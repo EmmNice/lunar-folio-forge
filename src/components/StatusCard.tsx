@@ -1,44 +1,68 @@
 import { forwardRef } from "react";
 import { Github, Linkedin, Twitter } from "lucide-react";
 
+export type Background = "noir" | "cream";
+
 export type StatusCardProps = {
   name: string;
-  title: string;
+  title?: string;
   content: string;
   handle?: string;
-  /** Render at export resolution (1080x1920) when true; otherwise a responsive preview. */
+  avatarUrl?: string | null;
+  background?: Background;
   exportMode?: boolean;
 };
 
-/**
- * Uses explicit hex colors (no oklch/CSS vars) so html-to-image can rasterize
- * it reliably. Fonts are inlined via the Google Fonts link in __root.tsx.
- */
+const THEMES = {
+  noir: {
+    bg: "#0b0b0c",
+    dot: "rgba(255,255,255,0.07)",
+    fg: "#ffffff",
+    body: "#e5e7eb",
+    muted: "#94a3b8",
+    border: "#1f2937",
+    avatarBg: "#111214",
+  },
+  cream: {
+    bg: "#f5f0e6",
+    dot: "rgba(0,0,0,0.07)",
+    fg: "#111111",
+    body: "#1f1f1f",
+    muted: "#6b6357",
+    border: "#d9d1bf",
+    avatarBg: "#ecead9",
+  },
+} satisfies Record<Background, Record<string, string>>;
+
 export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
-  function StatusCard({ name, title, content, handle = "@godson", exportMode = false }, ref) {
+  function StatusCard(
+    {
+      name,
+      title,
+      content,
+      handle = "",
+      avatarUrl,
+      background = "noir",
+      exportMode = false,
+    },
+    ref,
+  ) {
+    const t = THEMES[background];
     const styles: React.CSSProperties = exportMode
-      ? {
-          width: 1080,
-          height: 1920,
-          padding: "160px 110px",
-          fontSize: 32,
-        }
-      : {
-          aspectRatio: "1080 / 1920",
-          width: "100%",
-          padding: "9% 7%",
-        };
+      ? { width: 1080, height: 1920, padding: "160px 110px" }
+      : { aspectRatio: "1080 / 1920", width: "100%", padding: "9% 7%" };
+
+    const initial = (name.trim() || "•").charAt(0).toUpperCase();
 
     return (
       <div
         ref={ref}
         style={{
           ...styles,
-          backgroundColor: "#0b0b0c",
-          backgroundImage:
-            "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
+          backgroundColor: t.bg,
+          backgroundImage: `radial-gradient(${t.dot} 1px, transparent 1px)`,
           backgroundSize: exportMode ? "44px 44px" : "22px 22px",
-          color: "#ffffff",
+          color: t.fg,
           fontFamily:
             'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           display: "flex",
@@ -49,25 +73,35 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
           borderRadius: exportMode ? 0 : 20,
         }}
       >
-        {/* Header */}
         <div style={{ display: "flex", flexDirection: "column", gap: exportMode ? 28 : "1.2em" }}>
           <div
             style={{
               width: exportMode ? 120 : "3.5em",
               height: exportMode ? 120 : "3.5em",
               borderRadius: "9999px",
-              border: "1px solid #1f2937",
-              backgroundColor: "#111214",
+              border: `1px solid ${t.border}`,
+              backgroundColor: t.avatarBg,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 600,
               fontSize: exportMode ? 48 : "1.6em",
-              color: "#ffffff",
+              color: t.fg,
               letterSpacing: "-0.02em",
+              overflow: "hidden",
             }}
           >
-            {name.trim().charAt(0).toUpperCase() || "•"}
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt=""
+                crossOrigin="anonymous"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              initial
+            )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: exportMode ? 10 : "0.35em" }}>
             <div
@@ -76,34 +110,34 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
                 fontWeight: 700,
                 letterSpacing: "-0.03em",
                 lineHeight: 1.1,
-                color: "#ffffff",
+                color: t.fg,
               }}
             >
               {name || "Your Name"}
             </div>
-            <div
-              style={{
-                fontSize: exportMode ? 32 : "1em",
-                color: "#94a3b8",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {title || "Your Title"}
-            </div>
+            {title ? (
+              <div
+                style={{
+                  fontSize: exportMode ? 32 : "1em",
+                  color: t.muted,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {title}
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {/* Body */}
         <div
           style={{
             fontSize: exportMode ? 44 : "1.35em",
             lineHeight: 1.4,
-            color: "#e5e7eb",
+            color: t.body,
             fontWeight: 500,
             letterSpacing: "-0.02em",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            flex: exportMode ? "0 1 auto" : "0 1 auto",
             maxHeight: "60%",
             overflow: "hidden",
           }}
@@ -111,26 +145,25 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
           {content || "Write something worth reading."}
         </div>
 
-        {/* Footer */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             paddingTop: exportMode ? 40 : "1.2em",
-            borderTop: "1px solid #1f2937",
+            borderTop: `1px solid ${t.border}`,
           }}
         >
           <div
             style={{
               fontSize: exportMode ? 26 : "0.85em",
-              color: "#94a3b8",
+              color: t.muted,
               letterSpacing: "0.02em",
             }}
           >
-            {handle}
+            {handle ? (handle.startsWith("@") ? handle : `@${handle}`) : ""}
           </div>
-          <div style={{ display: "flex", gap: exportMode ? 28 : "0.9em", color: "#94a3b8" }}>
+          <div style={{ display: "flex", gap: exportMode ? 28 : "0.9em", color: t.muted }}>
             <Github size={exportMode ? 36 : 18} strokeWidth={1.75} />
             <Linkedin size={exportMode ? 36 : 18} strokeWidth={1.75} />
             <Twitter size={exportMode ? 36 : 18} strokeWidth={1.75} />
