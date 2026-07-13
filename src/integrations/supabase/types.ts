@@ -89,33 +89,146 @@ export type Database = {
           },
         ]
       }
-      follows: {
+      comments: {
         Row: {
+          author_id: string
+          content: string
           created_at: string
-          follower_id: string
-          following_id: string
+          id: string
+          post_id: string
         }
         Insert: {
+          author_id: string
+          content: string
           created_at?: string
-          follower_id: string
-          following_id: string
+          id?: string
+          post_id: string
         }
         Update: {
+          author_id?: string
+          content?: string
           created_at?: string
-          follower_id?: string
-          following_id?: string
+          id?: string
+          post_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "follows_follower_id_fkey"
-            columns: ["follower_id"]
+            foreignKeyName: "comments_author_id_fkey"
+            columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "follows_following_id_fkey"
-            columns: ["following_id"]
+            foreignKeyName: "comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      likes: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reposts: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reposts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reposts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      verification_requests: {
+        Row: {
+          created_at: string
+          id: string
+          link_primary: string
+          link_secondary: string | null
+          reviewed_at: string | null
+          status: string
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link_primary: string
+          link_secondary?: string | null
+          reviewed_at?: string | null
+          status?: string
+          tier: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link_primary?: string
+          link_secondary?: string | null
+          reviewed_at?: string | null
+          status?: string
+          tier?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_requests_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -200,29 +313,56 @@ export type Database = {
         Row: {
           avatar_url: string | null
           bio: string | null
+          company_name: string | null
           created_at: string
+          date_of_birth: string | null
           display_name: string
+          github_url: string | null
           handle: string
           id: string
+          onboarding_completed: boolean
+          portfolio_url: string | null
+          role_type: string | null
+          startup_url: string | null
+          traction_url: string | null
           updated_at: string
+          verification_tier: string
         }
         Insert: {
           avatar_url?: string | null
           bio?: string | null
+          company_name?: string | null
           created_at?: string
+          date_of_birth?: string | null
           display_name: string
+          github_url?: string | null
           handle: string
           id: string
+          onboarding_completed?: boolean
+          portfolio_url?: string | null
+          role_type?: string | null
+          startup_url?: string | null
+          traction_url?: string | null
           updated_at?: string
+          verification_tier?: string
         }
         Update: {
           avatar_url?: string | null
           bio?: string | null
+          company_name?: string | null
           created_at?: string
+          date_of_birth?: string | null
           display_name?: string
+          github_url?: string | null
           handle?: string
           id?: string
+          onboarding_completed?: boolean
+          portfolio_url?: string | null
+          role_type?: string | null
+          startup_url?: string | null
+          traction_url?: string | null
           updated_at?: string
+          verification_tier?: string
         }
         Relationships: []
       }

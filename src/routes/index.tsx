@@ -9,11 +9,11 @@ import { AppHeader } from "@/components/AppHeader";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Godson — Status Studio for tech founders" },
+      { title: "The Ledger — a high-signal network for tech founders" },
       {
         name: "description",
         content:
-          "Design and share tech-founder status cards. Sign in with Google to publish to The Ledger and export images for WhatsApp Status.",
+          "The Ledger: a professional network for verified tech founders. Publish status updates to a global feed, and export share-ready graphics for WhatsApp Status.",
       },
     ],
   }),
@@ -64,15 +64,15 @@ function Landing() {
         <div className="grid items-center gap-16 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              A status studio for builders
+              A high-signal network for builders
             </p>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
               Ship your thoughts like you ship code.
             </h1>
             <p className="mt-5 max-w-lg text-base text-muted-foreground sm:text-lg">
-              Write a punchy 280-character note, pick your background, and export
-              a crisp 1080×1920 card for WhatsApp Status — or publish it to The
-              Ledger, a global feed of tech founders.
+              A single global timeline for verified tech founders — no follower games,
+              just signal. Write a punchy 280-character note, publish it live, or export
+              a crisp 1080×1920 card for WhatsApp Status.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -95,18 +95,20 @@ function Landing() {
 
             <ul className="mt-10 grid gap-2 text-sm text-muted-foreground">
               <li>· Google sign-in — no passwords, uses your name and avatar</li>
-              <li>· Personal Studio with live preview + 1080×1920 PNG export</li>
-              <li>· Publish to a real-time public feed</li>
+              <li>· One global Explore Feed — chronological, no follower graph</li>
+              <li>· Workspace Studio with live preview + 1080×1920 PNG export</li>
+              <li>· Silver & Gold verification for recognized builders and elite founders</li>
               <li>· Direct messages, gated to keep the inbox clean</li>
             </ul>
           </div>
 
           <div className="mx-auto w-full max-w-[300px]">
             <StatusCard
-              name="Godson Chukwuemeka"
-              title="Tech Founder"
-              handle="godson"
-              content={`Building quiet software with loud ambition.\n\nNotes from the workshop, shipped daily.`}
+              name="Aria Stone"
+              title="Founder & CEO, Nimbus Cloud"
+              handle="ariastone"
+              content={`Building quiet infra with loud ambition.\n\nNotes from the workshop, shipped daily.`}
+              verificationTier="gold"
             />
           </div>
         </div>

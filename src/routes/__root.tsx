@@ -79,13 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Godson — Status Studio for tech founders" },
+      { title: "The Ledger — a high-signal network for tech founders" },
       {
         name: "description",
         content:
-          "Design and share tech-founder status cards. Sign in with Google, publish to the Feed, and export beautiful 1080×1920 images for WhatsApp Status.",
+          "The Ledger: a professional feed for verified tech founders and builders. Publish live status updates, export share-ready graphics, and get verified.",
       },
-      { property: "og:title", content: "Godson — Status Studio for tech founders" },
+      { property: "og:title", content: "The Ledger — a high-signal network for tech founders" },
       {
         property: "og:description",
         content:

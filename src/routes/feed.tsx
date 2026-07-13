@@ -1,51 +1,52 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Flag, MessageSquare } from "lucide-react";
+import { toPng } from "html-to-image";
+import { Image as ImageIcon, Loader2, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { StatusCard, type Background } from "@/components/StatusCard";
+import { StatusCard } from "@/components/StatusCard";
 import { AppHeader } from "@/components/AppHeader";
+import { PostCard, type FeedPost } from "@/components/PostCard";
 import { useAuth } from "@/hooks/use-auth";
-import { timeAgo } from "@/lib/time";
-import { startConversation } from "@/lib/messaging.functions";
-import { useServerFn } from "@tanstack/react-start";
-import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
     meta: [
-      { title: "The Ledger — Feed of tech-founder status cards" },
+      { title: "Explore Feed — The Ledger" },
       {
         name: "description",
         content:
-          "A real-time feed of status cards from tech founders and builders.",
+          "The global timeline of tech founders and builders — one chronological feed, no follower graph.",
       },
     ],
   }),
   component: FeedPage,
 });
 
-type FeedPost = {
-  id: string;
-  content: string;
-  background: Background;
-  created_at: string;
-  author: {
-    id: string;
-    handle: string;
-    display_name: string;
-    avatar_url: string | null;
-  };
-};
+const MAX = 280;
 
 function FeedPage() {
+  const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
+
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
+  const [composer, setComposer] = useState("");
+  const [busy, setBusy] = useState<"publish" | "download" | null>(null);
+  const [exportPost, setExportPost] = useState<FeedPost | null>(null);
+  const exportRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (loading) return;
+    if (user && profile && !profile.onboarding_completed) {
+      navigate({ to: "/onboarding", replace: true });
+    }
+  }, [loading, user, profile, navigate]);
 
   async function fetchAll() {
     const { data, error } = await supabase
       .from("posts")
       .select(
-        "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url)",
+        "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
       )
       .order("created_at", { ascending: false })
       .limit(60);
@@ -61,159 +62,178 @@ function FeedPage() {
     fetchAll();
     const channel = supabase
       .channel("public:posts")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "posts" },
-        () => fetchAll(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "posts" },
-        () => fetchAll(),
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => fetchAll())
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => fetchAll())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
+  useEffect(() => {
+    if (!exportPost || !exportRef.current) return;
+    (async () => {
+      try {
+        const dataUrl = await toPng(exportRef.current!, {
+          pixelRatio: 1,
+          cacheBust: true,
+          backgroundColor: exportPost.background === "noir" ? "#0b0b0c" : "#f5f0e6",
+          width: 1080,
+          height: 1920,
+        });
+        const link = document.createElement("a");
+        link.download = `${exportPost.author.handle}-status.png`;
+        link.href = dataUrl;
+        link.click();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Export failed.");
+      } finally {
+        setExportPost(null);
+      }
+    })();
+  }, [exportPost]);
+
+  async function publish() {
+    if (!user || !profile) {
+      toast.error("Sign in to publish.");
+      return;
+    }
+    const body = composer.trim();
+    if (!body) return;
+    if (body.length > MAX) {
+      toast.error(`Posts are limited to ${MAX} characters.`);
+      return;
+    }
+    setBusy("publish");
+    const { error } = await supabase.from("posts").insert({
+      author_id: profile.id,
+      content: body,
+      background: "noir",
+    });
+    setBusy(null);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setComposer("");
+    toast.success("Published live to The Ledger.");
+  }
+
+  async function downloadGraphic() {
+    if (!profile) {
+      toast.error("Sign in to create a graphic.");
+      return;
+    }
+    const body = composer.trim();
+    if (!body) {
+      toast.error("Write something first.");
+      return;
+    }
+    setBusy("download");
+    setExportPost({
+      id: "draft",
+      content: body,
+      background: "noir",
+      created_at: new Date().toISOString(),
+      author: {
+        id: profile.id,
+        handle: profile.handle,
+        display_name: profile.display_name,
+        avatar_url: profile.avatar_url,
+        verification_tier: profile.verification_tier,
+      },
+    });
+    setBusy(null);
+  }
+
+  const remaining = MAX - composer.length;
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
-      <main className="mx-auto max-w-6xl px-4 pt-10 pb-24 sm:px-6">
-        <div className="mb-8 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              The Ledger
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              What builders are saying
-            </h1>
-          </div>
-          <Link
-            to="/studio"
-            className="rounded-md bg-foreground px-4 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
-          >
-            Publish yours
-          </Link>
+      <main className="mx-auto max-w-2xl px-4 pt-8 pb-24 sm:px-6">
+        <div className="mb-6">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            The Ledger
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Explore Feed
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            One global timeline. Every onboarded builder, chronologically — no followers, no algorithm.
+          </p>
         </div>
+
+        {user && profile ? (
+          <div className="mb-8 rounded-2xl border border-border/60 bg-card/40 p-4">
+            <textarea
+              rows={2}
+              maxLength={MAX + 40}
+              value={composer}
+              onChange={(e) => setComposer(e.target.value)}
+              placeholder="What's happening in your build today?"
+              className="w-full resize-none border-0 bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
+            />
+            <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/50 pt-3">
+              <span
+                className={
+                  "text-xs tabular-nums " +
+                  (remaining < 0 ? "text-red-400" : remaining <= 20 ? "text-amber-400" : "text-muted-foreground")
+                }
+              >
+                {remaining}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={downloadGraphic}
+                  disabled={busy !== null || !composer.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  {busy === "download" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                  Download Graphic
+                </button>
+                <button
+                  type="button"
+                  onClick={publish}
+                  disabled={busy !== null || !composer.trim() || remaining < 0}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy === "publish" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Publish Live
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {posts === null ? (
           <div className="text-sm text-muted-foreground">Loading…</div>
-        ) : posts.length === 0 ? (
-          <EmptyState />
         ) : (
-          <div className="columns-1 gap-6 sm:columns-2 lg:columns-3 [column-fill:_balance]">
+          <div className="space-y-4">
             {posts.map((p) => (
-              <FeedCard key={p.id} post={p} />
+              <PostCard key={p.id} post={p} onDownload={setExportPost} />
             ))}
           </div>
         )}
       </main>
-    </div>
-  );
-}
 
-function EmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
-      <p className="text-sm text-muted-foreground">
-        No posts yet. Be the first to publish something.
-      </p>
-      <Link
-        to="/studio"
-        className="mt-4 inline-block rounded-md bg-foreground px-4 py-2 text-xs font-medium text-background"
-      >
-        Open the Studio
-      </Link>
-    </div>
-  );
-}
-
-function FeedCard({ post }: { post: FeedPost }) {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-  const start = useServerFn(startConversation);
-  const [busyMsg, setBusyMsg] = useState(false);
-  const [reported, setReported] = useState(false);
-
-  const isSelf = user?.id === post.author.id;
-
-  async function report() {
-    if (!user) {
-      toast.error("Sign in to report posts.");
-      return;
-    }
-    const { error } = await supabase
-      .from("reports")
-      .insert({ post_id: post.id, reporter_id: user.id });
-    if (error && !error.message.includes("duplicate")) {
-      toast.error("Couldn't submit report.");
-      return;
-    }
-    setReported(true);
-    toast.success("Thanks — the moderators will review.");
-  }
-
-  async function message() {
-    if (!user || !profile) {
-      toast.error("Sign in to send a message.");
-      return;
-    }
-    setBusyMsg(true);
-    try {
-      const res = await start({ data: { recipientId: post.author.id } });
-      navigate({ to: "/messages/$id", params: { id: res.conversationId } });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't start a conversation.");
-    } finally {
-      setBusyMsg(false);
-    }
-  }
-
-  return (
-    <div className="mb-6 break-inside-avoid">
-      <div className="overflow-hidden rounded-2xl border border-border/60">
-        <StatusCard
-          name={post.author.display_name}
-          handle={post.author.handle}
-          avatarUrl={post.author.avatar_url}
-          content={post.content}
-          background={post.background}
-        />
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
-        <Link
-          to="/u/$handle"
-          params={{ handle: post.author.handle }}
-          className="truncate transition-colors hover:text-foreground"
-        >
-          <span className="font-medium text-foreground">{post.author.display_name}</span>{" "}
-          · @{post.author.handle} · {timeAgo(post.created_at)}
-        </Link>
-        <div className="flex shrink-0 items-center gap-1">
-          {user && !isSelf ? (
-            <button
-              type="button"
-              onClick={message}
-              disabled={busyMsg}
-              aria-label="Message author"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={report}
-            disabled={reported}
-            aria-label="Report post"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            <Flag className="h-3.5 w-3.5" />
-          </button>
+      {/* Off-screen full-resolution render for the "Download Status" export */}
+      {exportPost ? (
+        <div aria-hidden style={{ position: "fixed", top: 0, left: 0, pointerEvents: "none", opacity: 0, zIndex: -1 }}>
+          <StatusCard
+            ref={exportRef}
+            name={exportPost.author.display_name}
+            handle={exportPost.author.handle}
+            avatarUrl={exportPost.author.avatar_url}
+            content={exportPost.content}
+            background={exportPost.background}
+            verificationTier={exportPost.author.verification_tier}
+            watermark
+            exportMode
+          />
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

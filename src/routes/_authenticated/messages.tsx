@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
 
 export const Route = createFileRoute("/_authenticated/messages")({
-  head: () => ({ meta: [{ title: "Messages · Godson" }] }),
+  head: () => ({ meta: [{ title: "Messages · The Ledger" }] }),
   component: MessagesIndex,
 });
 

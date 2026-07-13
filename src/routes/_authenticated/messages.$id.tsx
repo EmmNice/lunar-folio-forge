@@ -7,7 +7,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/messages/$id")({
-  head: () => ({ meta: [{ title: "Conversation · Godson" }] }),
+  head: () => ({ meta: [{ title: "Conversation · The Ledger" }] }),
   component: ThreadPage,
 });
 

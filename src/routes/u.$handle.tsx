@@ -1,11 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, UserPlus, UserMinus } from "lucide-react";
+import { MessageSquare, Github, Rocket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
+import type { RoleType, VerificationTier } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { startConversation } from "@/lib/messaging.functions";
 import { timeAgo } from "@/lib/time";
@@ -13,9 +15,9 @@ import { timeAgo } from "@/lib/time";
 export const Route = createFileRoute("/u/$handle")({
   head: ({ params }) => ({
     meta: [
-      { title: `@${params.handle} · Godson` },
+      { title: `@${params.handle} · The Ledger` },
       { name: "description", content: `Public profile and status cards from @${params.handle}.` },
-      { property: "og:title", content: `@${params.handle} on Godson` },
+      { property: "og:title", content: `@${params.handle} on The Ledger` },
     ],
   }),
   component: ProfilePage,
@@ -27,6 +29,13 @@ type ProfileRow = {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  company_name: string | null;
+  role_type: RoleType | null;
+  verification_tier: VerificationTier;
+  github_url: string | null;
+  portfolio_url: string | null;
+  startup_url: string | null;
+  traction_url: string | null;
 };
 
 type PostRow = {
@@ -34,6 +43,13 @@ type PostRow = {
   content: string;
   background: Background;
   created_at: string;
+};
+
+const ROLE_LABEL: Record<RoleType, string> = {
+  founder: "Startup Founder",
+  developer: "Core Developer",
+  pm: "Technical PM",
+  investor: "VC / Investor",
 };
 
 function ProfilePage() {
@@ -44,18 +60,16 @@ function ProfilePage() {
 
   const [profile, setProfile] = useState<ProfileRow | null | undefined>(undefined);
   const [posts, setPosts] = useState<PostRow[]>([]);
-  const [followState, setFollowState] = useState<{ following: boolean; followers: number }>({
-    following: false,
-    followers: 0,
-  });
-  const [busy, setBusy] = useState(false);
+  const [busyMsg, setBusyMsg] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data: pf, error } = await supabase
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, bio")
+        .select(
+          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url",
+        )
         .eq("handle", handle)
         .maybeSingle();
       if (cancelled) return;
@@ -63,72 +77,35 @@ function ProfilePage() {
         setProfile(null);
         return;
       }
-      setProfile(pf);
+      setProfile(pf as ProfileRow);
 
-      const [{ data: postsData }, { count: followersCount }, myFollow] = await Promise.all([
-        supabase
-          .from("posts")
-          .select("id, content, background, created_at")
-          .eq("author_id", pf.id)
-          .order("created_at", { ascending: false })
-          .limit(30),
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", pf.id),
-        user
-          ? supabase
-              .from("follows")
-              .select("follower_id")
-              .eq("follower_id", user.id)
-              .eq("following_id", pf.id)
-              .maybeSingle()
-          : Promise.resolve({ data: null } as { data: null }),
-      ]);
+      const { data: postsData } = await supabase
+        .from("posts")
+        .select("id, content, background, created_at")
+        .eq("author_id", pf.id)
+        .order("created_at", { ascending: false })
+        .limit(30);
       if (cancelled) return;
       setPosts((postsData ?? []) as PostRow[]);
-      setFollowState({
-        following: !!(myFollow as { data: unknown }).data,
-        followers: followersCount ?? 0,
-      });
     })();
     return () => {
       cancelled = true;
     };
-  }, [handle, user]);
-
-  async function toggleFollow() {
-    if (!user || !profile) {
-      toast.error("Sign in to follow people.");
-      return;
-    }
-    if (profile.id === user.id) return;
-    setBusy(true);
-    if (followState.following) {
-      const { error } = await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", user.id)
-        .eq("following_id", profile.id);
-      if (error) toast.error("Couldn't unfollow.");
-      else setFollowState((s) => ({ following: false, followers: s.followers - 1 }));
-    } else {
-      const { error } = await supabase
-        .from("follows")
-        .insert({ follower_id: user.id, following_id: profile.id });
-      if (error) toast.error("Couldn't follow.");
-      else setFollowState((s) => ({ following: true, followers: s.followers + 1 }));
-    }
-    setBusy(false);
-  }
+  }, [handle]);
 
   async function message() {
     if (!user || !me || !profile) {
       toast.error("Sign in to send a message.");
       return;
     }
+    setBusyMsg(true);
     try {
       const res = await start({ data: { recipientId: profile.id } });
       navigate({ to: "/messages/$id", params: { id: res.conversationId } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't start a conversation.");
+    } finally {
+      setBusyMsg(false);
     }
   }
 
@@ -147,7 +124,7 @@ function ProfilePage() {
         <div className="mx-auto max-w-5xl px-6 pt-16">
           <h1 className="text-xl font-semibold">Profile not found</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            No one on Godson uses the handle @{handle}.
+            No one on The Ledger uses the handle @{handle}.
           </p>
           <Link to="/feed" className="mt-6 inline-block text-sm underline underline-offset-4">
             Back to the feed
@@ -158,9 +135,14 @@ function ProfilePage() {
   }
 
   const isSelf = user?.id === profile.id;
+  const isVerified = profile.verification_tier !== "none";
+  const connectLinks = [
+    profile.github_url ? { label: "GitHub", href: profile.github_url, icon: Github } : null,
+    profile.startup_url ? { label: "Startup", href: profile.startup_url, icon: Rocket } : null,
+  ].filter(Boolean) as { label: string; href: string; icon: typeof Github }[];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
       <main className="mx-auto max-w-5xl px-4 pt-10 pb-24 sm:px-6">
         <header className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
@@ -179,43 +161,39 @@ function ProfilePage() {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h1 className="flex items-center gap-2 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
               {profile.display_name}
+              <VerificationBadge tier={profile.verification_tier} size={20} />
             </h1>
             <p className="text-sm text-muted-foreground">
-              @{profile.handle} · {followState.followers}{" "}
-              {followState.followers === 1 ? "follower" : "followers"}
+              @{profile.handle}
+              {profile.role_type ? ` · ${ROLE_LABEL[profile.role_type]}` : ""}
+              {profile.company_name ? ` · ${profile.company_name}` : ""}
             </p>
             {profile.bio ? (
               <p className="mt-2 max-w-prose text-sm text-foreground/90">{profile.bio}</p>
             ) : null}
           </div>
           {!isSelf ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={toggleFollow}
-                disabled={busy}
-                className={
-                  followState.following
-                    ? "inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    : "inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
-                }
-              >
-                {followState.following ? (
-                  <>
-                    <UserMinus className="h-4 w-4" /> Following
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4" /> Follow
-                  </>
-                )}
-              </button>
+            <div className="flex flex-wrap gap-2">
+              {isVerified && connectLinks.length > 0
+                ? connectLinks.map((l) => (
+                    <a
+                      key={l.label}
+                      href={l.href}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                    >
+                      <l.icon className="h-4 w-4" /> Connect
+                    </a>
+                  ))
+                : null}
               <button
                 type="button"
                 onClick={message}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                disabled={busyMsg}
+                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 <MessageSquare className="h-4 w-4" /> Message
               </button>
@@ -247,6 +225,7 @@ function ProfilePage() {
                       avatarUrl={profile.avatar_url}
                       content={p.content}
                       background={p.background}
+                      verificationTier={profile.verification_tier}
                     />
                   </div>
                   <div className="mt-2 px-1 text-xs text-muted-foreground">

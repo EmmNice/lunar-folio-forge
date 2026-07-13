@@ -1,22 +1,69 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Loader2, ShieldCheck, Github, Rocket } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings · Godson" }] }),
+  head: () => ({ meta: [{ title: "Studio Settings · The Ledger" }] }),
   component: SettingsPage,
 });
 
+type Tab = "profile" | "verification";
+
 function SettingsPage() {
-  const { profile } = useAuth();
-  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>("profile");
+
+  return (
+    <div className="min-h-screen pb-16 sm:pb-0">
+      <AppHeader />
+      <main className="mx-auto max-w-lg px-4 pt-10 pb-24 sm:px-6">
+        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+          The Ledger
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Studio Settings</h1>
+
+        <div className="mt-6 flex gap-1 border-b border-border/60">
+          <button
+            type="button"
+            onClick={() => setTab("profile")}
+            className={
+              "px-3 py-2 text-sm font-medium transition-colors " +
+              (tab === "profile" ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground")
+            }
+          >
+            Profile
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("verification")}
+            className={
+              "px-3 py-2 text-sm font-medium transition-colors " +
+              (tab === "verification" ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground")
+            }
+          >
+            Verification
+          </button>
+        </div>
+
+        <div className="mt-8">
+          {tab === "profile" ? <ProfileTab /> : <VerificationTab />}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function ProfileTab() {
+  const { profile, refreshProfile } = useAuth();
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -25,6 +72,7 @@ function SettingsPage() {
     setDisplayName(profile.display_name);
     setBio(profile.bio ?? "");
     setAvatarUrl(profile.avatar_url ?? "");
+    setCompanyName(profile.company_name ?? "");
   }, [profile]);
 
   async function save() {
@@ -45,6 +93,7 @@ function SettingsPage() {
         display_name: displayName.trim(),
         bio: bio.trim() || null,
         avatar_url: avatarUrl.trim() || null,
+        company_name: companyName.trim() || null,
       })
       .eq("id", profile.id);
     setBusy(false);
@@ -52,46 +101,216 @@ function SettingsPage() {
       toast.error(error.message.includes("profiles_handle_key") ? "That handle is taken." : error.message);
       return;
     }
+    await refreshProfile();
     toast.success("Profile updated.");
-    navigate({ to: "/u/$handle", params: { handle } });
   }
 
   const field =
     "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
 
   return (
-    <div className="min-h-screen">
-      <AppHeader />
-      <main className="mx-auto max-w-lg px-4 pt-10 pb-24 sm:px-6">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
-        <div className="mt-8 space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Handle</label>
-            <input className={field} value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} />
-            <p className="text-xs text-muted-foreground">Lowercase letters, numbers, underscore. 2–20 chars.</p>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Display name</label>
-            <input className={field} value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Bio</label>
-            <textarea rows={3} className={field + " resize-y"} value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Avatar URL</label>
-            <input className={field} value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://…" />
-          </div>
-          <button
-            type="button"
-            onClick={save}
-            disabled={busy}
-            className="w-full rounded-md bg-foreground px-4 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {busy ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </main>
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Verification status:</span>
+        <VerificationBadge tier={profile?.verification_tier} size={16} />
+        <span className="text-sm font-medium capitalize">{profile?.verification_tier ?? "none"}</span>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs uppercase tracking-wider text-muted-foreground">Handle</label>
+        <input className={field} value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} />
+        <p className="text-xs text-muted-foreground">Lowercase letters, numbers, underscore. 2–20 chars.</p>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs uppercase tracking-wider text-muted-foreground">Display name</label>
+        <input className={field} value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs uppercase tracking-wider text-muted-foreground">Company / startup</label>
+        <input className={field} value={companyName} onChange={(e) => setCompanyName(e.target.value)} maxLength={80} />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs uppercase tracking-wider text-muted-foreground">Bio</label>
+        <textarea rows={3} className={field + " resize-y"} value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs uppercase tracking-wider text-muted-foreground">Avatar URL</label>
+        <input className={field} value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://…" />
+      </div>
+      <button
+        type="button"
+        onClick={save}
+        disabled={busy}
+        className="w-full rounded-md bg-foreground px-4 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+      >
+        {busy ? "Saving…" : "Save"}
+      </button>
     </div>
+  );
+}
+
+type VerificationRequestRow = {
+  id: string;
+  tier: "silver" | "gold";
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+};
+
+function VerificationTab() {
+  const { profile, user } = useAuth();
+  const [requests, setRequests] = useState<VerificationRequestRow[] | null>(null);
+  const [silverGithub, setSilverGithub] = useState("");
+  const [silverPortfolio, setSilverPortfolio] = useState("");
+  const [goldStartup, setGoldStartup] = useState("");
+  const [goldTraction, setGoldTraction] = useState("");
+  const [busy, setBusy] = useState<"silver" | "gold" | null>(null);
+
+  async function load() {
+    if (!user) return;
+    const { data } = await supabase
+      .from("verification_requests")
+      .select("id, tier, status, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    setRequests((data ?? []) as VerificationRequestRow[]);
+  }
+
+  useEffect(() => {
+    load();
+  }, [user]);
+
+  function latestFor(tier: "silver" | "gold") {
+    return requests?.find((r) => r.tier === tier) ?? null;
+  }
+
+  async function submit(tier: "silver" | "gold") {
+    if (!user || !profile) return;
+    const primary = tier === "silver" ? silverGithub.trim() : goldStartup.trim();
+    const secondary = tier === "silver" ? silverPortfolio.trim() : goldTraction.trim();
+    if (!primary) {
+      toast.error(tier === "silver" ? "A GitHub link is required." : "A startup URL is required.");
+      return;
+    }
+    setBusy(tier);
+    const { error } = await supabase.from("verification_requests").insert({
+      user_id: user.id,
+      tier,
+      link_primary: primary,
+      link_secondary: secondary || null,
+    });
+    if (!error) {
+      await supabase
+        .from("profiles")
+        .update(
+          tier === "silver"
+            ? { github_url: primary, portfolio_url: secondary || null }
+            : { startup_url: primary, traction_url: secondary || null },
+        )
+        .eq("id", user.id);
+    }
+    setBusy(null);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Submitted — your credentials are now under review.");
+    await load();
+  }
+
+  const field =
+    "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
+
+  return (
+    <div className="space-y-8">
+      <div className="rounded-2xl border border-border/60 p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Github className="h-4 w-4 text-slate-300" /> Silver — Recognized Builder
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Verify with a public GitHub profile (and optional portfolio) that shows real shipped work.
+        </p>
+        <StatusPill request={latestFor("silver")} />
+        {profile?.verification_tier !== "silver" && profile?.verification_tier !== "gold" ? (
+          <div className="mt-3 space-y-2">
+            <input
+              className={field}
+              placeholder="https://github.com/yourhandle"
+              value={silverGithub}
+              onChange={(e) => setSilverGithub(e.target.value)}
+              disabled={latestFor("silver")?.status === "pending"}
+            />
+            <input
+              className={field}
+              placeholder="Portfolio URL (optional)"
+              value={silverPortfolio}
+              onChange={(e) => setSilverPortfolio(e.target.value)}
+              disabled={latestFor("silver")?.status === "pending"}
+            />
+            <button
+              type="button"
+              onClick={() => submit("silver")}
+              disabled={busy !== null || latestFor("silver")?.status === "pending"}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              {busy === "silver" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Apply for Silver
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-border/60 p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Rocket className="h-4 w-4 text-amber-400" /> Gold — Elite Founder
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Verify with your startup's public URL and a traction link (press, metrics, funding announcement).
+        </p>
+        <StatusPill request={latestFor("gold")} />
+        {profile?.verification_tier !== "gold" ? (
+          <div className="mt-3 space-y-2">
+            <input
+              className={field}
+              placeholder="https://yourstartup.com"
+              value={goldStartup}
+              onChange={(e) => setGoldStartup(e.target.value)}
+              disabled={latestFor("gold")?.status === "pending"}
+            />
+            <input
+              className={field}
+              placeholder="Traction link (press / metrics / funding)"
+              value={goldTraction}
+              onChange={(e) => setGoldTraction(e.target.value)}
+              disabled={latestFor("gold")?.status === "pending"}
+            />
+            <button
+              type="button"
+              onClick={() => submit("gold")}
+              disabled={busy !== null || latestFor("gold")?.status === "pending"}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              {busy === "gold" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Apply for Gold
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ request }: { request: VerificationRequestRow | null }) {
+  if (!request) return null;
+  const style =
+    request.status === "approved"
+      ? "text-emerald-400 border-emerald-400/40"
+      : request.status === "rejected"
+        ? "text-red-400 border-red-400/40"
+        : "text-amber-400 border-amber-400/40";
+  const label =
+    request.status === "approved" ? "Verified" : request.status === "rejected" ? "Not approved" : "Credentials Under Review";
+  return (
+    <span className={"mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium " + style}>
+      {label}
+    </span>
   );
 }

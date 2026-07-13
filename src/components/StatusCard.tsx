@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import { Github, Linkedin, Twitter } from "lucide-react";
+import { VerificationBadge, type VerificationTier } from "@/components/VerificationBadge";
 
 export type Background = "noir" | "cream";
 
@@ -11,6 +12,8 @@ export type StatusCardProps = {
   avatarUrl?: string | null;
   background?: Background;
   exportMode?: boolean;
+  verificationTier?: VerificationTier | null;
+  watermark?: boolean;
 };
 
 const THEMES = {
@@ -44,6 +47,8 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
       avatarUrl,
       background = "noir",
       exportMode = false,
+      verificationTier = null,
+      watermark = false,
     },
     ref,
   ) {
@@ -71,6 +76,7 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
           boxSizing: "border-box",
           overflow: "hidden",
           borderRadius: exportMode ? 0 : 20,
+          position: "relative",
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: exportMode ? 28 : "1.2em" }}>
@@ -106,6 +112,9 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
           <div style={{ display: "flex", flexDirection: "column", gap: exportMode ? 10 : "0.35em" }}>
             <div
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: exportMode ? 14 : "0.28em",
                 fontSize: exportMode ? 64 : "2em",
                 fontWeight: 700,
                 letterSpacing: "-0.03em",
@@ -113,7 +122,8 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
                 color: t.fg,
               }}
             >
-              {name || "Your Name"}
+              <span>{name || "Your Name"}</span>
+              <VerificationBadge tier={verificationTier} size={exportMode ? 44 : 18} exportMode={exportMode} />
             </div>
             {title ? (
               <div
@@ -169,6 +179,26 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
             <Twitter size={exportMode ? 36 : 18} strokeWidth={1.75} />
           </div>
         </div>
+
+        {watermark ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: exportMode ? 48 : "1.4em",
+              textAlign: "center",
+              fontSize: exportMode ? 22 : "0.65em",
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: t.muted,
+              opacity: 0.55,
+              pointerEvents: "none",
+            }}
+          >
+            via The Ledger
+          </div>
+        ) : null}
       </div>
     );
   },

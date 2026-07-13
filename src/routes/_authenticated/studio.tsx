@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/studio")({
-  head: () => ({ meta: [{ title: "Studio · Godson" }] }),
+  head: () => ({ meta: [{ title: "Workspace Studio · The Ledger" }] }),
   component: StudioPage,
 });
 
@@ -44,7 +44,7 @@ function StudioPage() {
         height: 1920,
       });
       const link = document.createElement("a");
-      link.download = `${(handle || "status").toLowerCase()}-status.png`;
+      link.download = `${(handle || "status").toLowerCase()}-whatsapp-status.png`;
       link.href = dataUrl;
       link.click();
     } catch (e) {
@@ -94,11 +94,15 @@ function StudioPage() {
       <main className="mx-auto max-w-4xl px-4 pt-10 pb-24 sm:px-6">
         <div className="mb-8">
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            The Studio
+            Workspace Studio
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
             Write a card
           </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A standalone canvas for crafting share-ready status cards — publish live to the Explore
+            Feed, or download a graphic for WhatsApp Status.
+          </p>
         </div>
 
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -110,6 +114,7 @@ function StudioPage() {
                 avatarUrl={avatarUrl}
                 content={content}
                 background={background}
+                verificationTier={profile?.verification_tier}
               />
             </div>
           </div>
@@ -194,7 +199,7 @@ function StudioPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
               >
                 {busy === "download" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Download
+                Download for WhatsApp
               </button>
               <button
                 type="button"
@@ -203,7 +208,7 @@ function StudioPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-foreground px-4 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {busy === "publish" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Publish to Feed
+                Publish Live
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -224,6 +229,8 @@ function StudioPage() {
             avatarUrl={avatarUrl}
             content={content}
             background={background}
+            verificationTier={profile?.verification_tier}
+            watermark
             exportMode
           />
         </div>
