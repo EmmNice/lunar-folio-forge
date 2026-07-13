@@ -13,15 +13,15 @@ export function ProfileHeader() {
         aria-hidden
         className="grid h-16 w-16 shrink-0 place-items-center rounded-full border border-border bg-secondary/60 text-lg font-semibold tracking-tight text-foreground"
       >
-        A
+        G
       </div>
 
       <div className="space-y-1.5">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Alex Morgan
+          Godson Chukwuemeka
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Software Engineer &amp; API Builder
+          Tech Founder
         </p>
       </div>
 
