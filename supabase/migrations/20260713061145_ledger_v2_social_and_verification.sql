@@ -76,7 +76,7 @@ grant all on public.verification_requests to service_role;
 alter table public.verification_requests enable row level security;
 
 create policy "users can view own verification requests" on public.verification_requests
-for select to authenticated using (auth.uid() = user_id or public.has_role(auth.uid(), 'admin'));
+for select to authenticated using (auth.uid() = user_id);
 
 create policy "users can apply for verification" on public.verification_requests
 for insert to authenticated with check (auth.uid() = user_id);
