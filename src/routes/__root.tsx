@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { supabase } from "@/integrations/supabase/client";
+import { Toaster } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -77,16 +79,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Alex Morgan — Software Engineer & API Builder" },
+      { title: "Godson — Status Studio for tech founders" },
       {
         name: "description",
         content:
-          "Personal site and writing by Alex Morgan — a software engineer building APIs, tools, and small software.",
+          "Design and share tech-founder status cards. Sign in with Google, publish to the Feed, and export beautiful 1080×1920 images for WhatsApp Status.",
       },
-      { property: "og:title", content: "Alex Morgan — Software Engineer & API Builder" },
+      { property: "og:title", content: "Godson — Status Studio for tech founders" },
       {
         property: "og:description",
-        content: "Notes on software, APIs, and the craft of shipping.",
+        content:
+          "Design and share tech-founder status cards. Sign in with Google and export 1080×1920 images ready for WhatsApp Status.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -124,11 +127,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      router.invalidate();
+      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [router, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster theme="dark" position="top-center" richColors closeButton />
     </QueryClientProvider>
   );
 }
