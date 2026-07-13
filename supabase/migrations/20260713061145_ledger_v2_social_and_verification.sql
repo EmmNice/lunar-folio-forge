@@ -8,7 +8,11 @@ alter table public.profiles
   add column if not exists role_type text,
   add column if not exists company_name text,
   add column if not exists onboarding_completed boolean not null default false,
-  add column if not exists verification_tier text not null default 'none';
+  add column if not exists verification_tier text not null default 'none',
+  add column if not exists github_url text,
+  add column if not exists portfolio_url text,
+  add column if not exists startup_url text,
+  add column if not exists traction_url text;
 
 alter table public.profiles
   add constraint role_type_valid check (
@@ -26,9 +30,27 @@ alter table public.profiles
   );
 
 alter table public.profiles
+  add constraint github_url_len check (github_url is null or char_length(github_url) <= 300);
+alter table public.profiles
+  add constraint portfolio_url_len check (portfolio_url is null or char_length(portfolio_url) <= 300);
+alter table public.profiles
+  add constraint startup_url_len check (startup_url is null or char_length(startup_url) <= 300);
+alter table public.profiles
+  add constraint traction_url_len check (traction_url is null or char_length(traction_url) <= 300);
+
+alter table public.profiles
   add constraint dob_min_age check (
     date_of_birth is null or date_of_birth <= (current_date - interval '13 years')
   );
+
+-- ============================================================
+-- REMOVE FOLLOW/FOLLOWING SYSTEM
+-- The Ledger is a high-signal professional network, not a social graph:
+-- the Explore Feed is a single global chronological timeline visible to
+-- everyone, and profile pages link out via "Connect" (GitHub / startup
+-- URL) instead of a follow relationship.
+-- ============================================================
+drop table if exists public.follows cascade;
 
 -- ============================================================
 -- VERIFICATION REQUESTS

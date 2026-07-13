@@ -9,8 +9,9 @@ const DAILY_LIMIT = 3;
  *
  * Gating:
  *   - Existing conversation: return it (either party can resume any time).
- *   - New conversation: allowed if mutual follow OR sender has started
- *     fewer than DAILY_LIMIT new conversations today (UTC).
+ *   - New conversation: allowed if sender has started fewer than
+ *     DAILY_LIMIT new conversations today (UTC). The Ledger has no
+ *     follow graph, so there is no mutual-follow bypass.
  */
 export const startConversation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -36,23 +37,8 @@ export const startConversation = createServerFn({ method: "POST" })
     if (existing.error) throw new Error(existing.error.message);
     if (existing.data) return { conversationId: existing.data.id, created: false };
 
-    // 2) mutual-follow check
-    const follows = await supabase
-      .from("follows")
-      .select("follower_id, following_id")
-      .in("follower_id", [userId, recipientId])
-      .in("following_id", [userId, recipientId]);
-    if (follows.error) throw new Error(follows.error.message);
-    const mutual =
-      follows.data.some(
-        (f) => f.follower_id === userId && f.following_id === recipientId,
-      ) &&
-      follows.data.some(
-        (f) => f.follower_id === recipientId && f.following_id === userId,
-      );
-
-    // 3) daily-quota check (uses service role for the atomic upsert)
-    if (!mutual) {
+    // 2) daily-quota check (uses service role for the atomic upsert)
+    {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const today = new Date().toISOString().slice(0, 10);
       const countRow = await supabaseAdmin
@@ -64,7 +50,7 @@ export const startConversation = createServerFn({ method: "POST" })
       const used = countRow.data?.count ?? 0;
       if (used >= DAILY_LIMIT) {
         throw new Error(
-          `You've used all ${DAILY_LIMIT} new conversation requests for today. Follow each other to remove the limit.`,
+          `You've used all ${DAILY_LIMIT} new conversation requests for today. Try again tomorrow.`,
         );
       }
       const upsert = await supabaseAdmin
