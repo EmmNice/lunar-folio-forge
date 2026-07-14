@@ -1,0 +1,2 @@
+- [Supabase project/env cross-check](supabase-project-crosscheck.md) — always verify a pasted Supabase DB URL/keys embed the same project ref as SUPABASE_URL before trusting them.
+- [Lovable-scaffolded app auth](lovable-scaffold-auth.md) — Lovable-originated TanStack+Supabase apps often ship Google login via `@lovable.dev/cloud-auth-js`, which only works on Lovable's own backend and breaks if the app moves to an independently-created Supabase project.
