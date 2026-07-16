@@ -2,23 +2,65 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
+import {
+  Rss,
+  PenSquare,
+  ShieldCheck,
+  MessageSquare,
+  Lock,
+  Zap,
+  Loader2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
-import { AppHeader } from "@/components/AppHeader";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "The Ledger — a high-signal network for tech founders" },
+      { title: "The Ledger — A high-signal network for tech founders" },
       {
         name: "description",
         content:
-          "The Ledger: a professional network for verified tech founders. Publish status updates to a global feed, and export share-ready graphics for WhatsApp Status.",
+          "The Ledger: a premium, elite platform for Web3 builders, founders, and investors. Publish status updates, export share-ready graphics, get verified.",
       },
     ],
   }),
   component: Landing,
 });
+
+const BENTO_CARDS = [
+  {
+    icon: Rss,
+    headline: "Signal & Beat Feeds",
+    desc: "Signal surfaces only verified builders. Beat is the raw, chronological pulse of everything shipping.",
+    span: true,
+  },
+  {
+    icon: Zap,
+    headline: "PulseAssist AI",
+    desc: "Draft, polish, and sharpen your posts with an elite AI co-writer built for high-signal founders.",
+  },
+  {
+    icon: PenSquare,
+    headline: "Workspace Studio",
+    desc: "Craft 1080×1920 status cards ready for WhatsApp Status or your socials — exported in one click.",
+  },
+  {
+    icon: ShieldCheck,
+    headline: "Silver & Gold Verification",
+    desc: "Earn your badge. Silver for recognized builders. Gold for elite founders with real traction.",
+  },
+  {
+    icon: Lock,
+    headline: "Elite Privacy Controls",
+    desc: "Post to verified audiences only, disable comments, and gate your content from noise.",
+  },
+  {
+    icon: MessageSquare,
+    headline: "Gated Direct Messages",
+    desc: "3 new DMs per day for unverified users. Verified builders send structured pitch requests.",
+  },
+];
 
 function Landing() {
   const navigate = useNavigate();
@@ -52,10 +94,7 @@ function Landing() {
     try {
       if (mode === "sign-up") {
         const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-          toast.error(error.message);
-          return;
-        }
+        if (error) { toast.error(error.message); return; }
         if (data.session) {
           navigate({ to: "/feed", replace: true });
         } else {
@@ -64,10 +103,7 @@ function Landing() {
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          toast.error(error.message);
-          return;
-        }
+        if (error) { toast.error(error.message); return; }
         navigate({ to: "/feed", replace: true });
       }
     } finally {
@@ -76,29 +112,54 @@ function Landing() {
   }
 
   if (!checkedSession) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Loading…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen">
-      <AppHeader />
-      <main className="mx-auto max-w-5xl px-6 pt-16 pb-24">
-        <div className="grid items-center gap-16 lg:grid-cols-[1.1fr_1fr]">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              A high-signal network for builders
-            </p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
-              Ship your thoughts like you ship code.
-            </h1>
-            <p className="mt-5 max-w-lg text-base text-muted-foreground sm:text-lg">
-              A single global timeline for verified tech founders — no follower games,
-              just signal. Write a punchy 280-character note, publish it live, or export
-              a crisp 1080×1920 card for WhatsApp Status.
-            </p>
+      {/* ── Nav ── */}
+      <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary/60 text-xs font-semibold">
+              L
+            </span>
+            <span className="text-sm font-semibold tracking-tight">The Ledger</span>
+          </div>
+          <Link
+            to="/feed"
+            className="rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Explore Feed →
+          </Link>
+        </div>
+      </header>
 
-            <form onSubmit={handleSubmit} className="mt-8 max-w-sm rounded-xl border border-border bg-card/50 p-5">
-              <div className="mb-4 flex gap-1 rounded-lg bg-muted p-1 text-sm">
+      <main>
+        {/* ── Hero ── */}
+        <section className="mx-auto max-w-5xl px-4 pb-16 pt-20 text-center sm:px-6 sm:pt-28">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            A high-signal network for builders
+          </p>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-6xl">
+            Ship your thoughts<br className="hidden sm:block" /> like you ship code.
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
+            A premium, tech-noir platform for Web3 builders, founders, and investors.
+            One global timeline — no follower games, just signal.
+          </p>
+
+          {/* ── Auth card ── */}
+          <div className="mx-auto mt-10 max-w-sm">
+            <form
+              onSubmit={handleSubmit}
+              className="rounded-2xl border border-slate-800/70 bg-card/50 p-6 shadow-xl shadow-black/20 backdrop-blur"
+            >
+              <div className="mb-5 flex gap-1 rounded-lg bg-muted p-1 text-sm">
                 <button
                   type="button"
                   onClick={() => setMode("sign-in")}
@@ -119,62 +180,85 @@ function Landing() {
                 </button>
               </div>
 
-              <label className="block text-xs font-medium text-muted-foreground">Email</label>
-              <input
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-              />
-
-              <label className="mt-3 block text-xs font-medium text-muted-foreground">Password</label>
-              <input
-                type="password"
-                autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                minLength={6}
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-              />
+              <div className="space-y-3">
+                <div className="text-left">
+                  <label className="block text-xs font-medium text-muted-foreground">Email</label>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="text-left">
+                  <label className="block text-xs font-medium text-muted-foreground">Password</label>
+                  <input
+                    type="password"
+                    autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={6}
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+              </div>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-4 w-full rounded-lg bg-foreground py-2.5 text-sm font-medium text-background shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="mt-5 w-full rounded-lg bg-foreground py-2.5 text-sm font-medium text-background shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
               >
-                {submitting ? "Please wait…" : mode === "sign-up" ? "Create account" : "Sign in"}
+                {submitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Please wait…
+                  </span>
+                ) : mode === "sign-up" ? "Create account" : "Sign in"}
               </button>
 
               <Link
                 to="/feed"
-                className="mt-4 block text-center text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                className="mt-4 block text-center text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
               >
                 Peek at The Ledger →
               </Link>
             </form>
-
-            <ul className="mt-10 grid gap-2 text-sm text-muted-foreground">
-              <li>· Email &amp; password sign-in — no third-party account required</li>
-              <li>· One global Explore Feed — chronological, no follower graph</li>
-              <li>· Workspace Studio with live preview + 1080×1920 PNG export</li>
-              <li>· Silver &amp; Gold verification for recognized builders and elite founders</li>
-              <li>· Direct messages, gated to keep the inbox clean</li>
-            </ul>
           </div>
+        </section>
 
-          <div className="mx-auto w-full max-w-[300px]">
-            <StatusCard
-              name="Aria Stone"
-              title="Founder & CEO, Nimbus Cloud"
-              handle="ariastone"
-              content={`Building quiet infra with loud ambition.\n\nNotes from the workshop, shipped daily.`}
-              verificationTier="gold"
-            />
+        {/* ── Demo card ── */}
+        <section className="mx-auto max-w-xs px-4 pb-12 sm:max-w-sm">
+          <StatusCard
+            name="Aria Stone"
+            title="Founder & CEO, Nimbus Cloud"
+            handle="ariastone"
+            content={`Building quiet infra with loud ambition.\n\nNotes from the workshop, shipped daily.`}
+            verificationTier="gold"
+          />
+        </section>
+
+        {/* ── Bento grid ── */}
+        <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+          <p className="mb-6 text-center text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            Everything on the platform
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {BENTO_CARDS.map((card, i) => (
+              <div
+                key={card.headline}
+                className={`rounded-2xl border border-slate-800/60 bg-card/40 p-5 transition-colors hover:border-slate-700/70 hover:bg-card/60 ${
+                  card.span ? "sm:col-span-2 lg:col-span-1" : ""
+                } ${i === 0 ? "lg:col-span-2" : ""}`}
+              >
+                <card.icon className="mb-3 h-5 w-5 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">{card.headline}</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{card.desc}</p>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );

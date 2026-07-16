@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare } from "lucide-react";
+import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ const TABS = [
 ];
 
 export function AppHeader() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -48,6 +48,20 @@ export function AppHeader() {
                 <t.icon className="h-4 w-4" /> {t.label}
               </Link>
             ))}
+
+            {/* Admin link — only visible to admins */}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-amber-400/70 transition-colors hover:text-amber-400"
+                activeProps={{
+                  className:
+                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-amber-400 bg-amber-500/10",
+                }}
+              >
+                <ShieldCheck className="h-4 w-4" /> Admin
+              </Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-1">

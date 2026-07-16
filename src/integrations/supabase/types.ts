@@ -274,30 +274,84 @@ export type Database = {
           },
         ]
       }
+      pitches: {
+        Row: {
+          id: string
+          sender_id: string
+          recipient_id: string
+          company_name: string
+          pitch: string
+          deck_url: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sender_id: string
+          recipient_id: string
+          company_name: string
+          pitch: string
+          deck_url?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          sender_id?: string
+          recipient_id?: string
+          company_name?: string
+          pitch?: string
+          deck_url?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pitches_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pitches_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           author_id: string
           background: string
+          comments_enabled: boolean
           content: string
           created_at: string
           id: string
           image_url: string | null
+          visibility: string
         }
         Insert: {
           author_id: string
           background?: string
+          comments_enabled?: boolean
           content: string
           created_at?: string
           id?: string
           image_url?: string | null
+          visibility?: string
         }
         Update: {
           author_id?: string
           background?: string
+          comments_enabled?: boolean
           content?: string
           created_at?: string
           id?: string
           image_url?: string | null
+          visibility?: string
         }
         Relationships: [
           {
@@ -311,6 +365,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ai_credits_reset_at: string
+          ai_credits_used: number
           avatar_url: string | null
           bio: string | null
           company_name: string | null
@@ -321,14 +377,18 @@ export type Database = {
           handle: string
           id: string
           onboarding_completed: boolean
+          pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
           startup_url: string | null
+          subscription_status: string
           traction_url: string | null
           updated_at: string
           verification_tier: string
         }
         Insert: {
+          ai_credits_reset_at?: string
+          ai_credits_used?: number
           avatar_url?: string | null
           bio?: string | null
           company_name?: string | null
@@ -339,14 +399,18 @@ export type Database = {
           handle: string
           id: string
           onboarding_completed?: boolean
+          pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
           startup_url?: string | null
+          subscription_status?: string
           traction_url?: string | null
           updated_at?: string
           verification_tier?: string
         }
         Update: {
+          ai_credits_reset_at?: string
+          ai_credits_used?: number
           avatar_url?: string | null
           bio?: string | null
           company_name?: string | null
@@ -357,9 +421,11 @@ export type Database = {
           handle?: string
           id?: string
           onboarding_completed?: boolean
+          pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
           startup_url?: string | null
+          subscription_status?: string
           traction_url?: string | null
           updated_at?: string
           verification_tier?: string

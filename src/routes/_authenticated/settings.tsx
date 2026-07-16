@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, Github, Rocket } from "lucide-react";
+import { Loader2, ShieldCheck, Github, Rocket, Inbox } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,10 +12,19 @@ export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
 
-type Tab = "profile" | "verification";
+type Tab = "profile" | "verification" | "pitches";
 
 function SettingsPage() {
+  const { profile } = useAuth();
   const [tab, setTab] = useState<Tab>("profile");
+
+  const tabs: { id: Tab; label: string; goldOnly?: boolean }[] = [
+    { id: "profile", label: "Profile" },
+    { id: "verification", label: "Verification" },
+    { id: "pitches", label: "Manage Pitches", goldOnly: true },
+  ];
+
+  const visibleTabs = tabs.filter((t) => !t.goldOnly || profile?.verification_tier === "gold");
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
@@ -27,30 +36,27 @@ function SettingsPage() {
         <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Studio Settings</h1>
 
         <div className="mt-6 flex gap-1 border-b border-border/60">
-          <button
-            type="button"
-            onClick={() => setTab("profile")}
-            className={
-              "px-3 py-2 text-sm font-medium transition-colors " +
-              (tab === "profile" ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground")
-            }
-          >
-            Profile
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("verification")}
-            className={
-              "px-3 py-2 text-sm font-medium transition-colors " +
-              (tab === "verification" ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground")
-            }
-          >
-            Verification
-          </button>
+          {visibleTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={
+                "px-3 py-2 text-sm font-medium transition-colors " +
+                (tab === t.id
+                  ? "border-b-2 border-foreground text-foreground"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         <div className="mt-8">
-          {tab === "profile" ? <ProfileTab /> : <VerificationTab />}
+          {tab === "profile" && <ProfileTab />}
+          {tab === "verification" && <VerificationTab />}
+          {tab === "pitches" && profile?.verification_tier === "gold" && <PitchesTab />}
         </div>
       </main>
     </div>
@@ -81,10 +87,7 @@ function ProfileTab() {
       toast.error("Handle must be 2–20 chars: lowercase letters, numbers, or _.");
       return;
     }
-    if (!displayName.trim()) {
-      toast.error("Display name is required.");
-      return;
-    }
+    if (!displayName.trim()) { toast.error("Display name is required."); return; }
     setBusy(true);
     const { error } = await supabase
       .from("profiles")
@@ -174,9 +177,7 @@ function VerificationTab() {
     setRequests((data ?? []) as VerificationRequestRow[]);
   }
 
-  useEffect(() => {
-    load();
-  }, [user]);
+  useEffect(() => { load(); }, [user]);
 
   function latestFor(tier: "silver" | "gold") {
     return requests?.find((r) => r.tier === tier) ?? null;
@@ -208,10 +209,7 @@ function VerificationTab() {
         .eq("id", user.id);
     }
     setBusy(null);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+    if (error) { toast.error(error.message); return; }
     toast.success("Submitted — your credentials are now under review.");
     await load();
   }
@@ -231,26 +229,9 @@ function VerificationTab() {
         <StatusPill request={latestFor("silver")} />
         {profile?.verification_tier !== "silver" && profile?.verification_tier !== "gold" ? (
           <div className="mt-3 space-y-2">
-            <input
-              className={field}
-              placeholder="https://github.com/yourhandle"
-              value={silverGithub}
-              onChange={(e) => setSilverGithub(e.target.value)}
-              disabled={latestFor("silver")?.status === "pending"}
-            />
-            <input
-              className={field}
-              placeholder="Portfolio URL (optional)"
-              value={silverPortfolio}
-              onChange={(e) => setSilverPortfolio(e.target.value)}
-              disabled={latestFor("silver")?.status === "pending"}
-            />
-            <button
-              type="button"
-              onClick={() => submit("silver")}
-              disabled={busy !== null || latestFor("silver")?.status === "pending"}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
+            <input className={field} placeholder="https://github.com/yourhandle" value={silverGithub} onChange={(e) => setSilverGithub(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
+            <input className={field} placeholder="Portfolio URL (optional)" value={silverPortfolio} onChange={(e) => setSilverPortfolio(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
+            <button type="button" onClick={() => submit("silver")} disabled={busy !== null || latestFor("silver")?.status === "pending"} className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50">
               {busy === "silver" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               Apply for Silver
             </button>
@@ -268,26 +249,9 @@ function VerificationTab() {
         <StatusPill request={latestFor("gold")} />
         {profile?.verification_tier !== "gold" ? (
           <div className="mt-3 space-y-2">
-            <input
-              className={field}
-              placeholder="https://yourstartup.com"
-              value={goldStartup}
-              onChange={(e) => setGoldStartup(e.target.value)}
-              disabled={latestFor("gold")?.status === "pending"}
-            />
-            <input
-              className={field}
-              placeholder="Traction link (press / metrics / funding)"
-              value={goldTraction}
-              onChange={(e) => setGoldTraction(e.target.value)}
-              disabled={latestFor("gold")?.status === "pending"}
-            />
-            <button
-              type="button"
-              onClick={() => submit("gold")}
-              disabled={busy !== null || latestFor("gold")?.status === "pending"}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
+            <input className={field} placeholder="https://yourstartup.com" value={goldStartup} onChange={(e) => setGoldStartup(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
+            <input className={field} placeholder="Traction link (press / metrics / funding)" value={goldTraction} onChange={(e) => setGoldTraction(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
+            <button type="button" onClick={() => submit("gold")} disabled={busy !== null || latestFor("gold")?.status === "pending"} className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50">
               {busy === "gold" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               Apply for Gold
             </button>
@@ -307,10 +271,173 @@ function StatusPill({ request }: { request: VerificationRequestRow | null }) {
         ? "text-red-400 border-red-400/40"
         : "text-amber-400 border-amber-400/40";
   const label =
-    request.status === "approved" ? "Verified" : request.status === "rejected" ? "Not approved" : "Credentials Under Review";
+    request.status === "approved"
+      ? "Verified"
+      : request.status === "rejected"
+        ? "Not approved"
+        : "Credentials Under Review";
   return (
     <span className={"mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium " + style}>
       {label}
     </span>
+  );
+}
+
+const LIMIT_OPTIONS = [
+  { label: "Do Not Disturb (block all)", value: 0 },
+  { label: "3 per week (minimum)", value: 3 },
+  { label: "5 per week", value: 5 },
+  { label: "10 per week", value: 10 },
+  { label: "20 per week", value: 20 },
+  { label: "Unlimited", value: null as number | null },
+];
+
+function PitchesTab() {
+  const { profile, user, refreshProfile } = useAuth();
+  const [pitchLimit, setPitchLimit] = useState<number | null>(profile?.pitch_limit ?? null);
+  const [busy, setBusy] = useState(false);
+  const [pitches, setPitches] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("pitches")
+        .select("id, company_name, pitch, deck_url, status, created_at, sender:profiles!pitches_sender_id_fkey(handle, display_name, avatar_url, verification_tier)")
+        .eq("recipient_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      setPitches((data ?? []) as any[]);
+    })();
+  }, [user]);
+
+  async function saveLimit() {
+    if (!user) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ pitch_limit: pitchLimit } as any)
+      .eq("id", user.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    await refreshProfile();
+    toast.success("Pitch limit updated.");
+  }
+
+  async function updateStatus(pitchId: string, status: string) {
+    await supabase.from("pitches").update({ status } as any).eq("id", pitchId);
+    setPitches((prev) =>
+      prev?.map((p) => (p.id === pitchId ? { ...p, status } : p)) ?? null,
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Limit settings */}
+      <div className="rounded-2xl border border-amber-500/20 bg-card/40 p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Inbox className="h-4 w-4 text-amber-400" /> Inbound Pitch Limit
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Control how many new pitch requests you receive per week. Minimum is 3 per week; set 0 to pause all incoming pitches.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {LIMIT_OPTIONS.map((opt) => (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() => setPitchLimit(opt.value)}
+              className={
+                "rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors " +
+                (pitchLimit === opt.value
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                  : "border-border text-muted-foreground hover:text-foreground")
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={saveLimit}
+          disabled={busy}
+          className="mt-4 inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Save limit
+        </button>
+      </div>
+
+      {/* Inbound pitches inbox */}
+      <div>
+        <h3 className="mb-4 text-sm font-semibold">Inbound Pitches</h3>
+        {pitches === null ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : pitches.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+            No pitches yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pitches.map((p: any) => (
+              <div key={p.id} className="rounded-2xl border border-border/60 bg-card/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-sm font-medium">
+                      {p.sender?.display_name ?? "Unknown"}
+                      <VerificationBadge tier={p.sender?.verification_tier} size={12} />
+                      <span className="text-xs text-muted-foreground">@{p.sender?.handle}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs font-medium text-muted-foreground">{p.company_name}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-foreground/90">{p.pitch}</p>
+                    {p.deck_url && (
+                      <a
+                        href={p.deck_url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="mt-2 inline-block text-xs text-amber-400 underline underline-offset-4 hover:text-amber-300"
+                      >
+                        View Deck / Demo →
+                      </a>
+                    )}
+                  </div>
+                  <span
+                    className={
+                      "shrink-0 rounded-full border px-2 py-0.5 text-xs " +
+                      (p.status === "read"
+                        ? "border-emerald-400/40 text-emerald-400"
+                        : p.status === "archived"
+                          ? "border-border text-muted-foreground"
+                          : "border-amber-400/40 text-amber-400")
+                    }
+                  >
+                    {p.status}
+                  </span>
+                </div>
+                {p.status === "pending" && (
+                  <div className="mt-3 flex gap-2 border-t border-border/50 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => updateStatus(p.id, "read")}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+                    >
+                      Mark Read
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateStatus(p.id, "archived")}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Archive
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

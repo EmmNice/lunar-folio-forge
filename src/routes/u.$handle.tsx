@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
+import { PitchModal, type PitchTarget } from "@/components/PitchModal";
 import { useAuth } from "@/hooks/use-auth";
 import type { RoleType, VerificationTier } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
@@ -36,6 +37,7 @@ type ProfileRow = {
   portfolio_url: string | null;
   startup_url: string | null;
   traction_url: string | null;
+  pitch_limit: number | null;
 };
 
 type PostRow = {
@@ -61,6 +63,7 @@ function ProfilePage() {
   const [profile, setProfile] = useState<ProfileRow | null | undefined>(undefined);
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [busyMsg, setBusyMsg] = useState(false);
+  const [showPitchModal, setShowPitchModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,16 +71,13 @@ function ProfilePage() {
       const { data: pf, error } = await supabase
         .from("profiles")
         .select(
-          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url",
+          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, pitch_limit",
         )
         .eq("handle", handle)
         .maybeSingle();
       if (cancelled) return;
-      if (error || !pf) {
-        setProfile(null);
-        return;
-      }
-      setProfile(pf as ProfileRow);
+      if (error || !pf) { setProfile(null); return; }
+      setProfile(pf as unknown as ProfileRow);
 
       const { data: postsData } = await supabase
         .from("posts")
@@ -88,16 +88,11 @@ function ProfilePage() {
       if (cancelled) return;
       setPosts((postsData ?? []) as PostRow[]);
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [handle]);
 
   async function message() {
-    if (!user || !me || !profile) {
-      toast.error("Sign in to send a message.");
-      return;
-    }
+    if (!user || !me || !profile) { toast.error("Sign in to send a message."); return; }
     setBusyMsg(true);
     try {
       const res = await start({ data: { recipientId: profile.id } });
@@ -136,16 +131,34 @@ function ProfilePage() {
 
   const isSelf = user?.id === profile.id;
   const isVerified = profile.verification_tier !== "none";
+  const isGold = profile.verification_tier === "gold";
+
+  // Viewer's verification status
+  const viewerIsSilverOrGold =
+    me?.verification_tier === "silver" || me?.verification_tier === "gold";
+
   const connectLinks = [
     profile.github_url ? { label: "GitHub", href: profile.github_url, icon: Github } : null,
     profile.startup_url ? { label: "Startup", href: profile.startup_url, icon: Rocket } : null,
   ].filter(Boolean) as { label: string; href: string; icon: typeof Github }[];
+
+  // Pitch target for the modal
+  const pitchTarget: PitchTarget = {
+    id: profile.id,
+    handle: profile.handle,
+    display_name: profile.display_name,
+    avatar_url: profile.avatar_url,
+    verification_tier: profile.verification_tier,
+    company_name: profile.company_name,
+    pitch_limit: (profile as any).pitch_limit ?? null,
+  };
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
       <main className="mx-auto max-w-5xl px-4 pt-10 pb-24 sm:px-6">
         <header className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+          {/* Avatar */}
           <div className="grid h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-2xl font-semibold">
             {profile.avatar_url ? (
               <img
@@ -160,6 +173,7 @@ function ProfilePage() {
               </span>
             )}
           </div>
+
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-2 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
               {profile.display_name}
@@ -174,29 +188,45 @@ function ProfilePage() {
               <p className="mt-2 max-w-prose text-sm text-foreground/90">{profile.bio}</p>
             ) : null}
           </div>
+
           {!isSelf ? (
             <div className="flex flex-wrap gap-2">
-              {isVerified && connectLinks.length > 0
-                ? connectLinks.map((l) => (
-                    <a
-                      key={l.label}
-                      href={l.href}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
-                    >
-                      <l.icon className="h-4 w-4" /> Connect
-                    </a>
-                  ))
-                : null}
-              <button
-                type="button"
-                onClick={message}
-                disabled={busyMsg}
-                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                <MessageSquare className="h-4 w-4" /> Message
-              </button>
+              {/* Connect links (GitHub, Startup) for verified profiles */}
+              {isVerified &&
+                connectLinks.map((l) => (
+                  <a
+                    key={l.label}
+                    href={l.href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    <l.icon className="h-4 w-4" /> {l.label}
+                  </a>
+                ))}
+
+              {/* Structured Pitch button: Silver viewer → Gold profile */}
+              {isGold && viewerIsSilverOrGold && user && me && (
+                <button
+                  type="button"
+                  onClick={() => setShowPitchModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+                >
+                  <Rocket className="h-4 w-4" /> Pitch
+                </button>
+              )}
+
+              {/* Message button */}
+              {user && me && (
+                <button
+                  type="button"
+                  onClick={message}
+                  disabled={busyMsg}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  <MessageSquare className="h-4 w-4" /> Message
+                </button>
+              )}
             </div>
           ) : (
             <Link
@@ -208,6 +238,7 @@ function ProfilePage() {
           )}
         </header>
 
+        {/* ── Cards grid ── */}
         <section className="mt-10">
           <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Cards
@@ -237,6 +268,15 @@ function ProfilePage() {
           )}
         </section>
       </main>
+
+      {/* Pitch modal */}
+      {showPitchModal && user && me && (
+        <PitchModal
+          target={pitchTarget}
+          senderId={user.id}
+          onClose={() => setShowPitchModal(false)}
+        />
+      )}
     </div>
   );
 }
