@@ -68,15 +68,10 @@ function Landing() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [checkedSession, setCheckedSession] = useState(false);
-
   useEffect(() => {
+    // Redirect already-authenticated users immediately — no loading gate.
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        navigate({ to: "/feed", replace: true });
-      } else {
-        setCheckedSession(true);
-      }
+      if (data.session) navigate({ to: "/feed", replace: true });
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) navigate({ to: "/feed", replace: true });
@@ -109,14 +104,6 @@ function Landing() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (!checkedSession) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
   }
 
   return (

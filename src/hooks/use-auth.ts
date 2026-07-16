@@ -45,46 +45,38 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
 
   // Small retry loop — the auth trigger creates the profile row asynchronously
   // on first sign-in, so the very first fetch can race and see nothing.
+  // Fire all three reads in parallel — base profile, migration-002 extras, admin role.
+  // The retry loop is kept only for the base profile (auth trigger races on first sign-in).
   let profile: Profile | null = null;
+
+  const [adminResult] = await Promise.all([
+    supabase.rpc("has_role", { _role: "admin", _user_id: user.id }).catch(() => ({ data: false })),
+  ]);
+  const isAdmin = (adminResult as { data: unknown }).data === true;
+
   for (let i = 0; i < 4; i++) {
-    const { data } = await supabase
-      .from("profiles")
-      .select(PROFILE_COLUMNS)
-      .eq("id", user.id)
-      .maybeSingle();
-    if (data) {
-      // Fetch migration-002 columns separately; gracefully degrade if not yet migrated
-      let extraCols: { subscription_status?: string; ai_credits_used?: number; ai_credits_reset_at?: string | null; pitch_limit?: number | null } = {};
-      try {
-        const { data: extra } = await supabase
-          .from("profiles")
-          .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (extra) extraCols = extra as typeof extraCols;
-      } catch { /* columns don't exist yet — will be available after migration 002 */ }
+    // Run base + extras in parallel each attempt
+    const [baseRes, extraRes] = await Promise.all([
+      supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit")
+        .eq("id", user.id)
+        .maybeSingle(),
+    ]);
+
+    if (baseRes.data) {
+      const extra = extraRes.data as { subscription_status?: string; ai_credits_used?: number; ai_credits_reset_at?: string | null; pitch_limit?: number | null } | null;
       profile = {
-        ...data,
-        subscription_status: extraCols.subscription_status ?? "active",
-        ai_credits_used: extraCols.ai_credits_used ?? 0,
-        ai_credits_reset_at: extraCols.ai_credits_reset_at ?? null,
-        pitch_limit: extraCols.pitch_limit ?? null,
+        ...baseRes.data,
+        subscription_status: extra?.subscription_status ?? "active",
+        ai_credits_used: extra?.ai_credits_used ?? 0,
+        ai_credits_reset_at: extra?.ai_credits_reset_at ?? null,
+        pitch_limit: extra?.pitch_limit ?? null,
       } as Profile;
       break;
     }
     await new Promise((r) => setTimeout(r, 250 * (i + 1)));
-  }
-
-  // Check admin role
-  let isAdmin = false;
-  try {
-    const { data: roleData } = await supabase.rpc("has_role", {
-      _role: "admin",
-      _user_id: user.id,
-    });
-    isAdmin = roleData === true;
-  } catch {
-    isAdmin = false;
   }
 
   return { profile, isAdmin };
