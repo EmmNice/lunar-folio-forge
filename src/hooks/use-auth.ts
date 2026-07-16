@@ -49,10 +49,15 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
   // The retry loop is kept only for the base profile (auth trigger races on first sign-in).
   let profile: Profile | null = null;
 
-  const [adminResult] = await Promise.all([
-    supabase.rpc("has_role", { _role: "admin", _user_id: user.id }).catch(() => ({ data: false })),
-  ]);
-  const isAdmin = (adminResult as { data: unknown }).data === true;
+  // Check admin role — wrapped in async IIFE so .catch works on the awaited promise
+  const isAdmin = await (async () => {
+    try {
+      const { data } = await supabase.rpc("has_role", { _role: "admin", _user_id: user.id });
+      return data === true;
+    } catch {
+      return false;
+    }
+  })();
 
   for (let i = 0; i < 4; i++) {
     // Run base + extras in parallel each attempt
