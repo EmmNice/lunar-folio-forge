@@ -305,12 +305,28 @@ function FeedPage() {
 
         {/* ── Feed ── */}
         {posts === null ? (
-          <div className="text-sm text-muted-foreground">Loading…</div>
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 rounded-2xl border border-border/40 bg-card/30 animate-pulse" />
+            ))}
+          </div>
         ) : displayedPosts.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground">
-            {tab === "signal"
-              ? "No verified posts yet — switch to Beat for the full feed."
-              : "Nothing here yet. Be the first to ship."}
+          <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
+            {tab === "signal" ? (
+              <>
+                <p className="text-sm font-medium text-foreground">No verified posts yet</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Signal only shows Silver & Gold verified builders.
+                  <br />
+                  Switch to <button type="button" onClick={() => setTab("beat")} className="font-medium text-foreground underline underline-offset-2">Beat</button> to see all posts — verified and unverified.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">Nothing here yet</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">Be the first to ship something.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

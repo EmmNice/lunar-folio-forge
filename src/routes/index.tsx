@@ -10,8 +10,6 @@ import {
   Lock,
   Zap,
   Loader2,
-  ChevronDown,
-  ChevronUp,
   Mail,
   RefreshCw,
 } from "lucide-react";
@@ -108,8 +106,8 @@ function Landing() {
   const [view, setView] = useState<AuthView>("social");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState<string | null>(null); // tracks which button
-  const [confirmEmail, setConfirmEmail] = useState(""); // email shown on check-email screen
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [confirmEmail, setConfirmEmail] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -132,11 +130,12 @@ function Landing() {
     if (error) {
       toast.error(
         error.message.includes("provider is not enabled") || error.message.includes("not enabled")
-          ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in isn't enabled yet in Supabase — enable it in your project's Auth Providers settings.`
+          ? `${provider === "twitter" ? "X/Twitter" : provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in isn't enabled yet — contact the admin to enable it.`
           : error.message,
       );
+      setSubmitting(null);
     }
-    setSubmitting(null);
+    // On success Supabase redirects the browser — no need to clear submitting
   }
 
   /* ── Email sign-in ── */
@@ -147,10 +146,16 @@ function Landing() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(null);
     if (!error) { navigate({ to: "/feed", replace: true }); return; }
-    if (error.message.toLowerCase().includes("not confirmed") || error.message.toLowerCase().includes("email not confirmed")) {
+    if (
+      error.message.toLowerCase().includes("not confirmed") ||
+      error.message.toLowerCase().includes("email not confirmed")
+    ) {
       setConfirmEmail(email);
       setView("check-email");
-    } else if (error.message.toLowerCase().includes("invalid login") || error.message.toLowerCase().includes("invalid credentials")) {
+    } else if (
+      error.message.toLowerCase().includes("invalid login") ||
+      error.message.toLowerCase().includes("invalid credentials")
+    ) {
       toast.error("Incorrect email or password. Try again or create an account.");
     } else {
       toast.error(error.message);
@@ -166,7 +171,10 @@ function Landing() {
     const { data, error } = await supabase.auth.signUp({ email, password });
     setSubmitting(null);
     if (error) {
-      if (error.message.toLowerCase().includes("already registered") || error.message.toLowerCase().includes("already exists")) {
+      if (
+        error.message.toLowerCase().includes("already registered") ||
+        error.message.toLowerCase().includes("already exists")
+      ) {
         toast.error("An account with this email already exists. Sign in instead.");
         setView("email-signin");
       } else {
@@ -192,29 +200,16 @@ function Landing() {
     toast.success("Confirmation email resent — check your inbox.");
   }
 
-  /* ── Magic link (passwordless) ── */
-  async function sendMagicLink(e: FormEvent) {
-    e.preventDefault();
-    if (!email) { toast.error("Enter your email address."); return; }
-    setSubmitting("magic");
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/feed` },
-    });
-    setSubmitting(null);
-    if (error) { toast.error(error.message); return; }
-    setConfirmEmail(email);
-    setView("check-email");
-  }
-
-  const field =
+  const inputCls =
     "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none ring-offset-background focus-visible:ring-1 focus-visible:ring-ring transition-colors";
 
-  const providerBtn = (busy: boolean) =>
-    "relative flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card/60 px-4 py-3 text-sm font-medium text-foreground transition-all hover:border-border hover:bg-card disabled:opacity-60";
+  const providerBtnCls =
+    "relative flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card/60 px-4 py-3.5 text-sm font-medium text-foreground transition-all hover:border-border hover:bg-card active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed";
 
-  /* ── Auth card content ── */
-  function AuthCard() {
+  /* ── Render auth card content inline (NOT as a nested component — doing so
+        causes React to unmount/remount the entire subtree on every state change,
+        making buttons appear unresponsive) ── */
+  const authCardContent = (() => {
     if (view === "check-email") {
       return (
         <div className="text-center">
@@ -224,16 +219,20 @@ function Landing() {
           <h2 className="text-base font-semibold">Check your email</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
             We sent a link to <span className="font-medium text-foreground">{confirmEmail}</span>.
-            Click it to sign in — then come back here.
+            Click it to finish signing in.
           </p>
           <div className="mt-5 space-y-2.5">
             <button
               type="button"
               onClick={resendConfirmation}
               disabled={submitting === "resend"}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm font-medium text-foreground transition-all hover:bg-card disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm font-medium text-foreground transition-all hover:bg-card active:scale-[0.98] disabled:opacity-50"
             >
-              {submitting === "resend" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {submitting === "resend" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               Resend confirmation email
             </button>
             <button
@@ -253,24 +252,52 @@ function Landing() {
         <div>
           <h2 className="mb-4 text-center text-base font-semibold">Sign in with email</h2>
           <form onSubmit={handleEmailSignIn} className="space-y-3">
-            <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" className={field} required />
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={field} required />
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              className={inputCls}
+              required
+            />
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className={inputCls}
+              required
+            />
             <button
               type="submit"
               disabled={submitting !== null}
-              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
             >
-              {submitting === "email-signin" ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span> : "Sign in"}
+              {submitting === "email-signin" ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />Signing in…
+                </span>
+              ) : "Sign in"}
             </button>
           </form>
           <div className="mt-4 space-y-2 text-center text-xs text-muted-foreground">
             <p>
               No account?{" "}
-              <button type="button" onClick={() => setView("email-signup")} className="font-medium text-foreground underline-offset-4 hover:underline">
+              <button
+                type="button"
+                onClick={() => setView("email-signup")}
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
                 Create one
               </button>
             </p>
-            <button type="button" onClick={() => setView("social")} className="hover:text-foreground hover:underline underline-offset-4">
+            <button
+              type="button"
+              onClick={() => setView("social")}
+              className="hover:text-foreground hover:underline underline-offset-4"
+            >
               ← Other sign-in options
             </button>
           </div>
@@ -281,29 +308,60 @@ function Landing() {
     if (view === "email-signup") {
       return (
         <div>
-          <h2 className="mb-4 text-center text-base font-semibold">Create account</h2>
+          <h2 className="mb-4 text-center text-base font-semibold">Create your account</h2>
           <form onSubmit={handleEmailSignUp} className="space-y-3">
-            <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" className={field} required />
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              className={inputCls}
+              required
+            />
             <div className="space-y-1">
-              <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (8+ characters)" className={field} minLength={8} required />
-              <p className="px-0.5 text-xs text-muted-foreground">Use a unique password — avoid simple or common ones.</p>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password (8+ characters)"
+                className={inputCls}
+                minLength={8}
+                required
+              />
+              <p className="px-0.5 text-xs text-muted-foreground">
+                Use a unique password — avoid simple or common ones.
+              </p>
             </div>
             <button
               type="submit"
               disabled={submitting !== null}
-              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
             >
-              {submitting === "email-signup" ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Creating…</span> : "Create account"}
+              {submitting === "email-signup" ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />Creating account…
+                </span>
+              ) : "Create account"}
             </button>
           </form>
           <div className="mt-4 space-y-2 text-center text-xs text-muted-foreground">
             <p>
               Already have an account?{" "}
-              <button type="button" onClick={() => setView("email-signin")} className="font-medium text-foreground underline-offset-4 hover:underline">
+              <button
+                type="button"
+                onClick={() => setView("email-signin")}
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
                 Sign in
               </button>
             </p>
-            <button type="button" onClick={() => setView("social")} className="hover:text-foreground hover:underline underline-offset-4">
+            <button
+              type="button"
+              onClick={() => setView("social")}
+              className="hover:text-foreground hover:underline underline-offset-4"
+            >
               ← Other sign-in options
             </button>
           </div>
@@ -314,16 +372,22 @@ function Landing() {
     /* ── Default: social-first ── */
     return (
       <div className="space-y-2.5">
-        {/* GitHub — most authentic for dev/founder identity */}
+        {/* GitHub */}
         <button
           type="button"
           onClick={() => signInWithProvider("github")}
           disabled={submitting !== null}
-          className={providerBtn(submitting === "github")}
+          className={providerBtnCls}
         >
-          {submitting === "github" ? <Loader2 className="h-5 w-5 animate-spin shrink-0" /> : <GitHubIcon className="h-5 w-5 shrink-0" />}
+          {submitting === "github" ? (
+            <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+          ) : (
+            <GitHubIcon className="h-5 w-5 shrink-0" />
+          )}
           <span className="flex-1 text-left">Continue with GitHub</span>
-          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Builders</span>
+          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+            Builders
+          </span>
         </button>
 
         {/* Google */}
@@ -331,22 +395,32 @@ function Landing() {
           type="button"
           onClick={() => signInWithProvider("google")}
           disabled={submitting !== null}
-          className={providerBtn(submitting === "google")}
+          className={providerBtnCls}
         >
-          {submitting === "google" ? <Loader2 className="h-5 w-5 animate-spin shrink-0" /> : <GoogleIcon className="h-5 w-5 shrink-0" />}
+          {submitting === "google" ? (
+            <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+          ) : (
+            <GoogleIcon className="h-5 w-5 shrink-0" />
+          )}
           <span className="flex-1 text-left">Continue with Google</span>
         </button>
 
-        {/* X / Twitter — Web3 native */}
+        {/* X / Twitter */}
         <button
           type="button"
           onClick={() => signInWithProvider("twitter")}
           disabled={submitting !== null}
-          className={providerBtn(submitting === "twitter")}
+          className={providerBtnCls}
         >
-          {submitting === "twitter" ? <Loader2 className="h-5 w-5 animate-spin shrink-0" /> : <XIcon className="h-5 w-5 shrink-0" />}
+          {submitting === "twitter" ? (
+            <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+          ) : (
+            <XIcon className="h-5 w-5 shrink-0" />
+          )}
           <span className="flex-1 text-left">Continue with X</span>
-          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-400">Web3</span>
+          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-400">
+            Web3
+          </span>
         </button>
 
         {/* Divider */}
@@ -361,14 +435,14 @@ function Landing() {
           <button
             type="button"
             onClick={() => setView("email-signin")}
-            className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:text-foreground"
+            className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:text-foreground active:scale-[0.98]"
           >
             Sign in with email
           </button>
           <button
             type="button"
             onClick={() => setView("email-signup")}
-            className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:text-foreground"
+            className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:text-foreground active:scale-[0.98]"
           >
             Create account
           </button>
@@ -376,12 +450,14 @@ function Landing() {
 
         <p className="pt-1 text-center text-[11px] leading-relaxed text-muted-foreground/70">
           By signing in you agree to The Ledger's{" "}
-          <Link to="/feed" className="underline underline-offset-2 hover:text-muted-foreground">terms</Link>.
-          A high-signal network — real identity required.
+          <Link to="/feed" className="underline underline-offset-2 hover:text-muted-foreground">
+            terms
+          </Link>
+          . A high-signal network — real identity required.
         </p>
       </div>
     );
-  }
+  })();
 
   return (
     <div className="min-h-screen">
@@ -413,14 +489,14 @@ function Landing() {
                 A high-signal network for builders
               </p>
               <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl xl:text-6xl">
-                Ship your thoughts<br /> like you ship code.
+                Ship your thoughts
+                <br /> like you ship code.
               </h1>
               <p className="mt-5 max-w-md text-base text-muted-foreground">
-                A premium, tech-noir platform for Web3 builders, founders, and investors.
-                One global timeline — no follower games, just signal.
+                A premium, tech-noir platform for Web3 builders, founders, and
+                investors. One global timeline — no follower games, just signal.
               </p>
 
-              {/* Social proof / feature pills */}
               <div className="mt-7 flex flex-wrap gap-2">
                 {[
                   "GitHub verified identity",
@@ -447,7 +523,7 @@ function Landing() {
                     Join The Ledger
                   </p>
                 )}
-                <AuthCard />
+                {authCardContent}
               </div>
             </div>
           </div>
@@ -478,7 +554,9 @@ function Landing() {
               >
                 <card.icon className="mb-3 h-5 w-5 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground">{card.headline}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{card.desc}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {card.desc}
+                </p>
               </div>
             ))}
           </div>
