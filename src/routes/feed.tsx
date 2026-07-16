@@ -92,8 +92,11 @@ function FeedPage() {
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  // Depend only on user ID — not the full user/profile objects.
+  // Object references change on every auth state refresh (token renewal etc.)
+  // which would re-subscribe and re-fetch the entire feed on every refresh tick.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, profile]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!exportPost || !exportRef.current) return;

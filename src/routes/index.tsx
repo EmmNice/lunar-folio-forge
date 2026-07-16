@@ -123,19 +123,29 @@ function Landing() {
   async function signInWithProvider(provider: "github" | "google" | "twitter") {
     setSubmitting(provider);
     const redirectTo = `${window.location.origin}/feed`;
-    const { error } = await supabase.auth.signInWithOAuth({
+    // skipBrowserRedirect: true — Supabase JS fetches the auth URL first instead of
+    // immediately navigating. This lets us catch "provider not enabled" errors in JS
+    // before the browser ends up on a raw JSON error page.
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo },
+      options: { redirectTo, skipBrowserRedirect: true },
     });
     if (error) {
+      const label = provider === "twitter" ? "X / Twitter" : provider.charAt(0).toUpperCase() + provider.slice(1);
       toast.error(
-        error.message.includes("provider is not enabled") || error.message.includes("not enabled")
-          ? `${provider === "twitter" ? "X/Twitter" : provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in isn't enabled yet — contact the admin to enable it.`
+        error.message.toLowerCase().includes("not enabled") || error.message.toLowerCase().includes("validation_failed")
+          ? `${label} sign-in isn't enabled on this server yet.`
           : error.message,
       );
       setSubmitting(null);
+      return;
     }
-    // On success Supabase redirects the browser — no need to clear submitting
+    // No error — navigate to the OAuth page manually
+    if (data?.url) {
+      window.location.href = data.url;
+    } else {
+      setSubmitting(null);
+    }
   }
 
   /* ── Email sign-in ── */
