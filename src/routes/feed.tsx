@@ -303,15 +303,21 @@ function FeedPage() {
     }
   }, [loading, user, profile, navigate]);
 
-  // ── FAB + tab-bar scroll visibility ────────────────────────────────────
+  // ── FAB + combined-header scroll visibility ─────────────────────────────
+  // Mirrors X's "For You / Following" behaviour:
+  //   • Any downward movement past the header height → hide immediately
+  //   • Any upward movement (even 1 px) → show immediately
   useEffect(() => {
     let lastY = window.scrollY;
     function onScroll() {
       const y = window.scrollY;
-      if (y > lastY && y > 64) {
+      const delta = y - lastY;
+      if (delta > 0 && y > 56) {
+        // Scrolling down and past the top bar — hide both header and FAB
         setFabVisible(false);
         setHeaderHidden(true);
-      } else if (y < lastY) {
+      } else if (delta < 0) {
+        // Any upward motion — show both immediately
         setFabVisible(true);
         setHeaderHidden(false);
       }
@@ -434,8 +440,12 @@ function FeedPage() {
           background: "rgba(11,11,12,0.92)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+          /* Hide fast (150 ms ease-out), reveal instantly (80 ms) — mirrors X's tab bar */
+          transition: headerHidden
+            ? "transform 0.15s ease-out"
+            : "transform 0.08s ease-out",
           transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+          willChange: "transform",
         }}
       >
         {/* Top nav bar — controlled mode: no internal scroll listener, no sticky/transform of its own */}
