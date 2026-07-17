@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, Github, Rocket, Inbox } from "lucide-react";
+import { Loader2, ShieldCheck, Github, Rocket, Inbox, EyeOff } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
 
-type Tab = "profile" | "verification" | "pitches";
+type Tab = "profile" | "verification" | "pitches" | "privacy";
 
 function SettingsPage() {
   const { profile } = useAuth();
@@ -22,6 +22,7 @@ function SettingsPage() {
     { id: "profile", label: "Profile" },
     { id: "verification", label: "Verification" },
     { id: "pitches", label: "Manage Pitches", goldOnly: true },
+    { id: "privacy", label: "Privacy", goldOnly: true },
   ];
 
   const visibleTabs = tabs.filter((t) => !t.goldOnly || profile?.verification_tier === "gold");
@@ -57,6 +58,7 @@ function SettingsPage() {
           {tab === "profile" && <ProfileTab />}
           {tab === "verification" && <VerificationTab />}
           {tab === "pitches" && profile?.verification_tier === "gold" && <PitchesTab />}
+          {tab === "privacy" && profile?.verification_tier === "gold" && <PrivacyTab />}
         </div>
       </main>
     </div>
@@ -280,6 +282,77 @@ function StatusPill({ request }: { request: VerificationRequestRow | null }) {
     <span className={"mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium " + style}>
       {label}
     </span>
+  );
+}
+
+function PrivacyTab() {
+  const { profile, user, refreshProfile } = useAuth();
+  const [cloaking, setCloaking] = useState<boolean>(profile?.dm_cloaking_enabled ?? false);
+  const [busy, setBusy] = useState(false);
+
+  async function save(next: boolean) {
+    if (!user) return;
+    setCloaking(next);
+    setBusy(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ dm_cloaking_enabled: next } as any)
+      .eq("id", user.id);
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      setCloaking(!next); // revert on error
+      return;
+    }
+    await refreshProfile();
+    toast.success(next ? "DM Cloaking enabled." : "DM Cloaking disabled.");
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* DM Cloaking */}
+      <div className="rounded-2xl border border-amber-500/20 bg-card/40 p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <EyeOff className="h-4 w-4 text-amber-400" /> DM Cloaking
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          When enabled, unverified users cannot see your Connect or Message buttons on your public
+          profile. Only other Silver &amp; Gold members can reach you directly.
+        </p>
+
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Hide contact buttons from unverified visitors</p>
+            <p className="text-xs text-muted-foreground">Silver &amp; Gold members can still message and connect.</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={cloaking}
+            disabled={busy}
+            onClick={() => save(!cloaking)}
+            className={
+              "relative h-6 w-11 shrink-0 rounded-full border transition-colors disabled:opacity-60 " +
+              (cloaking ? "border-amber-500 bg-amber-500" : "border-border bg-border/30")
+            }
+          >
+            <span
+              className={
+                "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform " +
+                (cloaking ? "translate-x-5" : "translate-x-0.5")
+              }
+            />
+          </button>
+        </div>
+
+        {cloaking && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-400/80">
+            <EyeOff className="h-3.5 w-3.5" />
+            DM Cloaking is active — unverified visitors cannot see your contact options.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

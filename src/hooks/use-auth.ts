@@ -24,6 +24,7 @@ export type Profile = {
   ai_credits_used: number;
   ai_credits_reset_at: string | null;
   pitch_limit: number | null;
+  dm_cloaking_enabled: boolean;
 };
 
 // NOTE: subscription_status, ai_credits_*, pitch_limit are added by migration 002.
@@ -65,19 +66,20 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
       supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).maybeSingle(),
       supabase
         .from("profiles")
-        .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit")
+        .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled")
         .eq("id", user.id)
         .maybeSingle(),
     ]);
 
     if (baseRes.data) {
-      const extra = extraRes.data as { subscription_status?: string; ai_credits_used?: number; ai_credits_reset_at?: string | null; pitch_limit?: number | null } | null;
+      const extra = extraRes.data as { subscription_status?: string; ai_credits_used?: number; ai_credits_reset_at?: string | null; pitch_limit?: number | null; dm_cloaking_enabled?: boolean } | null;
       profile = {
         ...baseRes.data,
         subscription_status: extra?.subscription_status ?? "active",
         ai_credits_used: extra?.ai_credits_used ?? 0,
         ai_credits_reset_at: extra?.ai_credits_reset_at ?? null,
         pitch_limit: extra?.pitch_limit ?? null,
+        dm_cloaking_enabled: extra?.dm_cloaking_enabled ?? false,
       } as Profile;
       break;
     }

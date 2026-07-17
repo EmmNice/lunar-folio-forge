@@ -70,7 +70,7 @@ function FeedPage() {
       visibility: p.visibility ?? "public",
     }));
 
-    // Hide verified_only posts from unverified viewers
+    // Hide verified_only posts from unverified logged-in viewers
     const isVerifiedViewer =
       !user ||
       !profile ||
@@ -79,6 +79,14 @@ function FeedPage() {
 
     if (!isVerifiedViewer) {
       all = all.filter((p) => (p.visibility ?? "public") === "public");
+    }
+
+    // Whisper Feed: always hidden from anyone who is not Silver or Gold
+    // (including logged-out visitors — stricter than verified_only)
+    const isSilverOrGold =
+      profile?.verification_tier === "silver" || profile?.verification_tier === "gold";
+    if (!isSilverOrGold) {
+      all = all.filter((p) => (p.visibility ?? "public") !== "whisper");
     }
 
     setPosts(all);

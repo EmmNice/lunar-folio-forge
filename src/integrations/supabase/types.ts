@@ -373,6 +373,7 @@ export type Database = {
           created_at: string
           date_of_birth: string | null
           display_name: string
+          dm_cloaking_enabled: boolean
           github_url: string | null
           handle: string
           id: string
@@ -395,6 +396,7 @@ export type Database = {
           created_at?: string
           date_of_birth?: string | null
           display_name: string
+          dm_cloaking_enabled?: boolean
           github_url?: string | null
           handle: string
           id: string
@@ -417,6 +419,7 @@ export type Database = {
           created_at?: string
           date_of_birth?: string | null
           display_name?: string
+          dm_cloaking_enabled?: boolean
           github_url?: string | null
           handle?: string
           id?: string

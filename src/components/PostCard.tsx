@@ -82,6 +82,7 @@ export function PostCard({
   const isSelf = (user?.id ?? currentUserId) === post.author.id;
   const commentsEnabled = post.comments_enabled !== false; // treat undefined as true
   const isVerifiedOnly = post.visibility === "verified_only";
+  const isWhisper = post.visibility === "whisper";
 
   // Tier-based border styles
   const tierBorder =
@@ -209,11 +210,15 @@ export function PostCard({
 
   return (
     <article className={`rounded-2xl border bg-card/40 p-4 sm:p-5 ${tierBorder}`}>
-      {/* ── Verified-only badge ── */}
-      {isVerifiedOnly && (
+      {/* ── Visibility badges ── */}
+      {(isVerifiedOnly || isWhisper) && (
         <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock className="h-3 w-3" />
-          <span>Verified only</span>
+          {isWhisper ? (
+            <span className="font-medium text-violet-400/80">Whisper Feed</span>
+          ) : (
+            <span>Verified only</span>
+          )}
         </div>
       )}
 

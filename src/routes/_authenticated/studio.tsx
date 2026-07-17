@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { toPng } from "html-to-image";
-import { Download, Loader2, Send, Zap, Lock, MessageCircleOff, Info } from "lucide-react";
+import { Download, Loader2, Send, Zap, Lock, MessageCircleOff, Info, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AppHeader } from "@/components/AppHeader";
@@ -30,6 +30,7 @@ function StudioPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
   const [commentsEnabled, setCommentsEnabled] = useState(true);
   const [visibility, setVisibility] = useState<"public" | "verified_only">("public");
+  const [whisperFeed, setWhisperFeed] = useState(false);
   const [busy, setBusy] = useState<"download" | "publish" | null>(null);
   const [aiMode, setAiMode] = useState<PulseMode>("polish");
   const [aiLoading, setAiLoading] = useState(false);
@@ -42,6 +43,7 @@ function StudioPage() {
   const handle = profile?.handle ?? "";
   const remaining = MAX - content.length;
   const isVerified = profile?.verification_tier !== "none";
+  const isGold = profile?.verification_tier === "gold";
   const hasUnlimitedAI =
     isVerified || (profile?.subscription_status ?? "active") === "active";
 
@@ -102,12 +104,14 @@ function StudioPage() {
     if (!body) { toast.error("Write something first."); return; }
     if (body.length > MAX) { toast.error(`Posts are limited to ${MAX} characters.`); return; }
     setBusy("publish");
+    // Whisper overrides verified_only; both require Silver/Gold to view
+    const actualVisibility = whisperFeed ? "whisper" : visibility;
     const { error } = await supabase.from("posts").insert({
       author_id: profile.id,
       content: body,
       background,
       comments_enabled: commentsEnabled,
-      visibility,
+      visibility: actualVisibility,
     } as any);
     setBusy(null);
     if (error) { toast.error(error.message); return; }
@@ -331,6 +335,40 @@ function StudioPage() {
                     />
                   </button>
                 </label>
+
+                {/* Whisper Feed — Gold only */}
+                {isGold && (
+                  <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2.5">
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-violet-300">
+                        <Radio className="h-3.5 w-3.5" />
+                        Publish to Whisper Feed
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Only Silver &amp; Gold members can see this post
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={whisperFeed}
+                      onClick={() => setWhisperFeed((v) => !v)}
+                      className={
+                        "relative h-5 w-9 shrink-0 rounded-full border transition-colors " +
+                        (whisperFeed
+                          ? "border-violet-500 bg-violet-500"
+                          : "border-border bg-border/30")
+                      }
+                    >
+                      <span
+                        className={
+                          "absolute top-0.5 h-4 w-4 rounded-full bg-background transition-transform " +
+                          (whisperFeed ? "translate-x-4" : "translate-x-0.5")
+                        }
+                      />
+                    </button>
+                  </label>
+                )}
               </div>
             )}
 

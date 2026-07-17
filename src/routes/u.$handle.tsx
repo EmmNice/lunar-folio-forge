@@ -38,6 +38,7 @@ type ProfileRow = {
   startup_url: string | null;
   traction_url: string | null;
   pitch_limit: number | null;
+  dm_cloaking_enabled: boolean;
 };
 
 type PostRow = {
@@ -71,7 +72,7 @@ function ProfilePage() {
       const { data: pf, error } = await supabase
         .from("profiles")
         .select(
-          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, pitch_limit",
+          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, pitch_limit, dm_cloaking_enabled",
         )
         .eq("handle", handle)
         .maybeSingle();
@@ -137,6 +138,9 @@ function ProfilePage() {
   const viewerIsSilverOrGold =
     me?.verification_tier === "silver" || me?.verification_tier === "gold";
 
+  // DM Cloaking: Gold members can hide their connect/message buttons from unverified visitors
+  const dmCloaked = (profile.dm_cloaking_enabled ?? false) && !isSelf && !viewerIsSilverOrGold;
+
   const connectLinks = [
     profile.github_url ? { label: "GitHub", href: profile.github_url, icon: Github } : null,
     profile.startup_url ? { label: "Startup", href: profile.startup_url, icon: Rocket } : null,
@@ -191,8 +195,8 @@ function ProfilePage() {
 
           {!isSelf ? (
             <div className="flex flex-wrap gap-2">
-              {/* Connect links (GitHub, Startup) for verified profiles */}
-              {isVerified &&
+              {/* Connect links (GitHub, Startup) — hidden when DM Cloaking active for unverified visitors */}
+              {isVerified && !dmCloaked &&
                 connectLinks.map((l) => (
                   <a
                     key={l.label}
@@ -216,8 +220,8 @@ function ProfilePage() {
                 </button>
               )}
 
-              {/* Message button */}
-              {user && me && (
+              {/* Message button — hidden when DM Cloaking active for unverified visitors */}
+              {user && me && !dmCloaked && (
                 <button
                   type="button"
                   onClick={message}
