@@ -27,9 +27,12 @@ export type Profile = {
   dm_cloaking_enabled: boolean;
 };
 
-// Base columns that always exist (no migration dependency)
-const PROFILE_COLUMNS =
-  "id, handle, display_name, avatar_url, bio, date_of_birth, role_type, company_name, onboarding_completed, verification_tier, github_url, portfolio_url, startup_url, traction_url";
+// All profile columns in one query — avoids the previous split into two
+// parallel requests on the same table with the same filter.
+const ALL_PROFILE_COLUMNS =
+  "id, handle, display_name, avatar_url, bio, date_of_birth, role_type, company_name, " +
+  "onboarding_completed, verification_tier, github_url, portfolio_url, startup_url, traction_url, " +
+  "subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled";
 
 export type AuthState = {
   loading: boolean;
@@ -42,86 +45,75 @@ export type AuthState = {
 
 /**
  * Loads the full profile for a user. Always resolves — never throws.
- * Returns null profile if the user has no row yet (new account race) or DB is down.
+ * Returns null profile if the user has no row yet (new-account race) or DB is down.
+ *
+ * Parallelises the admin-role DB check with the profile fetch so neither
+ * blocks the other. The env-var fast path skips the DB entirely.
  */
 async function loadProfile(user: User | null): Promise<{ profile: Profile | null; isAdmin: boolean }> {
   if (!user) return { profile: null, isAdmin: false };
 
-  // Admin check — query user_roles directly (authenticated users can SELECT
-  // their own rows via RLS). The has_role() RPC is service_role-only so we
-  // bypass it here. Isolated try/catch so it never blocks the profile load.
-  let isAdmin = false;
-  try {
-    // 1. Env-var override — reliable even if DB/migrations are not set up.
-    //    Set VITE_ADMIN_IDS to a comma-separated list of admin UUIDs in Replit Secrets.
-    const envAdmins = (import.meta.env.VITE_ADMIN_IDS ?? "")
-      .split(",")
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    if (envAdmins.includes(user.id)) {
-      isAdmin = true;
-    } else {
-      // 2. DB check — query user_roles; compare role in JS to avoid enum cast issues
-      const { data, error } = await supabase
+  // ── Admin check ────────────────────────────────────────────────────────────
+  // Fast path: env var list — no DB round-trip at all.
+  const envAdmins = (import.meta.env.VITE_ADMIN_IDS ?? "")
+    .split(",")
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+
+  const adminPromise: Promise<boolean> = envAdmins.includes(user.id)
+    ? Promise.resolve(true)
+    : supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
-        .limit(10);
-      if (error) {
-        console.error("[auth] user_roles query failed:", error.message, error.code);
-      } else if (Array.isArray(data)) {
-        isAdmin = data.some((r: any) => r.role === "admin");
-        if (!isAdmin) {
-          console.warn("[auth] user_roles rows for this user:", JSON.stringify(data));
-        }
-      }
-    }
-  } catch (e) {
-    console.error("[auth] admin check threw:", e);
-  }
+        .limit(10)
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("[auth] user_roles query failed:", error.message, error.code);
+            return false;
+          }
+          const admin = Array.isArray(data) && data.some((r: any) => r.role === "admin");
+          if (!admin) console.warn("[auth] user_roles rows:", JSON.stringify(data));
+          return admin;
+        })
+        .catch((e) => {
+          console.error("[auth] admin check threw:", e);
+          return false;
+        });
 
-  // Profile fetch with retry loop for new-account auth trigger race.
-  // 3 attempts: 0ms, 300ms, 700ms backoff. Always completes without throwing.
-  let profile: Profile | null = null;
-  const delays = [0, 300, 700];
-
-  for (let i = 0; i < delays.length; i++) {
-    if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
-
-    try {
-      const [baseRes, extraRes] = await Promise.all([
-        supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).maybeSingle(),
-        supabase
+  // ── Profile fetch ──────────────────────────────────────────────────────────
+  // Single query with all columns — previously split into two parallel queries
+  // on the same table, wasting one full round-trip.
+  // Retry loop handles new-account race where the trigger hasn't fired yet.
+  const profilePromise: Promise<Profile | null> = (async () => {
+    const delays = [0, 300, 700];
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+      try {
+        const { data } = await supabase
           .from("profiles")
-          .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled")
+          .select(ALL_PROFILE_COLUMNS)
           .eq("id", user.id)
-          .maybeSingle(),
-      ]);
-
-      if (baseRes.data) {
-        const extra = extraRes.data as {
-          subscription_status?: string;
-          ai_credits_used?: number;
-          ai_credits_reset_at?: string | null;
-          pitch_limit?: number | null;
-          dm_cloaking_enabled?: boolean;
-        } | null;
-
-        profile = {
-          ...baseRes.data,
-          subscription_status: extra?.subscription_status ?? "active",
-          ai_credits_used: extra?.ai_credits_used ?? 0,
-          ai_credits_reset_at: extra?.ai_credits_reset_at ?? null,
-          pitch_limit: extra?.pitch_limit ?? null,
-          dm_cloaking_enabled: extra?.dm_cloaking_enabled ?? false,
-        } as Profile;
-        break;
+          .maybeSingle();
+        if (data) {
+          return {
+            ...data,
+            subscription_status: data.subscription_status ?? "active",
+            ai_credits_used: data.ai_credits_used ?? 0,
+            ai_credits_reset_at: data.ai_credits_reset_at ?? null,
+            pitch_limit: data.pitch_limit ?? null,
+            dm_cloaking_enabled: data.dm_cloaking_enabled ?? false,
+          } as Profile;
+        }
+      } catch {
+        // DB error on this attempt — will retry or give up gracefully
       }
-    } catch {
-      // DB error on this attempt — will retry or give up gracefully
     }
-  }
+    return null;
+  })();
 
+  // ── Both in parallel ───────────────────────────────────────────────────────
+  const [isAdmin, profile] = await Promise.all([adminPromise, profilePromise]);
   return { profile, isAdmin };
 }
 

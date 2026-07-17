@@ -105,6 +105,11 @@ function OnboardingPage() {
       })
       .eq("id", user.id);
     setBusy(false);
+    if (!error) {
+      // Bust the _authenticated/route.tsx sessionStorage cache so the next
+      // navigation picks up the new onboarding_completed=true value.
+      sessionStorage.removeItem(`ob:${user.id}`);
+    }
     if (error) {
       toast.error(
         error.message.includes("profiles_handle_key") ? "That handle was just taken — try another." : error.message,
