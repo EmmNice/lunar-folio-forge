@@ -47,23 +47,38 @@ function FeedPage() {
   }, [loading, user, profile, navigate]);
 
   async function fetchAll() {
-    // Select base columns that always exist. comments_enabled / visibility are
-    // added by migration 002 — they default gracefully until that runs.
-    const { data, error } = await supabase
+    let data: any[] | null = null;
+
+    // Try full select including migration-002 columns first
+    const fullRes = await supabase
       .from("posts")
       .select(
-        "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
+        "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
       )
       .order("created_at", { ascending: false })
       .limit(80);
 
-    if (error) {
-      toast.error("Couldn't load the feed.");
-      setPosts([]);
-      return;
+    if (fullRes.error) {
+      // Migration-002 might not be applied — fall back to base columns only
+      const baseRes = await supabase
+        .from("posts")
+        .select(
+          "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
+        )
+        .order("created_at", { ascending: false })
+        .limit(80);
+
+      if (baseRes.error) {
+        toast.error("Couldn't load the feed. Check your connection.");
+        setPosts([]);
+        return;
+      }
+      data = baseRes.data;
+    } else {
+      data = fullRes.data;
     }
 
-    // Attach safe defaults for migration-002 columns
+    // Attach safe defaults for any missing migration-002 columns
     let all: FeedPost[] = (data ?? []).map((p: any) => ({
       ...p,
       comments_enabled: p.comments_enabled ?? true,
@@ -200,59 +215,45 @@ function FeedPage() {
         </div>
 
         {/* ── Signal / Beat tabs ── */}
-        <div className="mb-6 flex gap-1 rounded-xl border border-border/60 bg-secondary/20 p-1">
-          <button
-            type="button"
-            onClick={() => setTab("signal")}
-            className={
-              "flex-1 rounded-lg py-2 text-sm font-medium transition-colors " +
-              (tab === "signal"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground")
-            }
-          >
-            Signal
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("beat")}
-            className={
-              "flex-1 rounded-lg py-2 text-sm font-medium transition-colors " +
-              (tab === "beat"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground")
-            }
-          >
-            Beat
-          </button>
+        <div className="mb-1 flex gap-0.5 rounded-xl border border-border/50 bg-secondary/15 p-1">
+          {(["signal", "beat"] as FeedTab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={
+                "flex-1 rounded-[9px] py-[7px] text-[13px] font-medium transition-all duration-150 " +
+                (tab === t
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground/80")
+              }
+            >
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
         </div>
 
-        {tab === "signal" && (
-          <p className="mb-5 text-xs text-muted-foreground">
-            Silver & Gold verified builders only — the highest-signal posts on the platform.
-          </p>
-        )}
-        {tab === "beat" && (
-          <p className="mb-5 text-xs text-muted-foreground">
-            Raw chronological pulse of everything shipping — verified and unverified alike.
-          </p>
-        )}
+        <p className="mb-6 mt-2.5 text-[12px] leading-relaxed text-muted-foreground/80">
+          {tab === "signal"
+            ? "Silver & Gold verified builders — the highest-signal posts on the platform."
+            : "Raw chronological pulse of everything shipping — verified and unverified alike."}
+        </p>
 
-        {/* ── Composer (signed-in users) ── */}
+        {/* ── Quick composer (signed-in users) ── */}
         {user && profile ? (
-          <div className="mb-8 rounded-2xl border border-border/60 bg-card/40 p-4">
+          <div className="mb-8 rounded-2xl border border-border/50 bg-card/50 p-4 transition-shadow focus-within:border-border/80 focus-within:shadow-md focus-within:shadow-black/20">
             <textarea
               rows={2}
               maxLength={MAX + 40}
               value={composer}
               onChange={(e) => setComposer(e.target.value)}
               placeholder="What's happening in your build today?"
-              className="w-full resize-none border-0 bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50"
             />
-            <div className="mt-3 border-t border-border/50 pt-3">
+            <div className="mt-3 border-t border-border/40 pt-3">
               {/* Background picker */}
               <div className="mb-3 flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Card:</span>
+                <span className="text-[11px] text-muted-foreground/70">Card style:</span>
                 <button
                   type="button"
                   onClick={() => setBackground("noir")}
@@ -271,12 +272,12 @@ function FeedPage() {
               <div className="flex items-center justify-between gap-3">
                 <span
                   className={
-                    "text-xs tabular-nums " +
+                    "text-xs tabular-nums transition-colors " +
                     (remaining < 0
-                      ? "text-red-400"
+                      ? "font-medium text-red-400"
                       : remaining <= 20
-                        ? "text-amber-400"
-                        : "text-muted-foreground")
+                        ? "font-medium text-amber-400"
+                        : "text-muted-foreground/60")
                   }
                 >
                   {remaining}
@@ -286,27 +287,27 @@ function FeedPage() {
                     type="button"
                     onClick={downloadGraphic}
                     disabled={busy !== null || !composer.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:opacity-40"
                   >
                     {busy === "download" ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <ImageIcon className="h-3.5 w-3.5" />
                     )}
-                    Download Graphic
+                    Graphic
                   </button>
                   <button
                     type="button"
                     onClick={publish}
                     disabled={busy !== null || !composer.trim() || remaining < 0}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3.5 py-1.5 text-xs font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-40"
                   >
                     {busy === "publish" ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <Send className="h-3.5 w-3.5" />
                     )}
-                    Publish Live
+                    Publish
                   </button>
                 </div>
               </div>
@@ -316,26 +317,55 @@ function FeedPage() {
 
         {/* ── Feed ── */}
         {posts === null ? (
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-32 rounded-2xl border border-border/40 bg-card/30 animate-pulse" />
+          // Rich skeleton cards — match the shape of real PostCards
+          <div className="space-y-4" aria-label="Loading feed…">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border/40 bg-card/30 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary/60" />
+                  <div className="min-w-0 flex-1 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3.5 w-28 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 80}ms` }} />
+                      <div className="h-3 w-16 animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 80 + 40}ms` }} />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3.5 w-full animate-pulse rounded-full bg-secondary/50" style={{ animationDelay: `${i * 80 + 80}ms` }} />
+                      <div className="h-3.5 w-4/5 animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 80 + 120}ms` }} />
+                      {i % 2 === 0 && <div className="h-3.5 w-2/3 animate-pulse rounded-full bg-secondary/30" style={{ animationDelay: `${i * 80 + 160}ms` }} />}
+                    </div>
+                    <div className="flex gap-5 pt-1">
+                      {[20, 16, 16, 14].map((w, j) => (
+                        <div key={j} className={`h-3 w-${w} animate-pulse rounded-full bg-secondary/30`} style={{ animationDelay: `${i * 80 + j * 30}ms` }} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : displayedPosts.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
+          <div className="rounded-2xl border border-dashed border-border/60 p-12 text-center">
             {tab === "signal" ? (
               <>
-                <p className="text-sm font-medium text-foreground">No verified posts yet</p>
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Signal only shows Silver & Gold verified builders.
+                <p className="text-sm font-semibold text-foreground">No verified posts yet</p>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  Signal shows only Silver & Gold verified builders.
                   <br />
-                  Switch to <button type="button" onClick={() => setTab("beat")} className="font-medium text-foreground underline underline-offset-2">Beat</button> to see all posts — verified and unverified.
+                  Switch to{" "}
+                  <button
+                    type="button"
+                    onClick={() => setTab("beat")}
+                    className="font-medium text-foreground underline underline-offset-3 hover:opacity-80"
+                  >
+                    Beat
+                  </button>{" "}
+                  to see everything.
                 </p>
               </>
             ) : (
               <>
-                <p className="text-sm font-medium text-foreground">Nothing here yet</p>
-                <p className="mt-1.5 text-xs text-muted-foreground">Be the first to ship something.</p>
+                <p className="text-sm font-semibold text-foreground">Nothing here yet</p>
+                <p className="mt-2 text-xs text-muted-foreground">Be the first to ship something.</p>
               </>
             )}
           </div>

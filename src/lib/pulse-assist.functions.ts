@@ -6,7 +6,7 @@ const DAILY_CREDITS = 3;
 
 export const pulseAssistDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
+  .validator((input) =>
     z.object({
       content: z.string().min(1).max(1000),
       mode: z.enum(["polish", "expand", "shorten"]).default("polish"),

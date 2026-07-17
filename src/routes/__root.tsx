@@ -17,17 +17,17 @@ function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">404</p>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">Page not found</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          This page doesn't exist or has been moved.
         </p>
-        <div className="mt-6">
+        <div className="mt-8">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-xl bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
-            Go home
+            Back to The Ledger
           </Link>
         </div>
       </div>
@@ -36,34 +36,36 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
   const router = useRouter();
   useEffect(() => {
-    console.error("[root error boundary]", error);
+    // Log to error tracking in production; suppress in dev to keep console clean
+    if (import.meta.env.PROD) {
+      // eslint-disable-next-line no-console
+      console.error("[The Ledger]", error);
+    }
   }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">Error</p>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
+          Something went wrong
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          We hit an unexpected error. Try again or head back to the feed.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            type="button"
+            onClick={() => { router.invalidate(); reset(); }}
+            className="inline-flex items-center justify-center rounded-xl bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
             Try again
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
           </a>
@@ -88,7 +90,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Design and share tech-founder status cards. Sign in with Google and export 1080×1920 images ready for WhatsApp Status.",
+          "A premium, tech-noir platform for Web3 builders, founders, and investors. One global timeline — no follower games, just signal.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -100,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap",
       },
     ],
   }),
@@ -129,10 +131,14 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    // Only invalidate on SIGNED_OUT — SIGNED_IN is handled by useAuth hook directly.
+    // Calling router.invalidate() on SIGNED_IN causes every beforeLoad to re-run,
+    // doubling all DB profile fetches and causing visible flicker on sign-in.
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+      if (event === "SIGNED_OUT") {
+        queryClient.clear();
+        router.invalidate();
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
@@ -140,7 +146,15 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
-      <Toaster theme="dark" position="top-center" richColors closeButton />
+      <Toaster
+        theme="dark"
+        position="top-center"
+        richColors
+        closeButton
+        toastOptions={{
+          style: { fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" },
+        }}
+      />
     </QueryClientProvider>
   );
 }

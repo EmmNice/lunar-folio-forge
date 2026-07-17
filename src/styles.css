@@ -29,30 +29,32 @@
 
 :root {
   --radius: 0.625rem;
-  /* Tech-noir dark palette */
-  --background: oklch(0.14 0.005 260);
-  --foreground: oklch(1 0 0);
-  --card: oklch(0.17 0.005 260);
-  --card-foreground: oklch(1 0 0);
-  --primary: oklch(1 0 0);
-  --primary-foreground: oklch(0.14 0.005 260);
-  --secondary: oklch(0.22 0.008 260);
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.22 0.008 260);
-  --muted-foreground: oklch(0.72 0.02 255); /* ~slate-400 #94a3b8 */
-  --accent: oklch(0.22 0.008 260);
-  --accent-foreground: oklch(1 0 0);
-  --border: oklch(0.28 0.01 260); /* ~slate-800 */
-  --input: oklch(0.28 0.01 260);
-  --ring: oklch(0.6 0.02 260);
 
-  --dot-color: oklch(1 0 0 / 0.06);
-  --bg-base: #0b0b0c;
+  /* ── Tech-noir dark palette ── */
+  --background:          oklch(0.13 0.005 260);
+  --foreground:          oklch(0.98 0 0);
+  --card:                oklch(0.16 0.006 260);
+  --card-foreground:     oklch(0.98 0 0);
+  --primary:             oklch(0.98 0 0);
+  --primary-foreground:  oklch(0.13 0.005 260);
+  --secondary:           oklch(0.21 0.008 260);
+  --secondary-foreground:oklch(0.98 0 0);
+  --muted:               oklch(0.21 0.008 260);
+  --muted-foreground:    oklch(0.62 0.018 258); /* slate-400 equivalent */
+  --accent:              oklch(0.21 0.008 260);
+  --accent-foreground:   oklch(0.98 0 0);
+  --border:              oklch(0.26 0.01 260);  /* slate-800 equivalent */
+  --input:               oklch(0.26 0.01 260);
+  --ring:                oklch(0.55 0.02 260);
+
+  --dot-color: oklch(1 0 0 / 0.045);
+  --bg-base:   #0b0b0c;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
+    box-sizing: border-box;
   }
 
   html,
@@ -60,7 +62,9 @@
     background-color: var(--bg-base);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
@@ -68,5 +72,76 @@
     background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
     background-size: 22px 22px;
     background-position: 0 0;
+    background-attachment: fixed;
+  }
+
+  /* ── Text selection ── */
+  ::selection {
+    background-color: oklch(0.98 0 0 / 0.15);
+    color: oklch(0.98 0 0);
+  }
+
+  /* ── Focus ring — keyboard-only, consistent everywhere ── */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ── Scrollbar — minimal and on-brand ── */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.32 0.01 260);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.40 0.012 260);
+  }
+
+  /* ── Smooth page transitions ── */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  /* ── Consistent interactive cursor ── */
+  button,
+  [role="button"],
+  [role="switch"],
+  [role="tab"],
+  label[for],
+  a {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
+/* ── Verified border glow utilities ── */
+@layer utilities {
+  .glow-gold {
+    box-shadow: 0 0 0 1px oklch(0.79 0.17 84 / 0.3),
+                0 0 20px oklch(0.79 0.17 84 / 0.06);
+  }
+  .glow-silver {
+    box-shadow: 0 0 0 1px oklch(0.72 0.02 255 / 0.35);
+  }
+
+  /* Premium card hover lift */
+  .card-hover {
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-1px);
   }
 }

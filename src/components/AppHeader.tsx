@@ -25,93 +25,94 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur">
+      {/* ── Top nav ── */}
+      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary/60 text-xs font-semibold">
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
+            <span className="grid h-6 w-6 place-items-center rounded-[5px] bg-foreground text-[11px] font-bold text-background">
               L
             </span>
-            <span className="text-sm font-semibold tracking-tight">The Ledger</span>
+            <span className="text-sm font-semibold tracking-[-0.01em]">The Ledger</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 text-sm sm:flex">
+          {/* Desktop nav */}
+          <nav className="hidden items-center text-sm sm:flex">
             {TABS.map((t) => (
               <Link
                 key={t.to}
                 to={t.to}
-                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                activeProps={{
-                  className:
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-foreground bg-secondary/60",
-                }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                activeProps={{ className: "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-foreground font-medium" }}
               >
-                <t.icon className="h-4 w-4" /> {t.label}
+                <t.icon className="h-[15px] w-[15px]" />
+                {t.label}
               </Link>
             ))}
-
-            {/* Admin link — only visible to admins */}
             {isAdmin && (
               <Link
                 to="/admin"
-                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-amber-400/70 transition-colors hover:text-amber-400"
-                activeProps={{
-                  className:
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-amber-400 bg-amber-500/10",
-                }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-amber-400/60 transition-colors hover:text-amber-400"
+                activeProps={{ className: "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-amber-400 font-medium bg-amber-500/8" }}
               >
-                <ShieldCheck className="h-4 w-4" /> Admin
+                <ShieldCheck className="h-[15px] w-[15px]" /> Admin
               </Link>
             )}
           </nav>
 
+          {/* Right side */}
           <div className="flex items-center gap-1">
-            {loading ? null : user ? (
+            {loading ? (
+              <span className="h-7 w-24 animate-pulse rounded-full bg-secondary/60" />
+            ) : user ? (
               <>
                 <Link
                   to="/messages"
                   aria-label="Messages"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-                  activeProps={{ className: "inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground" }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                  activeProps={{ className: "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground bg-secondary/60" }}
                 >
-                  <MessageSquare className="h-4 w-4" />
+                  <MessageSquare className="h-[15px] w-[15px]" />
                 </Link>
-                {profile ? (
+
+                {profile && (
                   <Link
                     to="/u/$handle"
                     params={{ handle: profile.handle }}
-                    className="ml-1 inline-flex items-center gap-1.5 rounded-full border border-border/70 px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    className="ml-0.5 inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                   >
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
                         alt=""
-                        className="h-5 w-5 rounded-full object-cover"
+                        className="h-[18px] w-[18px] rounded-full object-cover ring-1 ring-border/50"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <span className="grid h-5 w-5 place-items-center rounded-full bg-secondary/60 text-[10px] font-semibold">
+                      <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-secondary text-[9px] font-semibold">
                         {profile.display_name.charAt(0).toUpperCase()}
                       </span>
                     )}
                     <span className="hidden items-center gap-1 sm:inline-flex">
                       @{profile.handle}
-                      <VerificationBadge tier={profile.verification_tier} size={12} />
+                      <VerificationBadge tier={profile.verification_tier} size={11} />
                     </span>
                   </Link>
-                ) : null}
+                )}
+
                 <button
                   type="button"
                   onClick={signOut}
                   aria-label="Sign out"
-                  className="ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  className="ml-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-[15px] w-[15px]" />
                 </button>
               </>
             ) : (
               <Link
                 to="/"
-                className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90"
+                className="rounded-lg bg-foreground px-3.5 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
               >
                 Sign in
               </Link>
@@ -120,16 +121,16 @@ export function AppHeader() {
         </div>
       </header>
 
-      {/* Bottom tab bar — mobile only */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border/60 bg-background/90 backdrop-blur sm:hidden">
+      {/* ── Mobile bottom tab bar ── */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border/50 bg-background/90 backdrop-blur-md sm:hidden">
         {TABS.map((t) => (
           <Link
             key={t.to}
             to={t.to}
-            className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] text-muted-foreground transition-colors"
-            activeProps={{ className: "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] text-foreground" }}
+            className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
+            activeProps={{ className: "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground" }}
           >
-            <t.icon className="h-5 w-5" />
+            <t.icon className="h-[18px] w-[18px]" />
             {t.label.split(" ")[0]}
           </Link>
         ))}

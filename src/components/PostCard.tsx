@@ -84,13 +84,13 @@ export function PostCard({
   const isVerifiedOnly = post.visibility === "verified_only";
   const isWhisper = post.visibility === "whisper";
 
-  // Tier-based border styles
+  // Tier-based border + glow styles
   const tierBorder =
     post.author.verification_tier === "gold"
-      ? "border-amber-500/30 shadow-sm shadow-amber-500/5"
+      ? "border-amber-500/25 glow-gold"
       : post.author.verification_tier === "silver"
-        ? "border-slate-400/30"
-        : "border-border/60";
+        ? "border-slate-400/25 glow-silver"
+        : "border-border/50";
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +206,7 @@ export function PostCard({
     onDeleted?.(post.id);
   }
 
-  const actionBtn = "inline-flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50";
+  const actionBtn = "inline-flex items-center gap-1.5 text-xs transition-colors disabled:opacity-40 select-none";
 
   return (
     <article className={`rounded-2xl border bg-card/40 p-4 sm:p-5 ${tierBorder}`}>

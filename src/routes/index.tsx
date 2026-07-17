@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
 
 export const Route = createFileRoute("/")({
+  ssr: false,  // auth is client-only; disable SSR to prevent hydration mismatches
   head: () => ({
     meta: [
       { title: "The Ledger — A high-signal network for tech founders" },

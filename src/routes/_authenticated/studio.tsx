@@ -206,13 +206,9 @@ function StudioPage() {
                       </span>
                     )}
                   </div>
-                  <a
-                    href="#"
-                    className="text-[10px] text-violet-400/60 hover:text-violet-400"
-                    onClick={(e) => e.preventDefault()}
-                  >
+                  <span className="text-[10px] text-violet-400/40">
                     Powered by PulseAssist
-                  </a>
+                  </span>
                 </div>
 
                 <div className="mb-2.5 flex gap-1.5 flex-wrap">

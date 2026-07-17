@@ -27,8 +27,7 @@ export type Profile = {
   dm_cloaking_enabled: boolean;
 };
 
-// NOTE: subscription_status, ai_credits_*, pitch_limit are added by migration 002.
-// They are fetched separately so the app keeps working before that migration runs.
+// Base columns that always exist (no migration dependency)
 const PROFILE_COLUMNS =
   "id, handle, display_name, avatar_url, bio, date_of_birth, role_type, company_name, onboarding_completed, verification_tier, github_url, portfolio_url, startup_url, traction_url";
 
@@ -41,49 +40,62 @@ export type AuthState = {
   refreshProfile: () => Promise<void>;
 };
 
+/**
+ * Loads the full profile for a user. Always resolves — never throws.
+ * Returns null profile if the user has no row yet (new account race) or DB is down.
+ */
 async function loadProfile(user: User | null): Promise<{ profile: Profile | null; isAdmin: boolean }> {
   if (!user) return { profile: null, isAdmin: false };
 
-  // Small retry loop — the auth trigger creates the profile row asynchronously
-  // on first sign-in, so the very first fetch can race and see nothing.
-  // Fire all three reads in parallel — base profile, migration-002 extras, admin role.
-  // The retry loop is kept only for the base profile (auth trigger races on first sign-in).
+  // Admin check — isolated try/catch so it never blocks the rest
+  let isAdmin = false;
+  try {
+    const { data } = await supabase.rpc("has_role", { _role: "admin", _user_id: user.id });
+    isAdmin = data === true;
+  } catch {
+    // RPC missing or network error — treat as non-admin
+  }
+
+  // Profile fetch with retry loop for new-account auth trigger race.
+  // 3 attempts: 0ms, 300ms, 700ms backoff. Always completes without throwing.
   let profile: Profile | null = null;
+  const delays = [0, 300, 700];
 
-  // Check admin role — wrapped in async IIFE so .catch works on the awaited promise
-  const isAdmin = await (async () => {
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+
     try {
-      const { data } = await supabase.rpc("has_role", { _role: "admin", _user_id: user.id });
-      return data === true;
+      const [baseRes, extraRes] = await Promise.all([
+        supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled")
+          .eq("id", user.id)
+          .maybeSingle(),
+      ]);
+
+      if (baseRes.data) {
+        const extra = extraRes.data as {
+          subscription_status?: string;
+          ai_credits_used?: number;
+          ai_credits_reset_at?: string | null;
+          pitch_limit?: number | null;
+          dm_cloaking_enabled?: boolean;
+        } | null;
+
+        profile = {
+          ...baseRes.data,
+          subscription_status: extra?.subscription_status ?? "active",
+          ai_credits_used: extra?.ai_credits_used ?? 0,
+          ai_credits_reset_at: extra?.ai_credits_reset_at ?? null,
+          pitch_limit: extra?.pitch_limit ?? null,
+          dm_cloaking_enabled: extra?.dm_cloaking_enabled ?? false,
+        } as Profile;
+        break;
+      }
     } catch {
-      return false;
+      // DB error on this attempt — will retry or give up gracefully
     }
-  })();
-
-  for (let i = 0; i < 4; i++) {
-    // Run base + extras in parallel each attempt
-    const [baseRes, extraRes] = await Promise.all([
-      supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", user.id).maybeSingle(),
-      supabase
-        .from("profiles")
-        .select("subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled")
-        .eq("id", user.id)
-        .maybeSingle(),
-    ]);
-
-    if (baseRes.data) {
-      const extra = extraRes.data as { subscription_status?: string; ai_credits_used?: number; ai_credits_reset_at?: string | null; pitch_limit?: number | null; dm_cloaking_enabled?: boolean } | null;
-      profile = {
-        ...baseRes.data,
-        subscription_status: extra?.subscription_status ?? "active",
-        ai_credits_used: extra?.ai_credits_used ?? 0,
-        ai_credits_reset_at: extra?.ai_credits_reset_at ?? null,
-        pitch_limit: extra?.pitch_limit ?? null,
-        dm_cloaking_enabled: extra?.dm_cloaking_enabled ?? false,
-      } as Profile;
-      break;
-    }
-    await new Promise((r) => setTimeout(r, 250 * (i + 1)));
   }
 
   return { profile, isAdmin };
@@ -101,20 +113,33 @@ export function useAuth(): AuthState {
   useEffect(() => {
     let cancelled = false;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (cancelled) return;
-      const user = data.session?.user ?? null;
-      const { profile, isAdmin } = await loadProfile(user);
-      if (cancelled) return;
-      setState({ loading: false, session: data.session, user, profile, isAdmin });
-    });
+    // Initial session load — always resolves, never freezes
+    async function init() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const user = data.session?.user ?? null;
+        const { profile, isAdmin } = await loadProfile(user);
+        if (cancelled) return;
+        setState({ loading: false, session: data.session, user, profile, isAdmin });
+      } catch {
+        // Absolute worst case (getSession itself throws) — unfreeze loading
+        if (!cancelled) setState((s) => ({ ...s, loading: false }));
+      }
+    }
+    init();
 
+    // Listen for auth changes; errors are swallowed so they never freeze the UI
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      const user = session?.user ?? null;
-      const { profile, isAdmin } = await loadProfile(user);
-      if (cancelled) return;
-      setState({ loading: false, session, user, profile, isAdmin });
+      try {
+        const user = session?.user ?? null;
+        const { profile, isAdmin } = await loadProfile(user);
+        if (cancelled) return;
+        setState({ loading: false, session, user, profile, isAdmin });
+      } catch {
+        // Don't freeze on auth-event errors
+      }
     });
 
     return () => {
@@ -124,10 +149,14 @@ export function useAuth(): AuthState {
   }, []);
 
   async function refreshProfile() {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user ?? null;
-    const { profile, isAdmin } = await loadProfile(user);
-    setState((s) => ({ ...s, user, session: data.session, profile, isAdmin }));
+    try {
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user ?? null;
+      const { profile, isAdmin } = await loadProfile(user);
+      setState((s) => ({ ...s, user, session: data.session, profile, isAdmin }));
+    } catch {
+      // Silently ignore refresh errors
+    }
   }
 
   return { ...state, refreshProfile };
