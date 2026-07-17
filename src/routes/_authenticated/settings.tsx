@@ -1,490 +1,384 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, Github, Rocket, Inbox, EyeOff } from "lucide-react";
+import {
+  Loader2, ShieldCheck, Github, LogOut, Lock, EyeOff, Bell,
+  MessageSquare, Zap, MonitorCog, CheckCircle2, Circle,
+  Inbox,
+} from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
-import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { acceptPitch } from "@/lib/pitch.functions";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Studio Settings · The Ledger" }] }),
-  component: SettingsPage,
+  head: () => ({ meta: [{ title: "Account Settings · The Ledger" }] }),
+  component: AccountSettingsPage,
 });
 
-type Tab = "profile" | "verification" | "pitches" | "privacy";
+// ─── Notification prefs are stored in localStorage (no DB column needed) ───
+const NOTIF_KEYS = {
+  messages: "ledger_notif_messages",
+  pitches: "ledger_notif_pitches",
+  system: "ledger_notif_system",
+} as const;
 
-function SettingsPage() {
+function readNotif(key: keyof typeof NOTIF_KEYS): boolean {
+  try { return localStorage.getItem(NOTIF_KEYS[key]) !== "false"; } catch { return true; }
+}
+function writeNotif(key: keyof typeof NOTIF_KEYS, val: boolean) {
+  try { localStorage.setItem(NOTIF_KEYS[key], String(val)); } catch { /* ignore */ }
+}
+
+// ─── Shared luxury toggle ────────────────────────────────────────────────────
+function LuxToggle({
+  checked, onChange, disabled = false,
+}: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="relative h-5 w-9 shrink-0 rounded-full transition-all disabled:opacity-40"
+      style={{
+        background: checked ? "rgba(245,245,246,0.90)" : "rgba(255,255,255,0.10)",
+        border: "1px solid rgba(255,255,255,0.10)",
+      }}
+    >
+      <span
+        className="absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform"
+        style={{ transform: checked ? "translateX(16px)" : "translateX(2px)" }}
+      />
+    </button>
+  );
+}
+
+// ─── Section wrapper ─────────────────────────────────────────────────────────
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {title}
+      </p>
+      <div
+        className="overflow-hidden rounded-2xl"
+        style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(26,26,30,0.60)" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Row inside a section ────────────────────────────────────────────────────
+function Row({ children, divider = true }: { children: React.ReactNode; divider?: boolean }) {
+  return (
+    <div
+      className="px-5 py-4"
+      style={divider ? { borderBottom: "1px solid rgba(255,255,255,0.05)" } : {}}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AccountSettingsPage() {
   const { profile } = useAuth();
-  const [tab, setTab] = useState<Tab>("profile");
-
-  const tabs: { id: Tab; label: string; goldOnly?: boolean }[] = [
-    { id: "profile", label: "Profile" },
-    { id: "verification", label: "Verification" },
-    { id: "pitches", label: "Inbound Pitches", goldOnly: true },
-    { id: "privacy", label: "Privacy", goldOnly: true },
-  ];
-
-  const visibleTabs = tabs.filter((t) => !t.goldOnly || profile?.verification_tier === "gold");
+  const isGold = profile?.verification_tier === "gold";
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
-      <main className="mx-auto max-w-lg px-4 pt-10 pb-24 sm:px-6">
+      <main className="mx-auto max-w-lg px-4 pt-10 pb-28 sm:px-6">
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
           The Ledger
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Studio Settings</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Account Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Security, privacy, and notification preferences.
+        </p>
 
-        <div className="mt-6 flex gap-1 border-b border-border/60">
-          {visibleTabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={
-                "px-3 py-2 text-sm font-medium transition-colors " +
-                (tab === t.id
-                  ? "border-b-2 border-foreground text-foreground"
-                  : "text-muted-foreground hover:text-foreground")
-              }
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-8">
-          {tab === "profile" && <ProfileTab />}
-          {tab === "verification" && <VerificationTab />}
-          {tab === "pitches" && profile?.verification_tier === "gold" && <PitchesTab />}
-          {tab === "privacy" && profile?.verification_tier === "gold" && <PrivacyTab />}
+        <div className="mt-8 space-y-8">
+          <SecuritySection />
+          <PrivacySection />
+          <NotificationsSection />
+          {isGold && <PitchesSection />}
+          <DangerSection />
         </div>
       </main>
     </div>
   );
 }
 
-function ProfileTab() {
-  const { profile, refreshProfile } = useAuth();
-  const [handle, setHandle] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [bio, setBio] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [githubUrl, setGithubUrl] = useState("");
-  const [websiteUrl, setWebsiteUrl] = useState("");
+// ─── 1. SECURITY & AUTH ──────────────────────────────────────────────────────
+function SecuritySection() {
+  const { user } = useAuth();
+  const [showPwForm, setShowPwForm] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!profile) return;
-    setHandle(profile.handle);
-    setDisplayName(profile.display_name);
-    setBio(profile.bio ?? "");
-    setAvatarUrl(profile.avatar_url ?? "");
-    setCompanyName(profile.company_name ?? "");
-    setGithubUrl(profile.github_url ?? "");
-    setWebsiteUrl(profile.portfolio_url ?? "");
-  }, [profile]);
+  // Parse provider identities
+  const identities = user?.identities ?? [];
+  const hasGithub = identities.some((i) => i.provider === "github");
+  const hasGoogle = identities.some((i) => i.provider === "google");
+  const hasEmail = identities.some((i) => i.provider === "email");
 
-  async function save() {
-    if (!profile) return;
-    if (!/^[a-z0-9_]{2,20}$/.test(handle)) {
-      toast.error("Handle must be 2–20 chars: lowercase letters, numbers, or _.");
-      return;
-    }
-    if (!displayName.trim()) { toast.error("Display name is required."); return; }
-    if (githubUrl && !/^https?:\/\//.test(githubUrl.trim())) {
-      toast.error("GitHub URL must start with https://");
-      return;
-    }
-    if (websiteUrl && !/^https?:\/\//.test(websiteUrl.trim())) {
-      toast.error("Website URL must start with https://");
-      return;
-    }
+  async function changePassword() {
+    if (!newPw.trim()) { toast.error("Enter a new password."); return; }
+    if (newPw !== confirmPw) { toast.error("Passwords don't match."); return; }
+    if (newPw.length < 8) { toast.error("Password must be at least 8 characters."); return; }
     setBusy(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        handle,
-        display_name: displayName.trim(),
-        bio: bio.trim() || null,
-        avatar_url: avatarUrl.trim() || null,
-        company_name: companyName.trim() || null,
-        github_url: githubUrl.trim() || null,
-        portfolio_url: websiteUrl.trim() || null,
-      })
-      .eq("id", profile.id);
+    const { error } = await supabase.auth.updateUser({ password: newPw });
     setBusy(false);
-    if (error) {
-      toast.error(error.message.includes("profiles_handle_key") ? "That handle is taken." : error.message);
-      return;
-    }
-    await refreshProfile();
-    toast.success("Profile updated.");
-  }
-
-  const field =
-    "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Verification status:</span>
-        <VerificationBadge tier={profile?.verification_tier} size={16} />
-        <span className="text-sm font-medium capitalize">{profile?.verification_tier ?? "none"}</span>
-      </div>
-      <div className="space-y-1.5">
-        <label className="text-xs uppercase tracking-wider text-muted-foreground">Handle</label>
-        <input className={field} value={handle} onChange={(e) => setHandle(e.target.value.toLowerCase())} />
-        <p className="text-xs text-muted-foreground">Lowercase letters, numbers, underscore. 2–20 chars.</p>
-      </div>
-      <div className="space-y-1.5">
-        <label className="text-xs uppercase tracking-wider text-muted-foreground">Display name</label>
-        <input className={field} value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
-      </div>
-      <div className="space-y-1.5">
-        <label className="text-xs uppercase tracking-wider text-muted-foreground">Company / startup</label>
-        <input className={field} value={companyName} onChange={(e) => setCompanyName(e.target.value)} maxLength={80} />
-      </div>
-      <div className="space-y-1.5">
-        <label className="text-xs uppercase tracking-wider text-muted-foreground">Bio</label>
-        <textarea rows={3} className={field + " resize-y"} value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} />
-      </div>
-      <div className="space-y-1.5">
-        <label className="text-xs uppercase tracking-wider text-muted-foreground">Avatar URL</label>
-        <input className={field} value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://…" />
-        <p className="text-xs text-muted-foreground">Paste a public image URL to use as your avatar.</p>
-      </div>
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-          <Github className="h-3.5 w-3.5" /> GitHub URL
-        </label>
-        <input
-          className={field}
-          value={githubUrl}
-          onChange={(e) => setGithubUrl(e.target.value)}
-          placeholder="https://github.com/yourhandle"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <label className="text-xs uppercase tracking-wider text-muted-foreground">Website / Portfolio</label>
-        <input
-          className={field}
-          value={websiteUrl}
-          onChange={(e) => setWebsiteUrl(e.target.value)}
-          placeholder="https://yoursite.com"
-        />
-      </div>
-      <button
-        type="button"
-        onClick={save}
-        disabled={busy}
-        className="w-full rounded-md bg-foreground px-4 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
-      >
-        {busy ? "Saving…" : "Save Profile"}
-      </button>
-    </div>
-  );
-}
-
-type VerificationRequestRow = {
-  id: string;
-  tier: "silver" | "gold";
-  status: "pending" | "approved" | "rejected";
-  created_at: string;
-};
-
-function VerificationTab() {
-  const { profile, user } = useAuth();
-  const [requests, setRequests] = useState<VerificationRequestRow[] | null>(null);
-  const [silverGithub, setSilverGithub] = useState("");
-  const [silverPortfolio, setSilverPortfolio] = useState("");
-  const [goldStartup, setGoldStartup] = useState("");
-  const [goldTraction, setGoldTraction] = useState("");
-  const [busy, setBusy] = useState<"silver" | "gold" | null>(null);
-
-  async function load() {
-    if (!user) return;
-    const { data } = await supabase
-      .from("verification_requests")
-      .select("id, tier, status, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    setRequests((data ?? []) as VerificationRequestRow[]);
-  }
-
-  useEffect(() => { load(); }, [user]);
-
-  function latestFor(tier: "silver" | "gold") {
-    return requests?.find((r) => r.tier === tier) ?? null;
-  }
-
-  async function submit(tier: "silver" | "gold") {
-    if (!user || !profile) return;
-    const primary = tier === "silver" ? silverGithub.trim() : goldStartup.trim();
-    const secondary = tier === "silver" ? silverPortfolio.trim() : goldTraction.trim();
-    if (!primary) {
-      toast.error(tier === "silver" ? "A GitHub link is required." : "A startup URL is required.");
-      return;
-    }
-    setBusy(tier);
-    const { error } = await supabase.from("verification_requests").insert({
-      user_id: user.id,
-      tier,
-      link_primary: primary,
-      link_secondary: secondary || null,
-    });
-    if (!error) {
-      await supabase
-        .from("profiles")
-        .update(
-          tier === "silver"
-            ? { github_url: primary, portfolio_url: secondary || null }
-            : { startup_url: primary, traction_url: secondary || null },
-        )
-        .eq("id", user.id);
-    }
-    setBusy(null);
     if (error) { toast.error(error.message); return; }
-    toast.success("Submitted — your credentials are now under review.");
-    await load();
+    toast.success("Password updated.");
+    setNewPw(""); setConfirmPw(""); setShowPwForm(false);
   }
 
-  const field =
-    "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
-
   return (
-    <div className="space-y-6">
-      {/* ── Silver card — glassmorphism ── */}
-      <div
-        className="glass-silver rounded-2xl p-5"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(148,163,184,0.12)" }}>
-            <Github className="h-4 w-4" style={{ color: "#94a3b8" }} />
+    <Section title="Security & Auth">
+      {/* Change Password */}
+      <Row>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: "rgba(255,255,255,0.06)" }}>
+              <Lock className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Change Password</p>
+              <p className="text-[11px] text-muted-foreground">
+                {hasEmail ? "Update your sign-in password." : "No email/password login linked."}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "#cbd5e1" }}>Silver — Recognized Builder</p>
-            <p className="text-[11px]" style={{ color: "rgba(148,163,184,0.65)" }}>Verified contributor identity</p>
-          </div>
-        </div>
-        <p className="mt-3 text-xs" style={{ color: "rgba(148,163,184,0.70)" }}>
-          Verify with a public GitHub profile (and optional portfolio) that shows real shipped work.
-        </p>
-        <StatusPill request={latestFor("silver")} />
-        {profile?.verification_tier !== "silver" && profile?.verification_tier !== "gold" ? (
-          <div className="mt-4 space-y-2.5">
-            <input
-              className="lux-field"
-              placeholder="https://github.com/yourhandle"
-              value={silverGithub}
-              onChange={(e) => setSilverGithub(e.target.value)}
-              disabled={latestFor("silver")?.status === "pending"}
-            />
-            <input
-              className="lux-field"
-              placeholder="Portfolio URL (optional)"
-              value={silverPortfolio}
-              onChange={(e) => setSilverPortfolio(e.target.value)}
-              disabled={latestFor("silver")?.status === "pending"}
-            />
-            {/* Silver CTA — brushed-metal outline */}
+          {hasEmail && (
             <button
               type="button"
-              onClick={() => submit("silver")}
-              disabled={busy !== null || latestFor("silver")?.status === "pending"}
-              className="group inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-              style={{
-                border: "1px solid rgba(148,163,184,0.35)",
-                color: "#94a3b8",
-                background: "rgba(148,163,184,0.04)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(148,163,184,0.10)";
-                e.currentTarget.style.borderColor = "rgba(148,163,184,0.55)";
-                e.currentTarget.style.color = "#cbd5e1";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(148,163,184,0.04)";
-                e.currentTarget.style.borderColor = "rgba(148,163,184,0.35)";
-                e.currentTarget.style.color = "#94a3b8";
-              }}
+              onClick={() => setShowPwForm((v) => !v)}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}
             >
-              {busy === "silver" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              Apply for Silver
+              {showPwForm ? "Cancel" : "Change"}
             </button>
-          </div>
-        ) : null}
-      </div>
+          )}
+        </div>
 
-      {/* ── Gold card — glassmorphism ── */}
-      <div
-        className="glass-gold rounded-2xl p-5"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(251,191,36,0.12)" }}>
-            <Rocket className="h-4 w-4" style={{ color: "#fbbf24" }} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "#fde68a" }}>Gold — Elite Founder</p>
-            <p className="text-[11px]" style={{ color: "rgba(251,191,36,0.55)" }}>Maximum network prestige</p>
-          </div>
-        </div>
-        <p className="mt-3 text-xs" style={{ color: "rgba(251,191,36,0.60)" }}>
-          Verify with your startup's public URL and a traction link (press, metrics, funding announcement).
-        </p>
-        <StatusPill request={latestFor("gold")} />
-        {profile?.verification_tier !== "gold" ? (
-          <div className="mt-4 space-y-2.5">
+        {showPwForm && (
+          <div className="mt-4 space-y-2">
             <input
+              type="password"
               className="lux-field"
-              placeholder="https://yourstartup.com"
-              value={goldStartup}
-              onChange={(e) => setGoldStartup(e.target.value)}
-              disabled={latestFor("gold")?.status === "pending"}
+              placeholder="New password (min 8 chars)"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
             />
             <input
+              type="password"
               className="lux-field"
-              placeholder="Traction link (press / metrics / funding)"
-              value={goldTraction}
-              onChange={(e) => setGoldTraction(e.target.value)}
-              disabled={latestFor("gold")?.status === "pending"}
+              placeholder="Confirm new password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
             />
-            {/* Gold CTA — luminous champagne-gold outline */}
             <button
               type="button"
-              onClick={() => submit("gold")}
-              disabled={busy !== null || latestFor("gold")?.status === "pending"}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-              style={{
-                border: "1px solid rgba(251,191,36,0.40)",
-                color: "#fbbf24",
-                background: "rgba(251,191,36,0.05)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(251,191,36,0.12)";
-                e.currentTarget.style.borderColor = "rgba(251,191,36,0.65)";
-                e.currentTarget.style.color = "#fde68a";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(251,191,36,0.05)";
-                e.currentTarget.style.borderColor = "rgba(251,191,36,0.40)";
-                e.currentTarget.style.color = "#fbbf24";
-              }}
+              onClick={changePassword}
+              disabled={busy}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ background: "#F5F5F6" }}
             >
-              {busy === "gold" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              Apply for Gold
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              Update Password
             </button>
           </div>
-        ) : null}
+        )}
+      </Row>
+
+      {/* Linked accounts */}
+      <Row divider={false}>
+        <p className="mb-3 text-xs font-medium text-muted-foreground">Linked Accounts</p>
+        <div className="space-y-2.5">
+          <LinkedAccount
+            icon={<Github className="h-4 w-4" />}
+            label="GitHub"
+            connected={hasGithub}
+          />
+          <LinkedAccount
+            icon={<span className="text-[13px] font-bold">G</span>}
+            label="Google"
+            connected={hasGoogle}
+          />
+        </div>
+      </Row>
+    </Section>
+  );
+}
+
+function LinkedAccount({
+  icon, label, connected,
+}: { icon: React.ReactNode; label: string; connected: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        {icon}
       </div>
+      <span className="flex-1 text-sm text-foreground/80">{label}</span>
+      {connected ? (
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Connected
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Circle className="h-3.5 w-3.5" />
+          Not linked
+        </div>
+      )}
     </div>
   );
 }
 
-function StatusPill({ request }: { request: VerificationRequestRow | null }) {
-  if (!request) return null;
-  const style =
-    request.status === "approved"
-      ? "text-emerald-400 border-emerald-400/40"
-      : request.status === "rejected"
-        ? "text-red-400 border-red-400/40"
-        : "text-amber-400 border-amber-400/40";
-  const label =
-    request.status === "approved"
-      ? "Verified"
-      : request.status === "rejected"
-        ? "Not approved"
-        : "Credentials Under Review";
-  return (
-    <span className={"mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium " + style}>
-      {label}
-    </span>
-  );
-}
-
-function PrivacyTab() {
+// ─── 2. PRIVACY & NETWORK ────────────────────────────────────────────────────
+function PrivacySection() {
   const { profile, user, refreshProfile } = useAuth();
-  const [cloaking, setCloaking] = useState<boolean>(profile?.dm_cloaking_enabled ?? false);
-  const [busy, setBusy] = useState(false);
+  const [dmRestrict, setDmRestrict] = useState(profile?.dm_cloaking_enabled ?? false);
+  const [hideSearch, setHideSearch] = useState(() => {
+    try { return localStorage.getItem("ledger_hide_search") === "true"; } catch { return false; }
+  });
+  const [busyDm, setBusyDm] = useState(false);
 
-  async function save(next: boolean) {
+  async function toggleDm(next: boolean) {
     if (!user) return;
-    setCloaking(next);
-    setBusy(true);
+    setDmRestrict(next);
+    setBusyDm(true);
     const { error } = await supabase
       .from("profiles")
       .update({ dm_cloaking_enabled: next } as any)
       .eq("id", user.id);
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      setCloaking(!next);
-      return;
-    }
+    setBusyDm(false);
+    if (error) { toast.error(error.message); setDmRestrict(!next); return; }
     await refreshProfile();
-    toast.success(next ? "DM Cloaking enabled." : "DM Cloaking disabled.");
+    toast.success(next ? "DMs restricted to verified members." : "DM restriction removed.");
+  }
+
+  function toggleHideSearch(next: boolean) {
+    setHideSearch(next);
+    try { localStorage.setItem("ledger_hide_search", String(next)); } catch { /* ignore */ }
+    toast.success(next ? "Profile hidden from search engines." : "Profile visible to search engines.");
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-amber-500/20 bg-card/40 p-5">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <EyeOff className="h-4 w-4 text-amber-400" /> DM Cloaking
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          When enabled, unverified users cannot see your Connect or Message buttons on your public
-          profile. Only other Silver &amp; Gold members can reach you directly.
-        </p>
-
-        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">Hide contact buttons from unverified visitors</p>
-            <p className="text-xs text-muted-foreground">Silver &amp; Gold members can still message and connect.</p>
+    <Section title="Privacy & Network">
+      <Row>
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: "rgba(255,255,255,0.06)" }}>
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Restrict DMs to Verified Members</p>
+              <p className="text-[11px] text-muted-foreground">
+                Only Silver &amp; Gold users can see your message button.
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={cloaking}
-            disabled={busy}
-            onClick={() => save(!cloaking)}
-            className={
-              "relative h-6 w-11 shrink-0 rounded-full border transition-colors disabled:opacity-60 " +
-              (cloaking ? "border-amber-500 bg-amber-500" : "border-border bg-border/30")
-            }
-          >
-            <span
-              className={
-                "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform " +
-                (cloaking ? "translate-x-5" : "translate-x-0.5")
-              }
-            />
-          </button>
+          <LuxToggle checked={dmRestrict} onChange={toggleDm} disabled={busyDm} />
         </div>
+      </Row>
 
-        {cloaking && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-400/80">
-            <EyeOff className="h-3.5 w-3.5" />
-            DM Cloaking is active — unverified visitors cannot see your contact options.
-          </p>
-        )}
-      </div>
-    </div>
+      <Row divider={false}>
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: "rgba(255,255,255,0.06)" }}>
+              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Hide Profile from Search Engines</p>
+              <p className="text-[11px] text-muted-foreground">
+                Adds a noindex directive to your public profile.
+              </p>
+            </div>
+          </div>
+          <LuxToggle checked={hideSearch} onChange={toggleHideSearch} />
+        </div>
+      </Row>
+    </Section>
   );
 }
 
-const LIMIT_OPTIONS = [
-  { label: "Do Not Disturb (block all)", value: 0 },
-  { label: "3 per week (minimum)", value: 3 },
-  { label: "5 per week", value: 5 },
-  { label: "10 per week", value: 10 },
-  { label: "20 per week", value: 20 },
-  { label: "Unlimited", value: null as number | null },
-];
+// ─── 3. NOTIFICATION PREFERENCES ────────────────────────────────────────────
+function NotificationsSection() {
+  const [messages, setMessages] = useState(() => readNotif("messages"));
+  const [pitches, setPitches] = useState(() => readNotif("pitches"));
+  const [system, setSystem] = useState(() => readNotif("system"));
 
+  function toggle(key: keyof typeof NOTIF_KEYS, val: boolean, setter: (v: boolean) => void) {
+    setter(val);
+    writeNotif(key, val);
+    toast.success("Notification preference saved.");
+  }
+
+  const rows = [
+    {
+      icon: <MessageSquare className="h-4 w-4 text-muted-foreground" />,
+      label: "New Message Alerts",
+      desc: "Notify when someone sends you a direct message.",
+      val: messages,
+      set: (v: boolean) => toggle("messages", v, setMessages),
+    },
+    {
+      icon: <Zap className="h-4 w-4 text-muted-foreground" />,
+      label: "Pitch Match Alerts",
+      desc: "Notify when a new pitch arrives in your inbox.",
+      val: pitches,
+      set: (v: boolean) => toggle("pitches", v, setPitches),
+    },
+    {
+      icon: <MonitorCog className="h-4 w-4 text-muted-foreground" />,
+      label: "System Updates",
+      desc: "Platform announcements and feature releases.",
+      val: system,
+      set: (v: boolean) => toggle("system", v, setSystem),
+    },
+  ];
+
+  return (
+    <Section title="Notification Preferences">
+      {rows.map((r, i) => (
+        <Row key={r.label} divider={i < rows.length - 1}>
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                style={{ background: "rgba(255,255,255,0.06)" }}>
+                {r.icon}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{r.label}</p>
+                <p className="text-[11px] text-muted-foreground">{r.desc}</p>
+              </div>
+            </div>
+            <LuxToggle checked={r.val} onChange={r.set} />
+          </div>
+        </Row>
+      ))}
+    </Section>
+  );
+}
+
+// ─── 4. PITCHES (Gold only) ──────────────────────────────────────────────────
 type PitchRow = {
   id: string;
   company_name: string;
@@ -501,7 +395,16 @@ type PitchRow = {
   } | null;
 };
 
-function PitchesTab() {
+const LIMIT_OPTIONS = [
+  { label: "Do Not Disturb (block all)", value: 0 },
+  { label: "3 per week (minimum)", value: 3 },
+  { label: "5 per week", value: 5 },
+  { label: "10 per week", value: 10 },
+  { label: "20 per week", value: 20 },
+  { label: "Unlimited", value: null as number | null },
+];
+
+function PitchesSection() {
   const { profile, user, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const accept = useServerFn(acceptPitch);
@@ -510,18 +413,13 @@ function PitchesTab() {
   const [pitches, setPitches] = useState<PitchRow[] | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    loadPitches();
-  }, [user]);
+  useEffect(() => { if (user) loadPitches(); }, [user]);
 
   async function loadPitches() {
     if (!user) return;
     const { data } = await supabase
       .from("pitches")
-      .select(
-        "id, company_name, pitch, deck_url, status, created_at, sender:profiles!pitches_sender_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
-      )
+      .select("id, company_name, pitch, deck_url, status, created_at, sender:profiles!pitches_sender_id_fkey(id, handle, display_name, avatar_url, verification_tier)")
       .eq("recipient_id", user.id)
       .in("status", ["pending"])
       .order("created_at", { ascending: false })
@@ -532,10 +430,7 @@ function PitchesTab() {
   async function saveLimit() {
     if (!user) return;
     setBusy(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ pitch_limit: pitchLimit } as any)
-      .eq("id", user.id);
+    const { error } = await supabase.from("profiles").update({ pitch_limit: pitchLimit } as any).eq("id", user.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     await refreshProfile();
@@ -552,45 +447,40 @@ function PitchesTab() {
       navigate({ to: "/messages/$id", params: { id: res.conversationId } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to accept pitch.");
-    } finally {
-      setActionBusy(null);
-    }
+    } finally { setActionBusy(null); }
   }
 
   async function handleDecline(pitchId: string) {
     setActionBusy(pitchId + ":decline");
-    const { error } = await supabase
-      .from("pitches")
-      .update({ status: "declined" } as any)
-      .eq("id", pitchId);
+    const { error } = await supabase.from("pitches").update({ status: "declined" } as any).eq("id", pitchId);
     setActionBusy(null);
     if (error) { toast.error(error.message); return; }
-    // Silently remove from list — no notification to sender
     setPitches((prev) => prev?.filter((x) => x.id !== pitchId) ?? null);
   }
 
   return (
-    <div className="space-y-8">
-      {/* Limit settings */}
-      <div className="rounded-2xl border border-amber-500/20 bg-card/40 p-5">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Inbox className="h-4 w-4 text-amber-400" /> Inbound Pitch Limit
+    <Section title="Inbound Pitches">
+      <Row>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: "rgba(251,191,36,0.10)" }}>
+            <Inbox className="h-4 w-4 text-amber-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">Pitch Inbox Limit</p>
+            <p className="text-[11px] text-muted-foreground">Control how many pitches you receive per week.</p>
+          </div>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Control how many new pitch requests you receive per week. Set 0 to pause all incoming pitches.
-        </p>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           {LIMIT_OPTIONS.map((opt) => (
             <button
               key={String(opt.value)}
               type="button"
               onClick={() => setPitchLimit(opt.value)}
-              className={
-                "rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors " +
-                (pitchLimit === opt.value
-                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                  : "border-border text-muted-foreground hover:text-foreground")
-              }
+              className="rounded-xl border px-3 py-2 text-left text-xs font-medium transition-colors"
+              style={pitchLimit === opt.value
+                ? { borderColor: "rgba(251,191,36,0.40)", background: "rgba(251,191,36,0.08)", color: "#fbbf24" }
+                : { borderColor: "rgba(255,255,255,0.07)", color: "#6B6B7A" }}
             >
               {opt.label}
             </button>
@@ -600,32 +490,31 @@ function PitchesTab() {
           type="button"
           onClick={saveLimit}
           disabled={busy}
-          className="mt-4 inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+          style={{ background: "#F5F5F6" }}
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           Save limit
         </button>
-      </div>
+      </Row>
 
-      {/* Inbound pitches inbox */}
-      <div>
-        <h3 className="mb-1 text-sm font-semibold">Inbound Pitches</h3>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Accept to open a DM thread with the founder. Decline silently archives the request.
-        </p>
+      <Row divider={false}>
+        <p className="mb-3 text-sm font-medium">Pending Pitches</p>
         {pitches === null ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : pitches.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground"
+            style={{ borderColor: "rgba(255,255,255,0.10)" }}>
             No pending pitches.
           </div>
         ) : (
           <div className="space-y-3">
             {pitches.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-border/60 bg-card/40 p-4">
+              <div key={p.id} className="rounded-xl p-4"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
                 <div className="flex items-start gap-3">
-                  {/* Sender avatar */}
-                  <div className="grid h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
+                  <div className="grid h-9 w-9 shrink-0 overflow-hidden rounded-full text-xs font-semibold"
+                    style={{ background: "rgba(255,255,255,0.08)" }}>
                     {p.sender?.avatar_url ? (
                       <img src={p.sender.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
@@ -634,7 +523,6 @@ function PitchesTab() {
                       </span>
                     )}
                   </div>
-
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 text-sm font-medium">
                       {p.sender?.display_name ?? "Unknown"}
@@ -644,49 +532,88 @@ function PitchesTab() {
                     <p className="mt-0.5 text-xs font-semibold text-amber-400/80">{p.company_name}</p>
                     <p className="mt-2 text-sm leading-relaxed text-foreground/90">{p.pitch}</p>
                     {p.deck_url && (
-                      <a
-                        href={p.deck_url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="mt-2 inline-block text-xs text-amber-400 underline underline-offset-4 hover:text-amber-300"
-                      >
-                        View Deck / Demo →
+                      <a href={p.deck_url} target="_blank" rel="noreferrer noopener"
+                        className="mt-2 inline-block text-xs text-amber-400 underline underline-offset-4 hover:text-amber-300">
+                        View Deck →
                       </a>
                     )}
                   </div>
                 </div>
-
-                {/* Accept / Decline actions */}
-                <div className="mt-3 flex gap-2 border-t border-border/50 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => handleAccept(p)}
-                    disabled={actionBusy !== null}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    {actionBusy === p.id + ":accept" ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : null}
+                <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+                  <button type="button" onClick={() => handleAccept(p)} disabled={actionBusy !== null}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50">
+                    {actionBusy === p.id + ":accept" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     Accept
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDecline(p.id)}
-                    disabled={actionBusy !== null}
-                    className="rounded-md border border-border px-4 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                  >
-                    {actionBusy === p.id + ":decline" ? (
-                      <Loader2 className="inline h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      "Decline"
-                    )}
+                  <button type="button" onClick={() => handleDecline(p.id)} disabled={actionBusy !== null}
+                    className="rounded-lg border px-4 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    style={{ borderColor: "rgba(255,255,255,0.10)" }}>
+                    {actionBusy === p.id + ":decline" ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : "Decline"}
                   </button>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </Row>
+    </Section>
+  );
+}
+
+// ─── 5. DANGER ZONE / SIGN OUT ───────────────────────────────────────────────
+function DangerSection() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  async function signOut() {
+    setBusy(true);
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/", replace: true });
+  }
+
+  return (
+    <Section title="System Actions">
+      <Row divider={false}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: "rgba(239,68,68,0.10)" }}>
+              <LogOut className="h-4 w-4 text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-red-400">Sign Out</p>
+              <p className="text-[11px] text-muted-foreground">
+                Destroy this session and return to the login page.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            disabled={busy}
+            className="shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: "rgba(239,68,68,0.10)",
+              border: "1px solid rgba(239,68,68,0.25)",
+              color: "#f87171",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(239,68,68,0.18)";
+              e.currentTarget.style.borderColor = "rgba(239,68,68,0.45)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(239,68,68,0.10)";
+              e.currentTarget.style.borderColor = "rgba(239,68,68,0.25)";
+            }}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+            Log Out
+          </button>
+        </div>
+      </Row>
+    </Section>
   );
 }

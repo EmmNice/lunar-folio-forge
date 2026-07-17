@@ -100,6 +100,7 @@ function ThreadPage() {
             <Link
               to="/u/$handle"
               params={{ handle: other.handle }}
+              search={{ tab: undefined }}
               className="ml-auto flex items-center gap-2 text-sm font-medium hover:opacity-80"
             >
               <div className="grid h-8 w-8 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">

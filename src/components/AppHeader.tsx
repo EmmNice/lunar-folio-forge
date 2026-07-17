@@ -6,14 +6,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { VerificationBadge } from "@/components/VerificationBadge";
 
-// Desktop top nav — primary sections only
+// Desktop top nav — three primary sections
 const DESKTOP_NAV = [
   { to: "/feed" as const, label: "Explore", icon: Rss },
   { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
   { to: "/studio" as const, label: "Workspace", icon: PenSquare },
 ];
 
-// Mobile bottom bar — three primary zones
+// Mobile bottom bar — exactly three zones (no extra tabs)
 const MOBILE_TABS = [
   { to: "/feed" as const, label: "Explore", icon: Rss },
   { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
@@ -21,7 +21,7 @@ const MOBILE_TABS = [
 ];
 
 export function AppHeader() {
-  const { user, profile, loading, isAdmin } = useAuth();
+  const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -72,10 +72,7 @@ export function AppHeader() {
       {/* ── Top nav ── */}
       <header
         className="sticky top-0 z-40 border-b backdrop-blur-md"
-        style={{
-          background: "rgba(11,11,12,0.88)",
-          borderColor: "rgba(255,255,255,0.07)",
-        }}
+        style={{ background: "rgba(11,11,12,0.88)", borderColor: "rgba(255,255,255,0.07)" }}
       >
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
 
@@ -90,7 +87,7 @@ export function AppHeader() {
             <span className="text-sm font-semibold tracking-[-0.01em]">The Ledger</span>
           </Link>
 
-          {/* Desktop nav */}
+          {/* Desktop primary nav */}
           <nav className="hidden items-center gap-0.5 sm:flex">
             {DESKTOP_NAV.map((t) => (
               <Link
@@ -98,8 +95,7 @@ export function AppHeader() {
                 to={t.to}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
                 activeProps={{
-                  className:
-                    "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-foreground font-medium",
+                  className: "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-foreground font-medium",
                   style: { background: "rgba(255,255,255,0.06)" },
                 }}
               >
@@ -115,15 +111,13 @@ export function AppHeader() {
               <span className="h-7 w-20 animate-pulse rounded-full bg-white/6" />
             ) : user ? (
               <>
-                {/* Notifications */}
+                {/* Notifications bell */}
                 <Link
                   to="/notifications"
                   aria-label="Notifications"
                   className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
-                  style={{ transition: "background 120ms" }}
                   activeProps={{
-                    className:
-                      "relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
+                    className: "relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
                     style: { background: "rgba(255,255,255,0.07)" },
                   }}
                 >
@@ -139,33 +133,33 @@ export function AppHeader() {
                   aria-label="Messages"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
                   activeProps={{
-                    className:
-                      "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
+                    className: "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
                     style: { background: "rgba(255,255,255,0.07)" },
                   }}
                 >
                   <MessageSquare className="h-[15px] w-[15px]" />
                 </Link>
 
-                {/* ⚙ Settings gear — replaces Settings tab */}
+                {/* ⚙ Account Settings gear */}
                 <Link
                   to="/settings"
-                  aria-label="Studio Settings"
+                  aria-label="Account Settings"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
                   activeProps={{
-                    className:
-                      "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
+                    className: "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
                     style: { background: "rgba(255,255,255,0.07)" },
                   }}
                 >
                   <SettingsIcon className="h-[15px] w-[15px]" />
                 </Link>
 
-                {/* Avatar pill */}
+                {/* Profile avatar — links to My Profile */}
                 {profile && (
                   <Link
                     to="/u/$handle"
                     params={{ handle: profile.handle }}
+                    search={{ tab: undefined }}
+                    aria-label="My Profile"
                     className="ml-0.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                     style={{ borderColor: "rgba(255,255,255,0.10)" }}
                   >
@@ -190,16 +184,6 @@ export function AppHeader() {
                     </span>
                   </Link>
                 )}
-
-                {/* Sign out */}
-                <button
-                  type="button"
-                  onClick={signOut}
-                  aria-label="Sign out"
-                  className="ml-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <LogOut className="h-[15px] w-[15px]" />
-                </button>
               </>
             ) : (
               <Link
@@ -214,7 +198,7 @@ export function AppHeader() {
         </div>
       </header>
 
-      {/* ── Mobile bottom tab bar — three primary zones ── */}
+      {/* ── Mobile bottom tab bar — exactly 3 zones ── */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
         style={{
@@ -229,8 +213,7 @@ export function AppHeader() {
             to={t.to}
             className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
             activeProps={{
-              className:
-                "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
+              className: "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
             }}
           >
             {t.to === "/pulse" ? (
@@ -246,22 +229,6 @@ export function AppHeader() {
             {t.label}
           </Link>
         ))}
-
-        {/* Notification tab for mobile */}
-        <Link
-          to="/notifications"
-          className="relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
-          activeProps={{
-            className:
-              "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
-          }}
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          {unreadCount > 0 && (
-            <span className="absolute right-[calc(50%-14px)] top-2 h-[6px] w-[6px] rounded-full bg-foreground ring-1 ring-[#0B0B0C]" />
-          )}
-          Alerts
-        </Link>
       </nav>
     </>
   );

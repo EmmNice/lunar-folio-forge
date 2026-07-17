@@ -224,7 +224,7 @@ export function PostCard({
 
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <Link to="/u/$handle" params={{ handle: post.author.handle }} className="shrink-0">
+        <Link to="/u/$handle" params={{ handle: post.author.handle }} search={{ tab: undefined }} className="shrink-0">
           <div className="grid h-10 w-10 overflow-hidden rounded-full border border-border bg-secondary/50 text-sm font-semibold">
             {post.author.avatar_url ? (
               <img
@@ -248,6 +248,7 @@ export function PostCard({
               <Link
                 to="/u/$handle"
                 params={{ handle: post.author.handle }}
+                search={{ tab: undefined }}
                 className="flex items-center gap-1 font-semibold text-foreground hover:underline underline-offset-2"
               >
                 {post.author.display_name}
@@ -400,6 +401,7 @@ export function PostCard({
                         <Link
                           to="/u/$handle"
                           params={{ handle: c.author.handle }}
+                          search={{ tab: undefined }}
                           className="flex items-center gap-1 font-medium text-foreground hover:underline underline-offset-2"
                         >
                           {c.author.display_name}

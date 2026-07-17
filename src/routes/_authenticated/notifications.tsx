@@ -123,6 +123,7 @@ function NotificationsPage() {
                       <Link
                         to="/u/$handle"
                         params={{ handle: n.actor.handle }}
+                        search={{ tab: undefined }}
                         className="shrink-0 hover:opacity-80"
                       >
                         <div className="grid h-8 w-8 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
@@ -149,6 +150,7 @@ function NotificationsPage() {
                           <Link
                             to="/u/$handle"
                             params={{ handle: n.actor.handle }}
+                            search={{ tab: undefined }}
                             className="font-medium hover:underline"
                           >
                             {n.actor.display_name}
