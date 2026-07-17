@@ -226,38 +226,50 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
         </div>
       </header>
 
-      {/* ── Mobile bottom tab bar — three zones ── */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
-        style={{
-          background: "rgba(11,11,12,0.92)",
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          backdropFilter: "blur(20px)",
-        }}
-      >
-        {MOBILE_TABS.map((t) => (
-          <Link
-            key={t.to}
-            to={t.to}
-            className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
-            activeProps={{
-              className: "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
-            }}
-          >
-            {t.to === "/pulse" ? (
-              <div
-                className="flex h-6 w-6 items-center justify-center rounded-md"
-                style={{ background: "rgba(167,139,250,0.15)" }}
-              >
-                <t.icon className="h-[14px] w-[14px] text-violet-400" />
-              </div>
-            ) : (
-              <t.icon className="h-[18px] w-[18px]" />
-            )}
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+      {/* Mobile bottom nav — only when NOT controlled; controlled pages render <MobileNav /> separately */}
+      {!controlled && <MobileNav />}
     </>
+  );
+}
+
+/**
+ * Mobile bottom tab bar — exported separately so pages that wrap AppHeader
+ * in a CSS-transform container can render this outside it.
+ * (A position:fixed child of a transformed ancestor is positioned relative
+ *  to that ancestor, not the viewport — rendering it here avoids that trap.)
+ */
+export function MobileNav() {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
+      style={{
+        background: "rgba(11,11,12,0.92)",
+        borderTop: "1px solid rgba(255,255,255,0.07)",
+        backdropFilter: "blur(20px)",
+      }}
+    >
+      {MOBILE_TABS.map((t) => (
+        <Link
+          key={t.to}
+          to={t.to}
+          className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
+          activeProps={{
+            className: "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
+          }}
+        >
+          {t.to === "/pulse" ? (
+            <div
+              className="flex h-6 w-6 items-center justify-center rounded-md"
+              style={{ background: "rgba(167,139,250,0.15)" }}
+            >
+              <t.icon className="h-[14px] w-[14px] text-violet-400" />
+            </div>
+          ) : (
+            <t.icon className="h-[18px] w-[18px]" />
+          )}
+          {t.label}
+        </Link>
+      ))}
+    </nav>
   );
 }

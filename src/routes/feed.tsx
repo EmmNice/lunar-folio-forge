@@ -5,7 +5,7 @@ import { toPng } from "html-to-image";
 import { Loader2, Plus, Send, X, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
-import { AppHeader } from "@/components/AppHeader";
+import { AppHeader, MobileNav } from "@/components/AppHeader";
 import { PostCard, type FeedPost } from "@/components/PostCard";
 import { useAuth } from "@/hooks/use-auth";
 import type { Background } from "@/components/StatusCard";
@@ -421,7 +421,13 @@ function FeedPage() {
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
 
-      {/* ── Combined sticky header: top nav + Signal/Beat tabs as ONE unit ── */}
+      {/*
+        ── Combined sticky header: top nav + Signal/Beat tabs as ONE unit ──
+        NOTE: MobileNav is rendered as a sibling BELOW this div, not inside it.
+        A position:fixed element inside a CSS-transformed ancestor gets positioned
+        relative to that ancestor instead of the viewport. Keeping MobileNav out
+        of this div ensures it stays pinned to the bottom of the screen.
+      */}
       <div
         className="sticky top-0 z-40"
         style={{
@@ -432,7 +438,7 @@ function FeedPage() {
           transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
         }}
       >
-        {/* Top nav bar — controlled so it doesn't register its own scroll listener */}
+        {/* Top nav bar — controlled mode: no internal scroll listener, no sticky/transform of its own */}
         <AppHeader controlled />
 
         {/* Signal / Beat tab switcher */}
@@ -461,6 +467,9 @@ function FeedPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile bottom nav — outside the transformed header so position:fixed works correctly */}
+      <MobileNav />
 
       <main className="mx-auto max-w-2xl px-4 pt-5 pb-32 sm:px-6">
         {/* Tab description */}
