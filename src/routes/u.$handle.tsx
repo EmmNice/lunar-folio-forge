@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2 } from "lucide-react";
+import { MessageSquare, Github, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { RoleType, VerificationTier } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { startConversation } from "@/lib/messaging.functions";
+import { submitVerificationApplication } from "@/lib/verification.functions";
 import { timeAgo } from "@/lib/time";
 
 export const Route = createFileRoute("/u/$handle")({
@@ -632,14 +633,25 @@ type VerificationRequestRow = {
 
 function VerificationSection({ profile }: { profile: SelfProfile & { verification_tier: VerificationTier } }) {
   const { user } = useAuth();
+  const doSubmit = useServerFn(submitVerificationApplication);
+  const [activeTab, setActiveTab] = useState<"silver" | "gold">("silver");
   const [requests, setRequests] = useState<VerificationRequestRow[] | null>(null);
-  const [silverGithub, setSilverGithub] = useState("");
-  const [silverPortfolio, setSilverPortfolio] = useState("");
-  const [goldStartup, setGoldStartup] = useState("");
-  const [goldTraction, setGoldTraction] = useState("");
-  const [busy, setBusy] = useState<"silver" | "gold" | null>(null);
 
-  async function load() {
+  // ── Silver fields ──────────────────────────────────────────────────────────
+  const [sGithub, setSGithub] = useState("");
+  const [sContract, setSContract] = useState("");
+  const [sLiveUrl, setSLiveUrl] = useState("");
+  const [sShipDesc, setSShipDesc] = useState("");
+
+  // ── Gold fields ────────────────────────────────────────────────────────────
+  const [gFundName, setGFundName] = useState("");
+  const [gPortfolio, setGPortfolio] = useState("");
+  const [gLinkedin, setGLinkedin] = useState("");
+  const [gInviteCode, setGInviteCode] = useState("");
+
+  const [busy, setBusy] = useState(false);
+
+  async function loadRequests() {
     if (!user) return;
     const { data } = await supabase
       .from("verification_requests")
@@ -649,143 +661,310 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
     setRequests((data ?? []) as VerificationRequestRow[]);
   }
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { loadRequests(); }, [user]);
 
   function latestFor(tier: "silver" | "gold") {
     return requests?.find((r) => r.tier === tier) ?? null;
   }
 
-  async function submit(tier: "silver" | "gold") {
-    if (!user || !profile) return;
-    const primary = tier === "silver" ? silverGithub.trim() : goldStartup.trim();
-    const secondary = tier === "silver" ? silverPortfolio.trim() : goldTraction.trim();
-    if (!primary) {
-      toast.error(tier === "silver" ? "A GitHub link is required." : "A startup URL is required.");
-      return;
+  async function handleSubmit() {
+    if (!user) return;
+    setBusy(true);
+    try {
+      await doSubmit({
+        data: activeTab === "silver"
+          ? {
+              tier: "silver" as const,
+              github_url: sGithub.trim(),
+              deployed_contract_address: sContract.trim(),
+              live_project_url: sLiveUrl.trim(),
+              recent_ship_desc: sShipDesc.trim(),
+            }
+          : {
+              tier: "gold" as const,
+              fund_or_company_name: gFundName.trim(),
+              portfolio_url: gPortfolio.trim(),
+              linkedin_or_x_url: gLinkedin.trim(),
+              invite_code: gInviteCode.trim(),
+            },
+      });
+      toast.success("Application submitted — your credentials are now under review.");
+      await loadRequests();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Submission failed.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(tier);
-    const { error } = await supabase.from("verification_requests").insert({
-      user_id: user.id,
-      tier,
-      link_primary: primary,
-      link_secondary: secondary || null,
-    });
-    if (!error) {
-      await supabase.from("profiles").update(
-        tier === "silver"
-          ? { github_url: primary, portfolio_url: secondary || null }
-          : { startup_url: primary, traction_url: secondary || null },
-      ).eq("id", user.id);
-    }
-    setBusy(null);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Submitted — your credentials are now under review.");
-    await load();
   }
+
+  // Resolved states for each tier
+  const silverLatest = latestFor("silver");
+  const goldLatest   = latestFor("gold");
+  const isSilverVerified = profile.verification_tier === "silver" || profile.verification_tier === "gold";
+  const isGoldVerified   = profile.verification_tier === "gold";
+
+  const activeLatest   = activeTab === "silver" ? silverLatest : goldLatest;
+  const activeVerified = activeTab === "silver" ? isSilverVerified : isGoldVerified;
+  const isPending      = activeLatest?.status === "pending";
+  const isRejected     = activeLatest?.status === "rejected";
+  const canApply       = !activeVerified && !isPending;
+
+  // Tier styles
+  const silverStyle = {
+    card: "glass-silver",
+    accent: "#94a3b8",
+    accentBright: "#cbd5e1",
+    iconBg: "rgba(148,163,184,0.12)",
+    title: "#cbd5e1",
+    subtitle: "rgba(148,163,184,0.65)",
+    desc: "rgba(148,163,184,0.70)",
+    btnBorder: "rgba(148,163,184,0.35)",
+    btnBg: "rgba(148,163,184,0.04)",
+    btnHoverBg: "rgba(148,163,184,0.12)",
+  };
+  const goldStyle = {
+    card: "glass-gold",
+    accent: "#fbbf24",
+    accentBright: "#fde68a",
+    iconBg: "rgba(251,191,36,0.12)",
+    title: "#fde68a",
+    subtitle: "rgba(251,191,36,0.55)",
+    desc: "rgba(251,191,36,0.60)",
+    btnBorder: "rgba(251,191,36,0.40)",
+    btnBg: "rgba(251,191,36,0.04)",
+    btnHoverBg: "rgba(251,191,36,0.12)",
+  };
+  const ts = activeTab === "silver" ? silverStyle : goldStyle;
 
   return (
     <div className="space-y-4">
-      {/* Silver */}
-      <div className="glass-silver rounded-2xl p-5">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(148,163,184,0.12)" }}>
-            <Github className="h-4 w-4" style={{ color: "#94a3b8" }} />
+      {/* ── Tab selector ────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 rounded-xl border border-border/50 bg-secondary/10 p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("silver")}
+          className={"flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
+            (activeTab === "silver"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground/80")}
+        >
+          <Github className="h-3.5 w-3.5" style={activeTab === "silver" ? { color: "#94a3b8" } : {}} />
+          Silver · Builder
+          {isSilverVerified && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("gold")}
+          className={"flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
+            (activeTab === "gold"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground/80")}
+        >
+          <Users className="h-3.5 w-3.5" style={activeTab === "gold" ? { color: "#fbbf24" } : {}} />
+          Gold · Investor
+          {isGoldVerified && <CheckCircle2 className="h-3 w-3 text-amber-400" />}
+        </button>
+      </div>
+
+      {/* ── Active track card ───────────────────────────────────────────────── */}
+      <div className={`${ts.card} rounded-2xl p-5 space-y-4`}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: ts.iconBg }}>
+              {activeTab === "silver"
+                ? <Github className="h-4 w-4" style={{ color: ts.accent }} />
+                : <Building2 className="h-4 w-4" style={{ color: ts.accent }} />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: ts.title }}>
+                {activeTab === "silver" ? "Silver — Recognized Builder" : "Gold — Verified Investor"}
+              </p>
+              <p className="text-[11px]" style={{ color: ts.subtitle }}>
+                {activeTab === "silver" ? "For active builders who ship" : "For fund managers & angels"}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "#cbd5e1" }}>Silver — Recognized Builder</p>
-            <p className="text-[11px]" style={{ color: "rgba(148,163,184,0.65)" }}>Verified contributor identity</p>
-          </div>
-          {(profile.verification_tier === "silver" || profile.verification_tier === "gold") && (
-            <div className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
+          {activeVerified && (
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" /> Verified
             </div>
           )}
         </div>
-        <p className="mt-3 text-xs" style={{ color: "rgba(148,163,184,0.70)" }}>
-          Verify with a public GitHub profile (and optional portfolio) that shows real shipped work.
+
+        {/* Description */}
+        <p className="text-xs" style={{ color: ts.desc }}>
+          {activeTab === "silver"
+            ? "Provide your GitHub profile and at least one live project so we can verify you're an active builder."
+            : "Provide your fund or company name and portfolio. An invite code from an existing Gold member accelerates review."}
         </p>
-        <VerifStatusPill request={latestFor("silver")} />
-        {profile.verification_tier !== "silver" && profile.verification_tier !== "gold" && (
-          <div className="mt-4 space-y-2.5">
-            <input className="lux-field" placeholder="https://github.com/yourhandle" value={silverGithub}
-              onChange={(e) => setSilverGithub(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
-            <input className="lux-field" placeholder="Portfolio URL (optional)" value={silverPortfolio}
-              onChange={(e) => setSilverPortfolio(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
-            <button
-              type="button"
-              onClick={() => submit("silver")}
-              disabled={busy !== null || latestFor("silver")?.status === "pending"}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-              style={{ border: "1px solid rgba(148,163,184,0.35)", color: "#94a3b8", background: "rgba(148,163,184,0.04)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(148,163,184,0.10)"; e.currentTarget.style.color = "#cbd5e1"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(148,163,184,0.04)"; e.currentTarget.style.color = "#94a3b8"; }}
-            >
-              {busy === "silver" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              Apply for Silver
-            </button>
+
+        {/* Status pill */}
+        {activeLatest && (
+          <div
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium"
+            style={
+              activeLatest.status === "pending"
+                ? { background: "rgba(251,191,36,0.10)", color: "#fbbf24" }
+                : activeLatest.status === "approved"
+                  ? { background: "rgba(34,197,94,0.10)", color: "#4ade80" }
+                  : { background: "rgba(239,68,68,0.10)", color: "#f87171" }
+            }
+          >
+            {activeLatest.status === "pending" && "⏳ Under Review"}
+            {activeLatest.status === "approved" && "✓ Approved"}
+            {activeLatest.status === "rejected" && "✕ Not Approved — you can reapply below"}
+            <span className="opacity-60">· {timeAgo(activeLatest.created_at)}</span>
           </div>
         )}
-      </div>
 
-      {/* Gold */}
-      <div className="glass-gold rounded-2xl p-5">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(251,191,36,0.12)" }}>
-            <Rocket className="h-4 w-4" style={{ color: "#fbbf24" }} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "#fde68a" }}>Gold — Elite Founder</p>
-            <p className="text-[11px]" style={{ color: "rgba(251,191,36,0.55)" }}>Maximum network prestige</p>
-          </div>
-          {profile.verification_tier === "gold" && (
-            <div className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-amber-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+        {/* ── Silver form ────────────────────────────────────────────────────── */}
+        {canApply && activeTab === "silver" && (
+          <div className="space-y-2.5">
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                GitHub Profile URL <span style={{ color: ts.accent }}>*</span>
+              </label>
+              <div className="relative">
+                <Github className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
+                <input
+                  className="lux-field pl-8"
+                  placeholder="https://github.com/yourhandle"
+                  value={sGithub}
+                  onChange={(e) => setSGithub(e.target.value)}
+                />
+              </div>
             </div>
-          )}
-        </div>
-        <p className="mt-3 text-xs" style={{ color: "rgba(251,191,36,0.60)" }}>
-          Verify with your startup's public URL and a traction link (press, metrics, funding announcement).
-        </p>
-        <VerifStatusPill request={latestFor("gold")} />
-        {profile.verification_tier !== "gold" && (
-          <div className="mt-4 space-y-2.5">
-            <input className="lux-field" placeholder="https://yourstartup.com" value={goldStartup}
-              onChange={(e) => setGoldStartup(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
-            <input className="lux-field" placeholder="Traction link (press / metrics / funding)" value={goldTraction}
-              onChange={(e) => setGoldTraction(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
-            <button
-              type="button"
-              onClick={() => submit("gold")}
-              disabled={busy !== null || latestFor("gold")?.status === "pending"}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-              style={{ border: "1px solid rgba(251,191,36,0.40)", color: "#fbbf24", background: "rgba(251,191,36,0.05)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(251,191,36,0.12)"; e.currentTarget.style.color = "#fde68a"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(251,191,36,0.05)"; e.currentTarget.style.color = "#fbbf24"; }}
-            >
-              {busy === "gold" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              Apply for Gold
-            </button>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                Live DApp / Project URL
+              </label>
+              <div className="relative">
+                <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
+                <input
+                  className="lux-field pl-8"
+                  placeholder="https://yourproject.xyz"
+                  value={sLiveUrl}
+                  onChange={(e) => setSLiveUrl(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                Deployed Contract Address
+              </label>
+              <div className="relative">
+                <FileCode2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
+                <input
+                  className="lux-field pl-8 font-mono text-xs"
+                  placeholder="0x…"
+                  value={sContract}
+                  onChange={(e) => setSContract(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                <span>What did you ship this week?</span>
+                <span style={{ color: sShipDesc.length > 90 ? "#f87171" : ts.subtitle }}>{sShipDesc.length}/100</span>
+              </label>
+              <textarea
+                className="lux-field resize-none"
+                rows={2}
+                placeholder="One sentence — the more specific the better."
+                maxLength={100}
+                value={sShipDesc}
+                onChange={(e) => setSShipDesc(e.target.value)}
+              />
+            </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-function VerifStatusPill({ request }: { request: VerificationRequestRow | null }) {
-  if (!request) return null;
-  const styles: Record<string, { bg: string; color: string; label: string }> = {
-    pending: { bg: "rgba(251,191,36,0.10)", color: "#fbbf24", label: "Under Review" },
-    approved: { bg: "rgba(34,197,94,0.10)", color: "#4ade80", label: "Approved" },
-    rejected: { bg: "rgba(239,68,68,0.10)", color: "#f87171", label: "Not Approved" },
-  };
-  const s = styles[request.status] ?? styles.pending;
-  return (
-    <div
-      className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium"
-      style={{ background: s.bg, color: s.color }}
-    >
-      {s.label} · {timeAgo(request.created_at)}
+        {/* ── Gold form ──────────────────────────────────────────────────────── */}
+        {canApply && activeTab === "gold" && (
+          <div className="space-y-2.5">
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                Fund or Company Name <span style={{ color: ts.accent }}>*</span>
+              </label>
+              <div className="relative">
+                <Building2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
+                <input
+                  className="lux-field pl-8"
+                  placeholder="Acme Ventures"
+                  value={gFundName}
+                  onChange={(e) => setGFundName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                Portfolio / Fund Website
+              </label>
+              <div className="relative">
+                <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
+                <input
+                  className="lux-field pl-8"
+                  placeholder="https://acmeventures.com"
+                  value={gPortfolio}
+                  onChange={(e) => setGPortfolio(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                LinkedIn or X Profile
+              </label>
+              <div className="relative">
+                <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
+                <input
+                  className="lux-field pl-8"
+                  placeholder="https://linkedin.com/in/yourname"
+                  value={gLinkedin}
+                  onChange={(e) => setGLinkedin(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                Invite Code <span className="normal-case" style={{ color: ts.subtitle }}>(optional — speeds up review)</span>
+              </label>
+              <input
+                className="lux-field font-mono tracking-widest text-xs"
+                placeholder="LEDGER-XXXX"
+                value={gInviteCode}
+                onChange={(e) => setGInviteCode(e.target.value.toUpperCase())}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Already verified message */}
+        {activeVerified && (
+          <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)", color: "#4ade80" }}>
+            You already hold {activeTab === "silver" ? "Silver (or higher)" : "Gold"} verification — no action needed.
+          </div>
+        )}
+
+        {/* Submit button */}
+        {canApply && (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={busy}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+            style={{ border: `1px solid ${ts.btnBorder}`, color: ts.accent, background: ts.btnBg }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = ts.btnHoverBg; e.currentTarget.style.color = ts.accentBright; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = ts.btnBg; e.currentTarget.style.color = ts.accent; }}
+          >
+            {busy
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <ShieldCheck className="h-4 w-4" />}
+            {isRejected ? "Reapply" : `Apply for ${activeTab === "silver" ? "Silver Builder" : "Gold Investor"}`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
