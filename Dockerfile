@@ -3,7 +3,7 @@ FROM oven/bun:1.2 AS builder
 WORKDIR /app
 
 # Install deps first (layer-cached unless lockfile changes)
-COPY bun.lockb bunfig.toml package.json ./
+COPY bun.lock bunfig.toml package.json ./
 RUN bun install --frozen-lockfile
 
 # Copy source and build
