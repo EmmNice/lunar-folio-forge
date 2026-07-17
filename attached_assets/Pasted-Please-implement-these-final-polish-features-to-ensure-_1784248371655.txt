@@ -1,0 +1,33 @@
+Please implement these final polish features to ensure the platform is 100% functional for launch:
+
+1. Profile Editing:
+- Add an "Edit Profile" button on the user's personal profile page.
+- Allow users to update their Profile Picture (avatar URL), Display Name, Bio, and Website/GitHub Link.
+
+2. Simple In-App Notifications:
+- Create a "Notifications" tab/page in the sidebar navigation.
+- Show a simple, clean list of notifications when another user:
+  * Likes their post
+  * Comments on their post
+  * Re-Ships their post
+- Mark notifications as read once the user visits the Notifications page.
+
+3. Basic DM Chat UI:
+- When a Gold investor clicks "Accept" on an inbound pitch, redirect both users to a clean, simple Direct Message (DM) chat page where they can send real-time text messages back and forth to finalize details.
+
+Please implement the "Inbound Pitch Routing & Delivery System" for Gold accounts:
+
+1. Database Schema Update:
+- Create an `inbound_pitches` table with columns: `id`, `sender_id` (Silver user), `receiver_id` (Gold user), `project_name`, `pitch_text` (max 280 chars), `deck_url`, `status` (pending, accepted, declined), and `created_at`.
+
+2. The Gold "Inbound Pitches" Dashboard:
+- Inside the settings or profile area for Gold members, build a minimalist "Inbound Pitches" dashboard.
+- Display all 'pending' pitches in a clean, high-contrast list.
+- Next to each pitch, provide two buttons: "Accept" and "Decline".
+  * Clicking "Accept" updates the status to 'accepted' and automatically initiates/opens a standard DM chat thread between the Gold and Silver user.
+  * Clicking "Decline" updates the status to 'declined' and archives the request (hiding it from the list).
+
+3. Email Notification System:
+- Whenever a new pitch is inserted into the `inbound_pitches` table, trigger an automated email notification to the Gold user's registered email address.
+- The email must cleanly present: The Project Name, the Pitch Text, the Deck Link, and a call-to-action button linking directly back to their "Inbound Pitches" dashboard.
+- If the Gold member clicks "Decline", update the status to 'declined' and archive the request. Do NOT send any email or platform notification to the Silver sender about the rejection. The rejection must remain completely silent to protect the investor's privacy and eliminate social friction.

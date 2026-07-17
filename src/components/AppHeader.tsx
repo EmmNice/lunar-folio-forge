@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare, ShieldCheck } from "lucide-react";
+import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare, ShieldCheck, Bell } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,6 +16,54 @@ export function AppHeader() {
   const { user, profile, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    let cancelled = false;
+
+    async function fetchUnread() {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user!.id)
+        .eq("read", false);
+      if (!cancelled) setUnreadCount(count ?? 0);
+    }
+
+    fetchUnread();
+
+    // Subscribe to new notifications in realtime
+    const channel = supabase
+      .channel(`notif-badge:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => setUnreadCount((n) => n + 1),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => fetchUnread(),
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   async function signOut() {
     await qc.cancelQueries();
@@ -66,6 +115,20 @@ export function AppHeader() {
               <span className="h-7 w-24 animate-pulse rounded-full bg-secondary/60" />
             ) : user ? (
               <>
+                {/* Notifications */}
+                <Link
+                  to="/notifications"
+                  aria-label="Notifications"
+                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                  activeProps={{ className: "relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground bg-secondary/60" }}
+                >
+                  <Bell className="h-[15px] w-[15px]" />
+                  {unreadCount > 0 && (
+                    <span className="absolute right-1 top-1 flex h-[7px] w-[7px] items-center justify-center rounded-full bg-foreground text-[8px] font-bold text-background ring-1 ring-background" />
+                  )}
+                </Link>
+
+                {/* Messages */}
                 <Link
                   to="/messages"
                   aria-label="Messages"
@@ -134,6 +197,18 @@ export function AppHeader() {
             {t.label.split(" ")[0]}
           </Link>
         ))}
+        {/* Notifications in mobile bar */}
+        <Link
+          to="/notifications"
+          className="relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
+          activeProps={{ className: "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground" }}
+        >
+          <Bell className="h-[18px] w-[18px]" />
+          {unreadCount > 0 && (
+            <span className="absolute right-[calc(50%-14px)] top-2 h-[7px] w-[7px] rounded-full bg-foreground ring-1 ring-background" />
+          )}
+          Alerts
+        </Link>
       </nav>
     </>
   );

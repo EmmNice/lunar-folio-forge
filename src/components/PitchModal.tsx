@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { X, Loader2, Rocket } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { submitPitch } from "@/lib/pitch.functions";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import type { VerificationTier } from "@/hooks/use-auth";
 
@@ -23,7 +24,8 @@ type Props = {
 
 const MAX_PITCH = 280;
 
-export function PitchModal({ target, senderId, onClose }: Props) {
+export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
+  const send = useServerFn(submitPitch);
   const [companyName, setCompanyName] = useState("");
   const [pitch, setPitch] = useState("");
   const [deckUrl, setDeckUrl] = useState("");
@@ -43,41 +45,18 @@ export function PitchModal({ target, senderId, onClose }: Props) {
 
     setSubmitting(true);
     try {
-      // Check weekly pitch count against limit
-      if (target.pitch_limit !== null) {
-        if (target.pitch_limit === 0) {
-          toast.error("This member has paused inbound pitches. Please try again next week.");
-          return;
-        }
-        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabase
-          .from("pitches")
-          .select("*", { count: "exact", head: true })
-          .eq("recipient_id", target.id)
-          .gte("created_at", oneWeekAgo);
-        if ((count ?? 0) >= target.pitch_limit) {
-          toast.error(
-            "This member is currently at their connection limit for the week. Please try again next week.",
-          );
-          return;
-        }
-      }
-
-      const { error } = await supabase.from("pitches").insert({
-        sender_id: senderId,
-        recipient_id: target.id,
-        company_name: companyName.trim(),
-        pitch: pitch.trim(),
-        deck_url: deckUrl.trim() || null,
-      } as any);
-
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-
+      await send({
+        data: {
+          recipientId: target.id,
+          companyName: companyName.trim(),
+          pitch: pitch.trim(),
+          deckUrl: deckUrl.trim() || "",
+        },
+      });
       toast.success("Pitch delivered — they'll review it in their inbox.");
       onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send pitch.");
     } finally {
       setSubmitting(false);
     }
