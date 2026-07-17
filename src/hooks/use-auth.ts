@@ -52,13 +52,14 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
   // bypass it here. Isolated try/catch so it never blocks the profile load.
   let isAdmin = false;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-    isAdmin = data !== null;
+      .limit(10);
+    if (!error && Array.isArray(data)) {
+      isAdmin = data.some((r: any) => r.role === "admin");
+    }
   } catch {
     // Table missing (migrations not applied) — treat as non-admin
   }
