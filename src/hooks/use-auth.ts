@@ -47,13 +47,20 @@ export type AuthState = {
 async function loadProfile(user: User | null): Promise<{ profile: Profile | null; isAdmin: boolean }> {
   if (!user) return { profile: null, isAdmin: false };
 
-  // Admin check — isolated try/catch so it never blocks the rest
+  // Admin check — query user_roles directly (authenticated users can SELECT
+  // their own rows via RLS). The has_role() RPC is service_role-only so we
+  // bypass it here. Isolated try/catch so it never blocks the profile load.
   let isAdmin = false;
   try {
-    const { data } = await supabase.rpc("has_role", { _role: "admin", _user_id: user.id });
-    isAdmin = data === true;
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    isAdmin = data !== null;
   } catch {
-    // RPC missing or network error — treat as non-admin
+    // Table missing (migrations not applied) — treat as non-admin
   }
 
   // Profile fetch with retry loop for new-account auth trigger race.
