@@ -12,6 +12,12 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Override the Lovable plugin's cloudflare-module default preset so production builds
+  // target a standard Node.js HTTP server (required for Railway deployment).
+  // In sandbox/dev mode the Lovable plugin ignores this and uses cloudflare-module.
+  nitro: {
+    preset: "node-server",
+  },
   // Replit's preview proxy requires binding to 0.0.0.0:5000 and allowing all hosts
   // (outside the Lovable sandbox this config's default host/port would otherwise win).
   vite: {

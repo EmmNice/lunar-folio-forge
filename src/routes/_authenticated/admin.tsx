@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,16 @@ import type { VerificationTier } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin Panel · The Ledger" }] }),
+  // Domain gate: only allow access from the designated admin domain.
+  // Authenticated routes have ssr:false, so this always runs in the browser.
+  // Set VITE_ADMIN_DOMAIN (e.g. "admin.yourapp.com") in Railway env vars.
+  // When the env var is absent (local dev / Replit) the gate is skipped.
+  beforeLoad: () => {
+    const adminDomain = import.meta.env.VITE_ADMIN_DOMAIN;
+    if (adminDomain && window.location.hostname !== adminDomain) {
+      throw redirect({ to: "/feed" });
+    }
+  },
   component: AdminPage,
 });
 
