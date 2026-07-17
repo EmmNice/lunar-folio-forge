@@ -1,4 +1,24 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+
+/** The Ledger geometric mark — three ascending signal bars */
+export function LedgerMark({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 22 18"
+      fill="none"
+      aria-label="The Ledger"
+      role="img"
+    >
+      {/* Bar 1 — short */}
+      <rect x="0" y="9" width="5" height="9" rx="1.5" fill="#F5F5F6" />
+      {/* Bar 2 — medium */}
+      <rect x="8.5" y="4.5" width="5" height="13.5" rx="1.5" fill="#F5F5F6" />
+      {/* Bar 3 — full height (gold accent) */}
+      <rect x="17" y="0" width="5" height="18" rx="1.5" fill="#FBBF24" />
+    </svg>
+  );
+}
 import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare, Bell, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -106,12 +126,7 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
 
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-            <span
-              className="grid h-6 w-6 place-items-center rounded-[5px] text-[11px] font-bold"
-              style={{ background: "#F5F5F6", color: "#0B0B0C" }}
-            >
-              L
-            </span>
+            <LedgerMark className="h-5 w-auto" />
             <span className="text-sm font-semibold tracking-[-0.01em]">The Ledger</span>
           </Link>
 

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
+import { LedgerMark } from "@/components/AppHeader";
 
 export const Route = createFileRoute("/")({
   ssr: false,  // auth is client-only; disable SSR to prevent hydration mismatches
@@ -479,10 +480,8 @@ function Landing() {
       {/* ── Nav ── */}
       <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary/60 text-xs font-semibold">
-              L
-            </span>
+          <div className="flex items-center gap-2.5">
+            <LedgerMark className="h-5 w-auto" />
             <span className="text-sm font-semibold tracking-tight">The Ledger</span>
           </div>
           <Link

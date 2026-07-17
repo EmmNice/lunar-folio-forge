@@ -288,7 +288,8 @@ function FeedPage() {
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<FeedTab>("signal");
-  const [posts, setPosts] = useState<FeedPost[] | null>(null);
+  const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null);   // Beat: all posts
+  const [signalPosts, setSignalPosts] = useState<FeedPost[] | null>(null); // Signal: verified only
   const [showModal, setShowModal] = useState(false);
   const [fabVisible, setFabVisible] = useState(true);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -327,11 +328,22 @@ function FeedPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ── Feed fetch ──────────────────────────────────────────────────────────
-  async function fetchAll() {
-    let data: any[] | null = null;
+  // ── Shared visibility filter ──────────────────────────────────────────
+  function applyVisibility(all: FeedPost[]): FeedPost[] {
+    const isVerifiedViewer =
+      !user || !profile ||
+      profile.verification_tier === "silver" ||
+      profile.verification_tier === "gold";
+    const isSilverOrGold =
+      profile?.verification_tier === "silver" || profile?.verification_tier === "gold";
+    return all
+      .filter((p) => isVerifiedViewer || (p.visibility ?? "public") === "public")
+      .filter((p) => isSilverOrGold  || (p.visibility ?? "public") !== "whisper");
+  }
 
-    const fullRes = await supabase
+  // ── Beat fetch: ALL posts, strictly chronological ──────────────────────
+  async function fetchBeat() {
+    const { data, error } = await supabase
       .from("posts")
       .select(
         "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
@@ -339,54 +351,54 @@ function FeedPage() {
       .order("created_at", { ascending: false })
       .limit(80);
 
-    if (fullRes.error) {
-      const baseRes = await supabase
-        .from("posts")
-        .select(
-          "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(80);
+    if (error) { toast.error("Couldn't load the feed. Check your connection."); setBeatPosts([]); return; }
 
-      if (baseRes.error) {
-        toast.error("Couldn't load the feed. Check your connection.");
-        setPosts([]);
-        return;
-      }
-      data = baseRes.data;
-    } else {
-      data = fullRes.data;
-    }
-
-    let all: FeedPost[] = (data ?? []).map((p: any) => ({
+    const all: FeedPost[] = (data ?? []).map((p: any) => ({
       ...p,
       comments_enabled: p.comments_enabled ?? true,
       visibility: p.visibility ?? "public",
     }));
+    setBeatPosts(applyVisibility(all));
+  }
 
-    const isVerifiedViewer =
-      !user || !profile ||
-      profile.verification_tier === "silver" ||
-      profile.verification_tier === "gold";
-    if (!isVerifiedViewer) {
-      all = all.filter((p) => (p.visibility ?? "public") === "public");
-    }
+  // ── Signal fetch: VERIFIED AUTHORS ONLY — backend-filtered ─────────────
+  // Uses !inner join so the DB only returns posts whose author has
+  // verification_tier = 'silver' | 'gold'. No client-side re-filtering needed.
+  async function fetchSignal() {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(
+        "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey!inner(id, handle, display_name, avatar_url, verification_tier)",
+      )
+      .in("profiles.verification_tier", ["silver", "gold"])
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-    const isSilverOrGold =
-      profile?.verification_tier === "silver" || profile?.verification_tier === "gold";
-    if (!isSilverOrGold) {
-      all = all.filter((p) => (p.visibility ?? "public") !== "whisper");
-    }
+    if (error) { setSignalPosts([]); return; }
 
-    setPosts(all);
+    const all: FeedPost[] = (data ?? []).map((p: any) => ({
+      ...p,
+      comments_enabled: p.comments_enabled ?? true,
+      visibility: p.visibility ?? "public",
+    }));
+    setSignalPosts(applyVisibility(all));
   }
 
   useEffect(() => {
-    fetchAll();
+    // Fetch both tabs in parallel so switching is always instant
+    fetchBeat();
+    fetchSignal();
+
     const channel = supabase
       .channel("public:posts")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => fetchAll())
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => fetchAll())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
+        fetchBeat();
+        fetchSignal();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => {
+        fetchBeat();
+        fetchSignal();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -416,13 +428,9 @@ function FeedPage() {
     })();
   }, [exportPost]);
 
-  // Signal: only show verified authors; Beat: everything
-  const displayedPosts =
-    tab === "signal"
-      ? (posts ?? []).filter(
-          (p) => p.author.verification_tier === "silver" || p.author.verification_tier === "gold",
-        )
-      : (posts ?? []);
+  // Instant tab switch — both caches pre-loaded at mount
+  const displayedPosts = tab === "signal" ? (signalPosts ?? []) : (beatPosts ?? []);
+  const feedLoading   = tab === "signal" ? signalPosts === null : beatPosts === null;
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
@@ -490,7 +498,7 @@ function FeedPage() {
         </p>
 
         {/* ── Feed ── */}
-        {posts === null ? (
+        {feedLoading ? (
           <div className="space-y-4" aria-label="Loading feed…">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="rounded-2xl border border-border/40 bg-card/30 p-5">
@@ -550,7 +558,10 @@ function FeedPage() {
                 post={p}
                 onDownload={setExportPost}
                 currentUserId={user?.id}
-                onDeleted={(id) => setPosts((prev) => prev?.filter((x) => x.id !== id) ?? null)}
+                onDeleted={(id) => {
+                  setBeatPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
+                  setSignalPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
+                }}
               />
             ))}
           </div>
@@ -585,7 +596,14 @@ function FeedPage() {
         <ComposerModal
           onClose={() => setShowModal(false)}
           onPublished={(post) => {
-            setPosts((prev) => (prev ? [post, ...prev] : [post]));
+            // Prepend to Beat immediately; Signal only gets it if author is verified
+            setBeatPosts((prev) => (prev ? [post, ...prev] : [post]));
+            const isVerified =
+              post.author.verification_tier === "silver" ||
+              post.author.verification_tier === "gold";
+            if (isVerified) {
+              setSignalPosts((prev) => (prev ? [post, ...prev] : [post]));
+            }
           }}
         />
       )}

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Heart,
@@ -8,7 +7,6 @@ import {
   Repeat2,
   Download,
   Flag,
-  MessageSquare,
   Loader2,
   Send,
   Trash2,
@@ -19,7 +17,6 @@ import { StatusCard, type Background } from "@/components/StatusCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
-import { startConversation } from "@/lib/messaging.functions";
 import type { VerificationTier } from "@/hooks/use-auth";
 
 export type FeedAuthor = {
@@ -59,8 +56,6 @@ export function PostCard({
   onDeleted?: (id: string) => void;
 }) {
   const { user, profile } = useAuth();
-  const navigate = useNavigate();
-  const start = useServerFn(startConversation);
 
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -69,7 +64,6 @@ export function PostCard({
   const [commentCount, setCommentCount] = useState(0);
   const [busyLike, setBusyLike] = useState(false);
   const [busyRepost, setBusyRepost] = useState(false);
-  const [busyMsg, setBusyMsg] = useState(false);
   const [busyDelete, setBusyDelete] = useState(false);
   const [reported, setReported] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -173,19 +167,6 @@ export function PostCard({
     setCommentDraft("");
     setCommentCount((c) => c + 1);
     await loadComments();
-  }
-
-  async function message() {
-    if (!user || !profile) { toast.error("Sign in to send a message."); return; }
-    setBusyMsg(true);
-    try {
-      const res = await start({ data: { recipientId: post.author.id } });
-      navigate({ to: "/messages/$id", params: { id: res.conversationId } });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't start a conversation.");
-    } finally {
-      setBusyMsg(false);
-    }
   }
 
   async function report() {
@@ -342,18 +323,6 @@ export function PostCard({
             >
               <Download className="h-4 w-4" />
             </button>
-
-            {user && !isSelf ? (
-              <button
-                type="button"
-                onClick={message}
-                disabled={busyMsg}
-                className={actionBtn + " hover:text-foreground"}
-                aria-label="Message author"
-              >
-                {busyMsg ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
-              </button>
-            ) : null}
 
             <button
               type="button"
