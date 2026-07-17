@@ -5,7 +5,7 @@ import { Download, Loader2, Send, Zap, Lock, Info, Radio, Radio as LiveIcon } fr
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { AppHeader } from "@/components/AppHeader";
-import { StatusCard, type Background } from "@/components/StatusCard";
+import { StatusCard, type Background, BACKGROUND_BASE_COLORS } from "@/components/StatusCard";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { pulseAssistDraft } from "@/lib/pulse-assist.functions";
@@ -262,41 +262,53 @@ function StudioPage() {
               )}
             </div>
 
-            {/* ── Background theme toggle ── */}
+            {/* ── Background theme picker ── */}
             <div className="space-y-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Card Theme
               </label>
-              <div
-                className="flex items-center rounded-xl p-1"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setBackground("noir")}
-                  className={
-                    "flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-medium transition-all " +
-                    (background === "noir"
-                      ? "bg-foreground text-background shadow-sm"
-                      : "text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#0b0b0c] ring-1 ring-white/20" />
-                  Tech Noir
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBackground("cream")}
-                  className={
-                    "flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-medium transition-all " +
-                    (background === "cream"
-                      ? "bg-[#f5f0e6] text-[#111] shadow-sm"
-                      : "text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f5f0e6] ring-1 ring-black/10" />
-                  Premium Cream
-                </button>
+              <div className="grid grid-cols-4 gap-1.5">
+                {(
+                  [
+                    { id: "noir",     label: "Noir",     swatch: "#0b0b0c",    ring: "ring-white/20" },
+                    { id: "cream",    label: "Cream",    swatch: "#f5f0e6",    ring: "ring-black/15" },
+                    { id: "gradient", label: "Violet",   swatch: "#1a0d2e",    ring: "ring-violet-400/30",  accent: "#a78bfa" },
+                    { id: "gold",     label: "Gold",     swatch: "#211700",    ring: "ring-amber-400/30",   accent: "#fbbf24" },
+                    { id: "steel",    label: "Steel",    swatch: "#0d1525",    ring: "ring-slate-400/30",   accent: "#94a3b8" },
+                    { id: "emerald",  label: "Emerald",  swatch: "#061a0e",    ring: "ring-emerald-400/30", accent: "#34d399" },
+                    { id: "midnight", label: "Midnight", swatch: "#060d20",    ring: "ring-indigo-400/30",  accent: "#6366f1" },
+                  ] as { id: Background; label: string; swatch: string; ring: string; accent?: string }[]
+                ).map(({ id, label, swatch, ring, accent }) => {
+                  const isActive = background === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setBackground(id)}
+                      title={label}
+                      className={
+                        "flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all " +
+                        (isActive
+                          ? "ring-1 ring-white/30 bg-white/06"
+                          : "hover:bg-white/04")
+                      }
+                      style={isActive ? { background: "rgba(255,255,255,0.06)" } : {}}
+                    >
+                      <span
+                        className={`block h-7 w-7 rounded-full ring-1 ${ring} shrink-0`}
+                        style={{
+                          background: accent
+                            ? `radial-gradient(circle at 35% 35%, ${accent}55, ${swatch})`
+                            : swatch,
+                          boxShadow: isActive ? `0 0 0 2px ${accent ?? "#ffffff"}44` : undefined,
+                        }}
+                      />
+                      <span className={`text-[10px] font-medium ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { toPng } from "html-to-image";
 import { Loader2, Plus, Send, X, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { StatusCard } from "@/components/StatusCard";
+import { StatusCard, BACKGROUND_BASE_COLORS } from "@/components/StatusCard";
 import { AppHeader, MobileNav } from "@/components/AppHeader";
 import { PostCard, type FeedPost } from "@/components/PostCard";
 import { useAuth } from "@/hooks/use-auth";
@@ -54,7 +54,7 @@ function ComposerModal({
         const dataUrl = await toPng(exportRef.current!, {
           pixelRatio: 1,
           cacheBust: true,
-          backgroundColor: exportData.background === "noir" ? "#0b0b0c" : "#f5f0e6",
+          backgroundColor: BACKGROUND_BASE_COLORS[exportData.background] ?? "#0b0b0c",
           width: 1080,
           height: 1920,
         });
@@ -400,7 +400,7 @@ function FeedPage() {
         const dataUrl = await toPng(exportRef.current!, {
           pixelRatio: 1,
           cacheBust: true,
-          backgroundColor: exportPost.background === "noir" ? "#0b0b0c" : "#f5f0e6",
+          backgroundColor: BACKGROUND_BASE_COLORS[exportPost.background] ?? "#0b0b0c",
           width: 1080,
           height: 1920,
         });
@@ -481,7 +481,7 @@ function FeedPage() {
       {/* Mobile bottom nav — outside the transformed header so position:fixed works correctly */}
       <MobileNav />
 
-      <main className="mx-auto max-w-2xl px-4 pt-5 pb-32 sm:px-6">
+      <main className="mx-auto max-w-2xl px-4 pt-5 pb-32 sm:px-6 page-enter">
         {/* Tab description */}
         <p className="mb-5 text-[12px] leading-relaxed text-muted-foreground/70">
           {tab === "signal"

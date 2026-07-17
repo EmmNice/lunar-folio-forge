@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /feed
+Allow: /u/
+
+Disallow: /studio
+Disallow: /settings
+Disallow: /messages
+Disallow: /notifications
+Disallow: /pulse
+Disallow: /onboarding
+Disallow: /admin
+
+Sitemap: https://theledger.app/sitemap.xml

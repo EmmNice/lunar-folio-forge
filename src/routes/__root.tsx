@@ -93,7 +93,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "A premium, tech-noir platform for Web3 builders, founders, and investors. One global timeline — no follower games, just signal.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/og.svg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "/og.svg" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

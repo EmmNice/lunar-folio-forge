@@ -117,9 +117,60 @@ function OnboardingPage() {
   const field =
     "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
 
+  // Progress tracking based on filled fields
+  const steps = [
+    { label: "Identity",  done: fullName.trim().length > 0 && handleStatus === "available" },
+    { label: "Role",      done: !!dob && !!roleType && companyName.trim().length > 0 },
+    { label: "Your story", done: bio.trim().length > 0 },
+  ];
+  const completedCount = steps.filter((s) => s.done).length;
+
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-lg px-4 pb-24 pt-14 sm:px-6">
+      <main className="mx-auto max-w-lg px-4 pb-24 pt-14 sm:px-6 page-enter">
+        {/* Step progress indicator */}
+        <div className="mb-8 flex items-center gap-3">
+          {steps.map((step, i) => (
+            <div key={step.label} className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-all"
+                  style={{
+                    background: step.done
+                      ? "rgba(245,245,246,0.90)"
+                      : i === completedCount
+                        ? "rgba(255,255,255,0.12)"
+                        : "rgba(255,255,255,0.05)",
+                    color: step.done ? "#0B0B0C" : i === completedCount ? "#F5F5F6" : "#6B6B7A",
+                    border: step.done
+                      ? "none"
+                      : i === completedCount
+                        ? "1px solid rgba(255,255,255,0.20)"
+                        : "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {step.done ? "✓" : i + 1}
+                </div>
+                <span
+                  className="hidden text-[11px] font-medium sm:block"
+                  style={{ color: step.done ? "#F5F5F6" : i === completedCount ? "#A0A0AA" : "#6B6B7A" }}
+                >
+                  {step.label}
+                </span>
+              </div>
+              {i < steps.length - 1 && (
+                <div
+                  className="h-px flex-1 transition-all"
+                  style={{
+                    background: step.done ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+                    width: "2rem",
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
           One-time setup
         </p>

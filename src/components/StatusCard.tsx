@@ -2,7 +2,18 @@ import { forwardRef } from "react";
 import { Github, Linkedin, Twitter } from "lucide-react";
 import { VerificationBadge, type VerificationTier } from "@/components/VerificationBadge";
 
-export type Background = "noir" | "cream";
+export type Background = "noir" | "cream" | "gradient" | "gold" | "steel" | "emerald" | "midnight";
+
+/** Base fill color used as the toPng backgroundColor for each theme */
+export const BACKGROUND_BASE_COLORS: Record<Background, string> = {
+  noir:     "#0b0b0c",
+  cream:    "#f5f0e6",
+  gradient: "#0d0a1a",
+  gold:     "#0f0c04",
+  steel:    "#080c14",
+  emerald:  "#030f09",
+  midnight: "#040812",
+};
 
 export type StatusCardProps = {
   name: string;
@@ -16,7 +27,19 @@ export type StatusCardProps = {
   watermark?: boolean;
 };
 
-const THEMES = {
+type ThemeConfig = {
+  bg: string;
+  /** Optional gradient layered behind the dot pattern */
+  bgGradient?: string;
+  dot: string;
+  fg: string;
+  body: string;
+  muted: string;
+  border: string;
+  avatarBg: string;
+};
+
+const THEMES: Record<Background, ThemeConfig> = {
   noir: {
     bg: "#0b0b0c",
     dot: "rgba(255,255,255,0.07)",
@@ -35,7 +58,57 @@ const THEMES = {
     border: "#d9d1bf",
     avatarBg: "#ecead9",
   },
-} satisfies Record<Background, Record<string, string>>;
+  gradient: {
+    bg: "#0d0a1a",
+    bgGradient: "linear-gradient(145deg, #1a0d2e 0%, #0d0a1a 50%, #0a0d1e 100%)",
+    dot: "rgba(167,139,250,0.06)",
+    fg: "#f0ecff",
+    body: "#d4cff5",
+    muted: "#8b7fd4",
+    border: "rgba(167,139,250,0.18)",
+    avatarBg: "#1a1230",
+  },
+  gold: {
+    bg: "#0f0c04",
+    bgGradient: "linear-gradient(145deg, #211700 0%, #0f0c04 50%, #0c0a02 100%)",
+    dot: "rgba(251,191,36,0.06)",
+    fg: "#fefce8",
+    body: "#fde68a",
+    muted: "#b89a45",
+    border: "rgba(251,191,36,0.20)",
+    avatarBg: "#1c1400",
+  },
+  steel: {
+    bg: "#080c14",
+    bgGradient: "linear-gradient(145deg, #0d1525 0%, #080c14 50%, #06080f 100%)",
+    dot: "rgba(148,163,184,0.06)",
+    fg: "#e8edf5",
+    body: "#c8d4e0",
+    muted: "#6b8aaa",
+    border: "rgba(148,163,184,0.18)",
+    avatarBg: "#0f1824",
+  },
+  emerald: {
+    bg: "#030f09",
+    bgGradient: "linear-gradient(145deg, #061a0e 0%, #030f09 50%, #020c07 100%)",
+    dot: "rgba(52,211,153,0.06)",
+    fg: "#ecfdf5",
+    body: "#a7f3d0",
+    muted: "#4a9970",
+    border: "rgba(52,211,153,0.18)",
+    avatarBg: "#041a0c",
+  },
+  midnight: {
+    bg: "#040812",
+    bgGradient: "linear-gradient(145deg, #060d20 0%, #040812 50%, #030610 100%)",
+    dot: "rgba(99,102,241,0.06)",
+    fg: "#eef2ff",
+    body: "#c7d2fe",
+    muted: "#6272cc",
+    border: "rgba(99,102,241,0.18)",
+    avatarBg: "#080e28",
+  },
+};
 
 export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
   function StatusCard(
@@ -65,8 +138,12 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(
         style={{
           ...styles,
           backgroundColor: t.bg,
-          backgroundImage: `radial-gradient(${t.dot} 1px, transparent 1px)`,
-          backgroundSize: exportMode ? "44px 44px" : "22px 22px",
+          backgroundImage: t.bgGradient
+            ? `${t.bgGradient}, radial-gradient(${t.dot} 1px, transparent 1px)`
+            : `radial-gradient(${t.dot} 1px, transparent 1px)`,
+          backgroundSize: t.bgGradient
+            ? `100% 100%, ${exportMode ? "44px 44px" : "22px 22px"}`
+            : exportMode ? "44px 44px" : "22px 22px",
           color: t.fg,
           fontFamily:
             'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',

@@ -141,7 +141,39 @@ function ProfilePage() {
     return (
       <div className="min-h-screen">
         <AppHeader />
-        <div className="mx-auto max-w-5xl px-6 pt-16 text-sm text-muted-foreground">Loading…</div>
+        <div className="mx-auto max-w-5xl px-4 pt-10 pb-24 sm:px-6">
+          {/* Profile header skeleton */}
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
+            <div className="h-20 w-20 shrink-0 animate-pulse rounded-full bg-secondary/60 sm:h-24 sm:w-24" />
+            <div className="flex-1 space-y-3 pt-1">
+              <div className="h-5 w-44 animate-pulse rounded-full bg-secondary/60" />
+              <div className="h-3.5 w-24 animate-pulse rounded-full bg-secondary/40" />
+              <div className="space-y-2 pt-1">
+                <div className="h-3 w-full max-w-xs animate-pulse rounded-full bg-secondary/40" />
+                <div className="h-3 w-3/4 max-w-xs animate-pulse rounded-full bg-secondary/30" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <div className="h-8 w-24 animate-pulse rounded-xl bg-secondary/50" />
+                <div className="h-8 w-24 animate-pulse rounded-xl bg-secondary/30" />
+              </div>
+            </div>
+          </div>
+          {/* Posts skeleton */}
+          <div className="mt-10 space-y-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-2xl border border-border/40 bg-card/30 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 60}ms` }} />
+                  <div className="flex-1 space-y-2.5">
+                    <div className="h-3 w-32 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 60 + 30}ms` }} />
+                    <div className="h-3 w-full animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 60 + 60}ms` }} />
+                    <div className="h-3 w-4/5 animate-pulse rounded-full bg-secondary/30" style={{ animationDelay: `${i * 60 + 90}ms` }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

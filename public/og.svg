@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="0.5" cy="0.5" r="0.7" fill="rgba(255,255,255,0.06)"/>
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0d2e" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0B0B0C" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="15%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="rgba(167,139,250,0.15)"/>
+      <stop offset="100%" stop-color="rgba(11,11,12,0)"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Base -->
+  <rect width="1200" height="630" fill="#0B0B0C"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Subtle top border accent -->
+  <rect x="0" y="0" width="1200" height="1" fill="rgba(255,255,255,0.08)"/>
+
+  <!-- Logo mark -->
+  <rect x="60" y="54" width="48" height="48" rx="10" fill="#1A1A1E" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
+  <text x="84" y="86" text-anchor="middle" dominant-baseline="middle" fill="#F5F5F6" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="700">L</text>
+
+  <!-- Brand name -->
+  <text x="120" y="84" dominant-baseline="middle" fill="#F5F5F6" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="500" letter-spacing="0.5">The Ledger</text>
+
+  <!-- Headline -->
+  <text x="60" y="230" fill="#F5F5F6" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="76" font-weight="700" letter-spacing="-2.5">Ship your thoughts</text>
+  <text x="60" y="325" fill="#F5F5F6" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="76" font-weight="700" letter-spacing="-2.5">like you ship code.</text>
+
+  <!-- Divider -->
+  <rect x="60" y="370" width="48" height="2" rx="1" fill="rgba(167,139,250,0.60)"/>
+
+  <!-- Subtitle -->
+  <text x="60" y="418" fill="#6B6B7A" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="26" letter-spacing="-0.3">A high-signal network for tech founders, builders, and investors.</text>
+
+  <!-- Feature pills -->
+  <rect x="60" y="490" width="194" height="42" rx="21" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
+  <text x="157" y="517" text-anchor="middle" dominant-baseline="middle" fill="#94a3b8" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="15">Signal Feed</text>
+
+  <rect x="272" y="490" width="220" height="42" rx="21" fill="rgba(251,191,36,0.08)" stroke="rgba(251,191,36,0.22)" stroke-width="1"/>
+  <text x="382" y="517" text-anchor="middle" dominant-baseline="middle" fill="#fbbf24" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="15">Gold Verification</text>
+
+  <rect x="510" y="490" width="220" height="42" rx="21" fill="rgba(167,139,250,0.08)" stroke="rgba(167,139,250,0.22)" stroke-width="1"/>
+  <text x="620" y="517" text-anchor="middle" dominant-baseline="middle" fill="#a78bfa" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="15">PulseAssist AI</text>
+
+  <rect x="748" y="490" width="230" height="42" rx="21" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.20)" stroke-width="1"/>
+  <text x="863" y="517" text-anchor="middle" dominant-baseline="middle" fill="#34d399" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="15">Status Cards</text>
+
+  <!-- Right: card preview mockup -->
+  <rect x="900" y="80" width="240" height="420" rx="20" fill="#1A1A1E" stroke="rgba(167,139,250,0.20)" stroke-width="1" opacity="0.7"/>
+  <circle cx="926" cy="118" r="16" fill="#222228"/>
+  <rect x="950" y="108" width="90" height="10" rx="5" fill="rgba(255,255,255,0.15)"/>
+  <rect x="950" y="124" width="60" height="7" rx="3.5" fill="rgba(255,255,255,0.08)"/>
+  <rect x="918" y="165" width="204" height="8" rx="4" fill="rgba(255,255,255,0.12)"/>
+  <rect x="918" y="182" width="170" height="8" rx="4" fill="rgba(255,255,255,0.09)"/>
+  <rect x="918" y="199" width="185" height="8" rx="4" fill="rgba(255,255,255,0.09)"/>
+  <rect x="918" y="216" width="140" height="8" rx="4" fill="rgba(255,255,255,0.07)"/>
+  <rect x="918" y="440" width="204" height="1" rx="0.5" fill="rgba(255,255,255,0.08)"/>
+  <rect x="918" y="456" width="70" height="7" rx="3.5" fill="rgba(255,255,255,0.10)"/>
+</svg>

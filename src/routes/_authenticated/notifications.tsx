@@ -70,7 +70,7 @@ function NotificationsPage() {
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
-      <main className="mx-auto max-w-2xl px-4 pt-10 pb-24 sm:px-6">
+      <main className="mx-auto max-w-2xl px-4 pt-10 pb-24 sm:px-6 page-enter">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Notifications</h1>
@@ -81,7 +81,18 @@ function NotificationsPage() {
 
         <div className="mt-8">
           {notifications === null ? (
-            <div className="text-sm text-muted-foreground">Loading…</div>
+            <div className="space-y-0 divide-y divide-border/60">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-start gap-3 py-4">
+                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 50}ms` }} />
+                  <div className="flex-1 space-y-2 pt-0.5">
+                    <div className="h-3 w-48 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 50 + 25}ms` }} />
+                    <div className="h-3 w-64 animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 50 + 50}ms` }} />
+                    <div className="h-2.5 w-16 animate-pulse rounded-full bg-secondary/25" style={{ animationDelay: `${i * 50 + 75}ms` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : notifications.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
               <Bell className="mx-auto h-8 w-8 text-border" />
