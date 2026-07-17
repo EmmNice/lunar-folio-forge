@@ -60,10 +60,19 @@ const ROLE_LABEL: Record<RoleType, string> = {
   investor: "VC / Investor",
 };
 
+// ─── Auto-redirect to the user's real handle ─────────────────────────────────
+function RedirectToOwnProfile({ handle }: { handle: string }) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/u/$handle", params: { handle }, replace: true });
+  }, [handle, navigate]);
+  return null;
+}
+
 // ─── Main page component ──────────────────────────────────────────────────────
 function ProfilePage() {
   const { handle } = Route.useParams();
-  const { user, profile: me, refreshProfile } = useAuth();
+  const { user, profile: me, refreshProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const start = useServerFn(startConversation);
 
@@ -107,8 +116,9 @@ function ProfilePage() {
     } finally { setBusyMsg(false); }
   }
 
-  // Loading / not-found states
-  if (profile === undefined) {
+  // Loading / not-found states — wait for BOTH the handle query AND auth to resolve
+  // before deciding "not found", so we can redirect a logged-in user to their real handle.
+  if (profile === undefined || authLoading) {
     return (
       <div className="min-h-screen">
         <AppHeader />
@@ -117,6 +127,40 @@ function ProfilePage() {
     );
   }
   if (profile === null) {
+    // If the signed-in user lands here but their real handle is different,
+    // redirect them to their actual profile automatically.
+    if (me && me.handle && me.handle !== handle) {
+      return (
+        <div className="min-h-screen">
+          <AppHeader />
+          <div className="mx-auto max-w-5xl px-6 pt-16">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Redirecting…</p>
+            <RedirectToOwnProfile handle={me.handle} />
+          </div>
+        </div>
+      );
+    }
+    // Logged-in user with no completed profile → send to onboarding
+    if (user && !me) {
+      return (
+        <div className="min-h-screen">
+          <AppHeader />
+          <div className="mx-auto max-w-5xl px-6 pt-16">
+            <h1 className="text-xl font-semibold">Finish setting up your profile</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Complete onboarding to claim your handle and access your profile.
+            </p>
+            <Link
+              to="/onboarding"
+              className="mt-6 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
+              style={{ background: "#F5F5F6" }}
+            >
+              Complete setup
+            </Link>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen">
         <AppHeader />
