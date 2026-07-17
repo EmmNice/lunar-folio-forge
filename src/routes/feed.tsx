@@ -341,47 +341,89 @@ function FeedPage() {
       .filter((p) => isSilverOrGold  || (p.visibility ?? "public") !== "whisper");
   }
 
-  // ── Beat fetch: ALL posts, strictly chronological ──────────────────────
-  async function fetchBeat() {
-    const { data, error } = await supabase
-      .from("posts")
-      .select(
-        "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(80);
-
-    if (error) { toast.error("Couldn't load the feed. Check your connection."); setBeatPosts([]); return; }
-
-    const all: FeedPost[] = (data ?? []).map((p: any) => ({
+  // ── Shared row normaliser ─────────────────────────────────────────────
+  function normalisePosts(data: any[]): FeedPost[] {
+    return data.map((p) => ({
       ...p,
       comments_enabled: p.comments_enabled ?? true,
       visibility: p.visibility ?? "public",
     }));
-    setBeatPosts(applyVisibility(all));
+  }
+
+  // ── Beat fetch: ALL posts, strictly chronological ──────────────────────
+  // Two-step: try with optional columns first; fall back to base schema if
+  // they don't exist yet (e.g. migrations not applied).
+  async function fetchBeat() {
+    const BASE_SELECT =
+      "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)";
+    const FULL_SELECT =
+      `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
+
+    let data: any[] | null = null;
+
+    const full = await supabase
+      .from("posts")
+      .select(FULL_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(80);
+
+    if (full.error) {
+      // Column probably doesn't exist yet — retry without optional columns
+      const base = await supabase
+        .from("posts")
+        .select(BASE_SELECT)
+        .order("created_at", { ascending: false })
+        .limit(80);
+
+      if (base.error) {
+        toast.error("Couldn't load the feed. Check your connection.");
+        setBeatPosts([]);
+        return;
+      }
+      data = base.data;
+    } else {
+      data = full.data;
+    }
+
+    setBeatPosts(applyVisibility(normalisePosts(data ?? [])));
   }
 
   // ── Signal fetch: VERIFIED AUTHORS ONLY — backend-filtered ─────────────
   // Uses !inner join so the DB only returns posts whose author has
-  // verification_tier = 'silver' | 'gold'. No client-side re-filtering needed.
+  // verification_tier = 'silver' | 'gold'. Falls back to client-side filter
+  // if the inner-join syntax isn't supported by the schema version.
   async function fetchSignal() {
-    const { data, error } = await supabase
+    const BASE_SELECT =
+      "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)";
+    const FULL_SELECT =
+      "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey!inner(id, handle, display_name, avatar_url, verification_tier)";
+
+    // Try backend-filtered query first
+    const full = await supabase
       .from("posts")
-      .select(
-        "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey!inner(id, handle, display_name, avatar_url, verification_tier)",
-      )
+      .select(FULL_SELECT)
       .in("profiles.verification_tier", ["silver", "gold"])
       .order("created_at", { ascending: false })
       .limit(50);
 
-    if (error) { setSignalPosts([]); return; }
+    if (!full.error) {
+      setSignalPosts(applyVisibility(normalisePosts(full.data ?? [])));
+      return;
+    }
 
-    const all: FeedPost[] = (data ?? []).map((p: any) => ({
-      ...p,
-      comments_enabled: p.comments_enabled ?? true,
-      visibility: p.visibility ?? "public",
-    }));
-    setSignalPosts(applyVisibility(all));
+    // Fallback: base columns + client-side filter for verified authors
+    const base = await supabase
+      .from("posts")
+      .select(BASE_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(80);
+
+    if (base.error) { setSignalPosts([]); return; }
+
+    const verified = normalisePosts(base.data ?? []).filter(
+      (p) => p.author.verification_tier === "silver" || p.author.verification_tier === "gold",
+    );
+    setSignalPosts(applyVisibility(verified));
   }
 
   useEffect(() => {
