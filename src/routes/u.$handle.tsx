@@ -424,63 +424,64 @@ function SelfProfileCard({
       style={{ background: "rgba(26,26,30,0.70)", border: "1px solid rgba(255,255,255,0.07)" }}
     >
       {/* Hero row — always visible */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {/* Avatar */}
-          <div
-            className="grid h-16 w-16 shrink-0 overflow-hidden rounded-full text-xl font-semibold"
-            style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
-          >
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              <span className="grid h-full w-full place-items-center">
-                {profile.display_name.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-          {/* Name / handle / meta */}
-          <div>
-            <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-              {profile.display_name}
-              <VerificationBadge tier={profile.verification_tier} size={18} />
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              @{profile.handle}
-              {profile.role_type ? ` · ${ROLE_LABEL[profile.role_type]}` : ""}
-              {profile.company_name ? ` · ${profile.company_name}` : ""}
-            </p>
-            {!editMode && profile.bio && (
-              <p className="mt-1.5 max-w-sm text-sm text-foreground/80">{profile.bio}</p>
-            )}
-          </div>
+      <div className="flex items-start gap-3">
+        {/* Avatar */}
+        <div
+          className="grid h-14 w-14 shrink-0 overflow-hidden rounded-full text-xl font-semibold sm:h-16 sm:w-16"
+          style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
+        >
+          {profile.avatar_url ? (
+            <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+          ) : (
+            <span className="grid h-full w-full place-items-center">
+              {profile.display_name.charAt(0).toUpperCase()}
+            </span>
+          )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Edit / Cancel toggle */}
-          <button
-            type="button"
-            onClick={() => setEditMode((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            {editMode ? (
-              <><X className="h-3.5 w-3.5" />Cancel</>
-            ) : (
-              <><Pencil className="h-3.5 w-3.5" />Edit Profile</>
-            )}
-          </button>
+        {/* Name / handle / meta — grows to fill available width */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="flex min-w-0 items-center gap-1.5 truncate text-lg font-semibold tracking-tight sm:text-xl">
+                <span className="truncate">{profile.display_name}</span>
+                <VerificationBadge tier={profile.verification_tier} size={16} />
+              </h1>
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                @{profile.handle}
+                {profile.role_type ? ` · ${ROLE_LABEL[profile.role_type]}` : ""}
+                {profile.company_name ? ` · ${profile.company_name}` : ""}
+              </p>
+            </div>
 
-          {/* Gear → Account Settings */}
-          <Link
-            to="/settings"
-            aria-label="Account Settings"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </Link>
+            {/* Action buttons — pinned to right, never overflow */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setEditMode((v) => !v)}
+                className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                {editMode ? (
+                  <><X className="h-3.5 w-3.5" /><span className="hidden sm:inline">Cancel</span></>
+                ) : (
+                  <><Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit</span></>
+                )}
+              </button>
+              <Link
+                to="/settings"
+                aria-label="Account Settings"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          {!editMode && profile.bio && (
+            <p className="mt-1.5 text-sm text-foreground/80 break-words">{profile.bio}</p>
+          )}
         </div>
       </div>
 

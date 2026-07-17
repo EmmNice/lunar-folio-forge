@@ -20,19 +20,24 @@ const MOBILE_TABS = [
   { to: "/studio" as const, label: "Workspace", icon: PenSquare },
 ];
 
-export function AppHeader() {
+/**
+ * controlled — when true the outer container owns sticky/hide behaviour;
+ * AppHeader renders as a plain transparent block with no scroll listener
+ * and no transform of its own.
+ */
+export function AppHeader({ controlled = false }: { controlled?: boolean } = {}) {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [unreadCount, setUnreadCount] = useState(0);
   const [hidden, setHidden] = useState(false);
 
-  // ── Scroll direction detector for auto-hide ──────────────────────────────
+  // ── Scroll direction detector — only when NOT externally controlled ──────
   useEffect(() => {
+    if (controlled) return;
     let lastY = window.scrollY;
     function onScroll() {
       const y = window.scrollY;
-      // Only hide after scrolled past header height (~56 px)
       if (y > lastY && y > 64) {
         setHidden(true);
       } else if (y < lastY) {
@@ -42,7 +47,7 @@ export function AppHeader() {
     }
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [controlled]);
 
   useEffect(() => {
     if (!user) { setUnreadCount(0); return; }
@@ -89,8 +94,8 @@ export function AppHeader() {
     <>
       {/* ── Top nav ── */}
       <header
-        className="sticky top-0 z-40 border-b backdrop-blur-md"
-        style={{
+        className={controlled ? "" : "sticky top-0 z-40 border-b backdrop-blur-md"}
+        style={controlled ? {} : {
           background: "rgba(11,11,12,0.88)",
           borderColor: "rgba(255,255,255,0.07)",
           transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",

@@ -420,55 +420,55 @@ function FeedPage() {
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
-      <AppHeader />
-      <main className="mx-auto max-w-2xl px-4 pt-8 pb-32 sm:px-6">
-        {/* ── Page heading ── */}
-        <div className="mb-6">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            The Ledger
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Explore Feed
-          </h1>
-        </div>
 
-        {/* ── Sticky Signal / Beat tab bar ── */}
+      {/* ── Combined sticky header: top nav + Signal/Beat tabs as ONE unit ── */}
+      <div
+        className="sticky top-0 z-40"
+        style={{
+          background: "rgba(11,11,12,0.92)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+          transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+        }}
+      >
+        {/* Top nav bar — controlled so it doesn't register its own scroll listener */}
+        <AppHeader controlled />
+
+        {/* Signal / Beat tab switcher */}
         <div
-          className="sticky top-14 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 pt-3 pb-2"
-          style={{
-            background: "rgba(11,11,12,0.92)",
-            backdropFilter: "blur(20px)",
-            borderBottom: "1px solid rgba(255,255,255,0.05)",
-            transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-            transform: headerHidden ? "translateY(calc(-100% - 56px))" : "translateY(0)",
-          }}
+          className="px-4 pt-2 pb-2.5 sm:px-6"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
-          <div className="flex gap-0.5 rounded-xl border border-border/50 bg-secondary/15 p-1">
-            {(["signal", "beat"] as FeedTab[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={
-                  "flex-1 rounded-[9px] py-[7px] text-[13px] font-medium transition-all duration-150 " +
-                  (tab === t
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground/80")
-                }
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+          <div className="mx-auto max-w-2xl">
+            <div className="flex gap-0.5 rounded-xl border border-border/50 bg-secondary/15 p-1">
+              {(["signal", "beat"] as FeedTab[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={
+                    "flex-1 rounded-[9px] py-[7px] text-[13px] font-medium transition-all duration-150 " +
+                    (tab === t
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground/80")
+                  }
+                >
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="mt-2 mb-1 text-[12px] leading-relaxed text-muted-foreground/80">
-            {tab === "signal"
-              ? "Silver & Gold verified builders — the highest-signal posts on the platform."
-              : "Raw chronological pulse of everything shipping — verified and unverified alike."}
-          </p>
         </div>
+      </div>
 
-        {/* Spacer so first post isn't hidden behind sticky tab bar */}
-        <div className="h-6" />
+      <main className="mx-auto max-w-2xl px-4 pt-5 pb-32 sm:px-6">
+        {/* Tab description */}
+        <p className="mb-5 text-[12px] leading-relaxed text-muted-foreground/70">
+          {tab === "signal"
+            ? "Silver & Gold verified builders — the highest-signal posts on the platform."
+            : "Raw chronological pulse of everything shipping — verified and unverified alike."}
+        </p>
 
         {/* ── Feed ── */}
         {posts === null ? (
