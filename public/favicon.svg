@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background tile — matches app's #0B0B0C dark surface -->
+  <rect width="32" height="32" rx="7" fill="#0B0B0C"/>
+  <!-- Subtle border, same as OG logo mark -->
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
+  <!-- Bar-chart mark (3 bars, matches the app header icon) -->
+  <rect x="7"  y="18" width="4" height="7"  rx="1" fill="#F5F5F6" opacity="0.5"/>
+  <rect x="14" y="12" width="4" height="13" rx="1" fill="#F5F5F6" opacity="0.8"/>
+  <rect x="21" y="7"  width="4" height="18" rx="1" fill="#F5F5F6"/>
+</svg>
