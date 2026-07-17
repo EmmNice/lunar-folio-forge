@@ -39,7 +39,10 @@ function PulsePage() {
   const [isUnlimited, setIsUnlimited] = useState<boolean>(false);
   const [exhausted, setExhausted] = useState(false);
 
-  const isVerified = profile?.verification_tier !== "none";
+  // Only treat as verified once the profile has actually loaded
+  const isVerified =
+    !!profile &&
+    (profile.verification_tier === "silver" || profile.verification_tier === "gold");
 
   useEffect(() => {
     if (isVerified) setIsUnlimited(true);

@@ -58,11 +58,13 @@ function OnboardingPage() {
     }
     setHandleStatus("checking");
     checkTimer.current = setTimeout(async () => {
+      // Don't run the check until the user session is confirmed
+      if (!user?.id) { setHandleStatus("idle"); return; }
       const { data } = await supabase
         .from("profiles")
         .select("id")
         .eq("handle", h)
-        .neq("id", user?.id ?? "")
+        .neq("id", user.id)
         .maybeSingle();
       setHandleStatus(data ? "taken" : "available");
     }, 400);

@@ -36,8 +36,12 @@ function ThreadPage() {
         .eq("id", id)
         .maybeSingle();
       if (cancelled || !conv) return;
-      const otherProfile = (conv.user_a === user.id ? conv.b : conv.a) as unknown as Profile;
-      setOther(otherProfile);
+      // Supabase returns joined rows as objects for FK joins; guard against
+      // array shape and missing profile (e.g. deleted account).
+      const rawOther = conv.user_a === user.id ? conv.b : conv.a;
+      const otherProfile = Array.isArray(rawOther) ? (rawOther[0] ?? null) : rawOther;
+      if (!otherProfile) return;
+      setOther(otherProfile as unknown as Profile);
 
       const { data: msgs } = await supabase
         .from("messages")

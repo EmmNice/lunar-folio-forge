@@ -330,10 +330,11 @@ function FeedPage() {
 
   // ── Shared visibility filter ──────────────────────────────────────────
   function applyVisibility(all: FeedPost[]): FeedPost[] {
+    // Only authenticated, verified members can see restricted posts
     const isVerifiedViewer =
-      !user || !profile ||
-      profile.verification_tier === "silver" ||
-      profile.verification_tier === "gold";
+      !!user && !!profile &&
+      (profile.verification_tier === "silver" ||
+      profile.verification_tier === "gold");
     const isSilverOrGold =
       profile?.verification_tier === "silver" || profile?.verification_tier === "gold";
     return all
