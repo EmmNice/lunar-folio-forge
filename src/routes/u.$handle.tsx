@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2 } from "lucide-react";
+import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
@@ -60,47 +60,9 @@ const ROLE_LABEL: Record<RoleType, string> = {
   investor: "VC / Investor",
 };
 
-// ─── Shared lux tab bar ───────────────────────────────────────────────────────
-type SelfTab = "posts" | "edit" | "verification";
-
-function TabBar({
-  active,
-  onChange,
-}: { active: SelfTab; onChange: (t: SelfTab) => void }) {
-  const tabs: { id: SelfTab; label: string }[] = [
-    { id: "posts", label: "My Posts" },
-    { id: "edit", label: "Edit Profile" },
-    { id: "verification", label: "Verification" },
-  ];
-  return (
-    <div
-      className="flex gap-0 border-b"
-      style={{ borderColor: "rgba(255,255,255,0.07)" }}
-    >
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={
-            "px-4 py-2.5 text-sm font-medium transition-colors " +
-            (active === t.id
-              ? "border-b-2 text-foreground"
-              : "text-muted-foreground hover:text-foreground")
-          }
-          style={active === t.id ? { borderBottomColor: "#F5F5F6" } : {}}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ─── Main page component ──────────────────────────────────────────────────────
 function ProfilePage() {
   const { handle } = Route.useParams();
-  const search = useSearch({ from: "/u/$handle" });
   const { user, profile: me, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const start = useServerFn(startConversation);
@@ -109,7 +71,6 @@ function ProfilePage() {
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [busyMsg, setBusyMsg] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
-  const [selfTab, setSelfTab] = useState<SelfTab>(search.tab ?? "posts");
 
   useEffect(() => {
     let cancelled = false;
@@ -134,11 +95,6 @@ function ProfilePage() {
     })();
     return () => { cancelled = true; };
   }, [handle]);
-
-  // Sync tab param from URL
-  useEffect(() => {
-    if (search.tab) setSelfTab(search.tab);
-  }, [search.tab]);
 
   async function message() {
     if (!user || !me || !profile) { toast.error("Sign in to send a message."); return; }
@@ -195,64 +151,71 @@ function ProfilePage() {
     pitch_limit: (profile as any).pitch_limit ?? null,
   };
 
-  // ── SELF VIEW — Identity Hub ───────────────────────────────────────────────
+  // ── SELF VIEW ─────────────────────────────────────────────────────────────
   if (isSelf && me) {
     return (
       <div className="min-h-screen pb-16 sm:pb-0">
         <AppHeader />
         <main className="mx-auto max-w-2xl px-4 pt-10 pb-28 sm:px-6">
-          {/* Profile hero */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div
-                className="grid h-16 w-16 shrink-0 overflow-hidden rounded-full text-xl font-semibold"
-                style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
-              >
-                {me.avatar_url ? (
-                  <img src={me.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <span className="grid h-full w-full place-items-center">
-                    {me.display_name.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div>
-                <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-                  {me.display_name}
-                  <VerificationBadge tier={me.verification_tier} size={18} />
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  @{me.handle}
-                  {me.company_name ? ` · ${me.company_name}` : ""}
-                </p>
-                {me.bio && (
-                  <p className="mt-1 text-sm text-foreground/80">{me.bio}</p>
-                )}
-              </div>
+
+          {/* ── Profile Card ── */}
+          <SelfProfileCard
+            profile={me as any}
+            onSaved={refreshProfile}
+          />
+
+          {/* ── Verification Portal ── */}
+          <section className="mt-10">
+            <div className="mb-4 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Verification Portal
+              </p>
             </div>
+            <VerificationSection profile={me as any} />
+          </section>
 
-            {/* Gear → Account Settings */}
-            <Link
-              to="/settings"
-              aria-label="Account Settings"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-            >
-              <Settings className="h-4 w-4" />
-            </Link>
-          </div>
-
-          {/* Tab bar */}
-          <div className="mt-8">
-            <TabBar active={selfTab} onChange={setSelfTab} />
-          </div>
-
-          {/* Tab content */}
-          <div className="mt-6">
-            {selfTab === "posts" && <MyPostsTab posts={posts} profile={profile} />}
-            {selfTab === "edit" && <EditProfileTab onSaved={refreshProfile} />}
-            {selfTab === "verification" && <VerificationTab />}
-          </div>
+          {/* ── My Cards ── */}
+          <section className="mt-10">
+            <p className="mb-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              My Cards
+            </p>
+            {posts.length === 0 ? (
+              <div
+                className="flex flex-col items-center rounded-2xl py-12 text-center"
+                style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
+              >
+                <p className="text-sm font-medium">No cards published yet.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Head to Workspace to write your first card.</p>
+                <Link
+                  to="/studio"
+                  search={{ draft: undefined }}
+                  className="mt-4 rounded-xl px-4 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
+                  style={{ background: "#F5F5F6" }}
+                >
+                  Open Workspace
+                </Link>
+              </div>
+            ) : (
+              <div className="columns-1 gap-5 sm:columns-2 [column-fill:_balance]">
+                {posts.map((p) => (
+                  <div key={p.id} className="mb-5 break-inside-avoid">
+                    <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <StatusCard
+                        name={profile.display_name}
+                        handle={profile.handle}
+                        avatarUrl={profile.avatar_url}
+                        content={p.content}
+                        background={p.background}
+                        verificationTier={profile.verification_tier}
+                      />
+                    </div>
+                    <div className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       </div>
     );
@@ -294,7 +257,6 @@ function ProfilePage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {/* Connect links */}
             {profile.verification_tier !== "none" && !dmCloaked &&
               connectLinks.map((l) => (
                 <a
@@ -309,7 +271,6 @@ function ProfilePage() {
                 </a>
               ))}
 
-            {/* Pitch button (Silver/Gold viewer → Gold profile) */}
             {isGold && viewerIsSilverOrGold && user && me && (
               <button
                 type="button"
@@ -321,7 +282,6 @@ function ProfilePage() {
               </button>
             )}
 
-            {/* Message button */}
             {user && me && !dmCloaked && (
               <button
                 type="button"
@@ -373,68 +333,127 @@ function ProfilePage() {
   );
 }
 
-// ─── TAB 1: My Posts ─────────────────────────────────────────────────────────
-function MyPostsTab({ posts, profile }: { posts: PostRow[]; profile: ProfileRow }) {
-  if (posts.length === 0) {
-    return (
-      <div className="flex flex-col items-center rounded-2xl py-12 text-center"
-        style={{ border: "1px dashed rgba(255,255,255,0.10)" }}>
-        <p className="text-sm font-medium">No cards published yet.</p>
-        <p className="mt-1 text-xs text-muted-foreground">Head to Workspace to write your first card.</p>
-        <Link
-          to="/studio"
-          search={{ draft: undefined }}
-          className="mt-4 rounded-xl px-4 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
-          style={{ background: "#F5F5F6" }}
-        >
-          Open Workspace
-        </Link>
-      </div>
-    );
-  }
+// ─── Self Profile Card (read-only → inline edit toggle) ───────────────────────
+type SelfProfile = {
+  id: string;
+  handle: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  company_name: string | null;
+  role_type: RoleType | null;
+  verification_tier: VerificationTier;
+  github_url: string | null;
+  portfolio_url: string | null;
+};
+
+function SelfProfileCard({
+  profile,
+  onSaved,
+}: {
+  profile: SelfProfile;
+  onSaved: () => Promise<void>;
+}) {
+  const [editMode, setEditMode] = useState(false);
+
   return (
-    <div className="columns-1 gap-5 sm:columns-2 [column-fill:_balance]">
-      {posts.map((p) => (
-        <div key={p.id} className="mb-5 break-inside-avoid">
-          <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-            <StatusCard
-              name={profile.display_name}
-              handle={profile.handle}
-              avatarUrl={profile.avatar_url}
-              content={p.content}
-              background={p.background}
-              verificationTier={profile.verification_tier}
-            />
+    <div
+      className="rounded-2xl p-5 sm:p-6"
+      style={{ background: "rgba(26,26,30,0.70)", border: "1px solid rgba(255,255,255,0.07)" }}
+    >
+      {/* Hero row — always visible */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          {/* Avatar */}
+          <div
+            className="grid h-16 w-16 shrink-0 overflow-hidden rounded-full text-xl font-semibold"
+            style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
+          >
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <span className="grid h-full w-full place-items-center">
+                {profile.display_name.charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
-          <div className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</div>
+          {/* Name / handle / meta */}
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+              {profile.display_name}
+              <VerificationBadge tier={profile.verification_tier} size={18} />
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              @{profile.handle}
+              {profile.role_type ? ` · ${ROLE_LABEL[profile.role_type]}` : ""}
+              {profile.company_name ? ` · ${profile.company_name}` : ""}
+            </p>
+            {!editMode && profile.bio && (
+              <p className="mt-1.5 max-w-sm text-sm text-foreground/80">{profile.bio}</p>
+            )}
+          </div>
         </div>
-      ))}
+
+        {/* Action buttons */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Edit / Cancel toggle */}
+          <button
+            type="button"
+            onClick={() => setEditMode((v) => !v)}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            {editMode ? (
+              <><X className="h-3.5 w-3.5" />Cancel</>
+            ) : (
+              <><Pencil className="h-3.5 w-3.5" />Edit Profile</>
+            )}
+          </button>
+
+          {/* Gear → Account Settings */}
+          <Link
+            to="/settings"
+            aria-label="Account Settings"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Inline edit form */}
+      {editMode && (
+        <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+          <EditProfileForm
+            profile={profile}
+            onSaved={async () => {
+              await onSaved();
+              setEditMode(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── TAB 2: Edit Profile ──────────────────────────────────────────────────────
-function EditProfileTab({ onSaved }: { onSaved: () => Promise<void> }) {
-  const { profile } = useAuth();
-  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
-  const [bio, setBio] = useState(profile?.bio ?? "");
-  const [companyName, setCompanyName] = useState(profile?.company_name ?? "");
-  const [roleType, setRoleType] = useState<string>(profile?.role_type ?? "");
-  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? "");
-  const [githubUrl, setGithubUrl] = useState(profile?.github_url ?? "");
-  const [websiteUrl, setWebsiteUrl] = useState(profile?.portfolio_url ?? "");
+// ─── Inline edit form ─────────────────────────────────────────────────────────
+function EditProfileForm({
+  profile,
+  onSaved,
+}: {
+  profile: SelfProfile;
+  onSaved: () => Promise<void>;
+}) {
+  const [displayName, setDisplayName] = useState(profile.display_name);
+  const [bio, setBio] = useState(profile.bio ?? "");
+  const [companyName, setCompanyName] = useState(profile.company_name ?? "");
+  const [roleType, setRoleType] = useState<string>(profile.role_type ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
+  const [githubUrl, setGithubUrl] = useState(profile.github_url ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(profile.portfolio_url ?? "");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!profile) return;
-    setDisplayName(profile.display_name);
-    setBio(profile.bio ?? "");
-    setCompanyName(profile.company_name ?? "");
-    setRoleType(profile.role_type ?? "");
-    setAvatarUrl(profile.avatar_url ?? "");
-    setGithubUrl(profile.github_url ?? "");
-    setWebsiteUrl(profile.portfolio_url ?? "");
-  }, [profile?.id]);
 
   const ROLE_OPTIONS: { value: RoleType | ""; label: string }[] = [
     { value: "", label: "Not specified" },
@@ -445,7 +464,6 @@ function EditProfileTab({ onSaved }: { onSaved: () => Promise<void> }) {
   ];
 
   async function save() {
-    if (!profile) return;
     if (!displayName.trim()) { toast.error("Display name is required."); return; }
     if (githubUrl && !/^https?:\/\//.test(githubUrl.trim())) { toast.error("GitHub URL must start with https://"); return; }
     if (websiteUrl && !/^https?:\/\//.test(websiteUrl.trim())) { toast.error("Website URL must start with https://"); return; }
@@ -466,35 +484,26 @@ function EditProfileTab({ onSaved }: { onSaved: () => Promise<void> }) {
   }
 
   return (
-    <div className="space-y-5">
-      <Field label="Display Name">
-        <input className="lux-field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
-      </Field>
-
-      <Field label="Bio" hint="Max 200 characters.">
-        <textarea
-          rows={3}
-          className="lux-field resize-y"
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          maxLength={200}
-        />
-      </Field>
-
-      <Field label="Role Type">
-        <select
-          className="lux-field"
-          value={roleType}
-          onChange={(e) => setRoleType(e.target.value)}
-        >
-          {ROLE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </Field>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Display Name">
+          <input className="lux-field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
+        </Field>
+        <Field label="Role Type">
+          <select className="lux-field" value={roleType} onChange={(e) => setRoleType(e.target.value)}>
+            {ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
 
       <Field label="Company / Startup">
         <input className="lux-field" value={companyName} onChange={(e) => setCompanyName(e.target.value)} maxLength={80} />
+      </Field>
+
+      <Field label="Bio" hint="Max 200 characters.">
+        <textarea rows={3} className="lux-field resize-y" value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} />
       </Field>
 
       <div
@@ -534,7 +543,7 @@ function EditProfileTab({ onSaved }: { onSaved: () => Promise<void> }) {
         style={{ background: "#F5F5F6" }}
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-        Save Profile
+        Save Changes
       </button>
     </div>
   );
@@ -550,7 +559,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-// ─── TAB 3: Verification ──────────────────────────────────────────────────────
+// ─── Verification section ────────────────────────────────────────────────────
 type VerificationRequestRow = {
   id: string;
   tier: "silver" | "gold";
@@ -558,8 +567,8 @@ type VerificationRequestRow = {
   created_at: string;
 };
 
-function VerificationTab() {
-  const { profile, user } = useAuth();
+function VerificationSection({ profile }: { profile: SelfProfile & { verification_tier: VerificationTier } }) {
+  const { user } = useAuth();
   const [requests, setRequests] = useState<VerificationRequestRow[] | null>(null);
   const [silverGithub, setSilverGithub] = useState("");
   const [silverPortfolio, setSilverPortfolio] = useState("");
@@ -612,7 +621,7 @@ function VerificationTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Silver */}
       <div className="glass-silver rounded-2xl p-5">
         <div className="flex items-center gap-2.5">
@@ -623,12 +632,17 @@ function VerificationTab() {
             <p className="text-sm font-semibold" style={{ color: "#cbd5e1" }}>Silver — Recognized Builder</p>
             <p className="text-[11px]" style={{ color: "rgba(148,163,184,0.65)" }}>Verified contributor identity</p>
           </div>
+          {(profile.verification_tier === "silver" || profile.verification_tier === "gold") && (
+            <div className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+            </div>
+          )}
         </div>
         <p className="mt-3 text-xs" style={{ color: "rgba(148,163,184,0.70)" }}>
           Verify with a public GitHub profile (and optional portfolio) that shows real shipped work.
         </p>
         <VerifStatusPill request={latestFor("silver")} />
-        {profile?.verification_tier !== "silver" && profile?.verification_tier !== "gold" && (
+        {profile.verification_tier !== "silver" && profile.verification_tier !== "gold" && (
           <div className="mt-4 space-y-2.5">
             <input className="lux-field" placeholder="https://github.com/yourhandle" value={silverGithub}
               onChange={(e) => setSilverGithub(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
@@ -660,12 +674,17 @@ function VerificationTab() {
             <p className="text-sm font-semibold" style={{ color: "#fde68a" }}>Gold — Elite Founder</p>
             <p className="text-[11px]" style={{ color: "rgba(251,191,36,0.55)" }}>Maximum network prestige</p>
           </div>
+          {profile.verification_tier === "gold" && (
+            <div className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-amber-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+            </div>
+          )}
         </div>
         <p className="mt-3 text-xs" style={{ color: "rgba(251,191,36,0.60)" }}>
           Verify with your startup's public URL and a traction link (press, metrics, funding announcement).
         </p>
         <VerifStatusPill request={latestFor("gold")} />
-        {profile?.verification_tier !== "gold" && (
+        {profile.verification_tier !== "gold" && (
           <div className="mt-4 space-y-2.5">
             <input className="lux-field" placeholder="https://yourstartup.com" value={goldStartup}
               onChange={(e) => setGoldStartup(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
@@ -692,17 +711,18 @@ function VerificationTab() {
 
 function VerifStatusPill({ request }: { request: VerificationRequestRow | null }) {
   if (!request) return null;
-  const style =
-    request.status === "approved" ? "text-emerald-400 border-emerald-400/40"
-    : request.status === "rejected" ? "text-red-400 border-red-400/40"
-    : "text-amber-400 border-amber-400/40";
-  const label =
-    request.status === "approved" ? "Verified"
-    : request.status === "rejected" ? "Not approved"
-    : "Under Review";
+  const styles: Record<string, { bg: string; color: string; label: string }> = {
+    pending: { bg: "rgba(251,191,36,0.10)", color: "#fbbf24", label: "Under Review" },
+    approved: { bg: "rgba(34,197,94,0.10)", color: "#4ade80", label: "Approved" },
+    rejected: { bg: "rgba(239,68,68,0.10)", color: "#f87171", label: "Not Approved" },
+  };
+  const s = styles[request.status] ?? styles.pending;
   return (
-    <span className={"mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium " + style}>
-      {label}
-    </span>
+    <div
+      className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium"
+      style={{ background: s.bg, color: s.color }}
+    >
+      {s.label} · {timeAgo(request.created_at)}
+    </div>
   );
 }

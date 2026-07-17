@@ -13,7 +13,7 @@ const DESKTOP_NAV = [
   { to: "/studio" as const, label: "Workspace", icon: PenSquare },
 ];
 
-// Mobile bottom bar — exactly three zones (no extra tabs)
+// Mobile bottom bar — exactly three zones
 const MOBILE_TABS = [
   { to: "/feed" as const, label: "Explore", icon: Rss },
   { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
@@ -25,6 +25,24 @@ export function AppHeader() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hidden, setHidden] = useState(false);
+
+  // ── Scroll direction detector for auto-hide ──────────────────────────────
+  useEffect(() => {
+    let lastY = window.scrollY;
+    function onScroll() {
+      const y = window.scrollY;
+      // Only hide after scrolled past header height (~56 px)
+      if (y > lastY && y > 64) {
+        setHidden(true);
+      } else if (y < lastY) {
+        setHidden(false);
+      }
+      lastY = y;
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     if (!user) { setUnreadCount(0); return; }
@@ -72,7 +90,12 @@ export function AppHeader() {
       {/* ── Top nav ── */}
       <header
         className="sticky top-0 z-40 border-b backdrop-blur-md"
-        style={{ background: "rgba(11,11,12,0.88)", borderColor: "rgba(255,255,255,0.07)" }}
+        style={{
+          background: "rgba(11,11,12,0.88)",
+          borderColor: "rgba(255,255,255,0.07)",
+          transition: "transform 320ms cubic-bezier(0.4,0,0.2,1)",
+          transform: hidden ? "translateY(-100%)" : "translateY(0)",
+        }}
       >
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
 
@@ -198,7 +221,7 @@ export function AppHeader() {
         </div>
       </header>
 
-      {/* ── Mobile bottom tab bar — exactly 3 zones ── */}
+      {/* ── Mobile bottom tab bar — three zones ── */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
         style={{
