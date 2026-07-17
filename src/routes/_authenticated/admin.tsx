@@ -10,7 +10,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
-import { reviewApplication } from "@/lib/verification.functions";
+import { reviewApplication, listPendingApplications } from "@/lib/verification.functions";
 import { timeAgo } from "@/lib/time";
 import type { VerificationTier } from "@/hooks/use-auth";
 
@@ -71,6 +71,7 @@ function AdminPage() {
   const isAdmin = dbAdmin || (user ? checkEnvAdmin(user.id) : false);
   const navigate = useNavigate();
   const doReview = useServerFn(reviewApplication);
+  const doListApplications = useServerFn(listPendingApplications);
 
   const [adminTab, setAdminTab] = useState<"members" | "applications">("applications");
   const [search, setSearch] = useState("");
@@ -98,21 +99,15 @@ function AdminPage() {
     setProfiles((data ?? []) as ProfileRow[]);
   }
 
-  // ── Load pending applications ───────────────────────────────────────────────
+  // ── Load pending applications via service-role server fn (bypasses RLS) ────
   async function loadApplications() {
-    const { data, error } = await supabase
-      .from("verification_requests")
-      .select(`
-        id, tier, status, created_at,
-        github_url, deployed_contract_address, live_project_url, recent_ship_desc,
-        fund_or_company_name, portfolio_url, linkedin_or_x_url, invite_code,
-        link_primary, link_secondary,
-        profiles!verification_requests_user_id_fkey(id, handle, display_name, avatar_url, company_name)
-      `)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true });
-    if (error) { toast.error("Failed to load applications."); return; }
-    setApplications((data ?? []) as unknown as ApplicationRow[]);
+    try {
+      const data = await doListApplications({});
+      setApplications((data ?? []) as unknown as ApplicationRow[]);
+    } catch (e) {
+      console.error("[admin] loadApplications:", e);
+      toast.error(e instanceof Error ? e.message : "Failed to load applications.");
+    }
   }
 
   useEffect(() => {
@@ -299,8 +294,8 @@ function AdminPage() {
             {profiles === null ? (
               <div className="text-sm text-muted-foreground">Loading profiles…</div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-border/60">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-2xl border border-border/60">
+                <table className="w-full min-w-[480px] text-sm">
                   <thead className="border-b border-border/60 bg-secondary/20">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">User</th>
