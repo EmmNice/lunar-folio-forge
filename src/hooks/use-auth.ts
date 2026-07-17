@@ -52,16 +52,32 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
   // bypass it here. Isolated try/catch so it never blocks the profile load.
   let isAdmin = false;
   try {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .limit(10);
-    if (!error && Array.isArray(data)) {
-      isAdmin = data.some((r: any) => r.role === "admin");
+    // 1. Env-var override — reliable even if DB/migrations are not set up.
+    //    Set VITE_ADMIN_IDS to a comma-separated list of admin UUIDs in Replit Secrets.
+    const envAdmins = (import.meta.env.VITE_ADMIN_IDS ?? "")
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    if (envAdmins.includes(user.id)) {
+      isAdmin = true;
+    } else {
+      // 2. DB check — query user_roles; compare role in JS to avoid enum cast issues
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .limit(10);
+      if (error) {
+        console.error("[auth] user_roles query failed:", error.message, error.code);
+      } else if (Array.isArray(data)) {
+        isAdmin = data.some((r: any) => r.role === "admin");
+        if (!isAdmin) {
+          console.warn("[auth] user_roles rows for this user:", JSON.stringify(data));
+        }
+      }
     }
-  } catch {
-    // Table missing (migrations not applied) — treat as non-admin
+  } catch (e) {
+    console.error("[auth] admin check threw:", e);
   }
 
   // Profile fetch with retry loop for new-account auth trigger race.
