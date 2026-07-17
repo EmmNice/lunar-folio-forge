@@ -1,0 +1,18 @@
+# Explicit Nixpacks config — overrides Railway's auto-detection which:
+#   (a) misidentifies this as a Vite static site and wires up Caddy, and
+#   (b) tries to install Node.js 18 (removed from Nix as EOL).
+#
+# Nixpacks auto-detects Bun from bun.lockb; we just need to pin Node 22
+# to satisfy the vite/TanStack build toolchain.
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["bun run build"]
+
+[start]
+cmd = "bun .output/server/index.mjs"
