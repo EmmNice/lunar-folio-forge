@@ -5,10 +5,10 @@ This project was imported from [Lovable](https://lovable.dev). It's "Godson" —
 ## Stack
 
 - **Framework:** TanStack Start (React 19) + Vite, SSR via a Nitro build
-- **Styling:** Tailwind CSS v4 + shadcn/ui (Radix primitives)
-- **Backend/data:** Supabase (Postgres + Auth), project ref `hfiiirbhbuksfmgjlpkl` — credentials already in `.env`
-- **Auth:** Lovable Cloud Auth (`@lovable.dev/cloud-auth-js`) wrapping Supabase, Google sign-in
-- **Package manager:** Bun (`bun.lock` is the source of truth; a `package-lock.json` also exists from the original repo but isn't used here)
+- **Styling:** Tailwind CSS v4 + custom luxury design system (off-black palette, glassmorphism utilities)
+- **Backend/data:** Supabase (Postgres + Auth), project ref in `.env` / Replit env vars
+- **Auth:** Lovable Cloud Auth (`@lovable.dev/cloud-auth-js`) wrapping Supabase, Google/GitHub/X sign-in
+- **Package manager:** Bun (`bun.lock` is the source of truth)
 
 ## Running on Replit
 

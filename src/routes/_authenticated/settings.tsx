@@ -257,20 +257,62 @@ function VerificationTab() {
     "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
 
   return (
-    <div className="space-y-8">
-      <div className="rounded-2xl border border-border/60 p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Github className="h-4 w-4 text-slate-300" /> Silver — Recognized Builder
+    <div className="space-y-6">
+      {/* ── Silver card — glassmorphism ── */}
+      <div
+        className="glass-silver rounded-2xl p-5"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(148,163,184,0.12)" }}>
+            <Github className="h-4 w-4" style={{ color: "#94a3b8" }} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "#cbd5e1" }}>Silver — Recognized Builder</p>
+            <p className="text-[11px]" style={{ color: "rgba(148,163,184,0.65)" }}>Verified contributor identity</p>
+          </div>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-3 text-xs" style={{ color: "rgba(148,163,184,0.70)" }}>
           Verify with a public GitHub profile (and optional portfolio) that shows real shipped work.
         </p>
         <StatusPill request={latestFor("silver")} />
         {profile?.verification_tier !== "silver" && profile?.verification_tier !== "gold" ? (
-          <div className="mt-3 space-y-2">
-            <input className={field} placeholder="https://github.com/yourhandle" value={silverGithub} onChange={(e) => setSilverGithub(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
-            <input className={field} placeholder="Portfolio URL (optional)" value={silverPortfolio} onChange={(e) => setSilverPortfolio(e.target.value)} disabled={latestFor("silver")?.status === "pending"} />
-            <button type="button" onClick={() => submit("silver")} disabled={busy !== null || latestFor("silver")?.status === "pending"} className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50">
+          <div className="mt-4 space-y-2.5">
+            <input
+              className="lux-field"
+              placeholder="https://github.com/yourhandle"
+              value={silverGithub}
+              onChange={(e) => setSilverGithub(e.target.value)}
+              disabled={latestFor("silver")?.status === "pending"}
+            />
+            <input
+              className="lux-field"
+              placeholder="Portfolio URL (optional)"
+              value={silverPortfolio}
+              onChange={(e) => setSilverPortfolio(e.target.value)}
+              disabled={latestFor("silver")?.status === "pending"}
+            />
+            {/* Silver CTA — brushed-metal outline */}
+            <button
+              type="button"
+              onClick={() => submit("silver")}
+              disabled={busy !== null || latestFor("silver")?.status === "pending"}
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+              style={{
+                border: "1px solid rgba(148,163,184,0.35)",
+                color: "#94a3b8",
+                background: "rgba(148,163,184,0.04)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(148,163,184,0.10)";
+                e.currentTarget.style.borderColor = "rgba(148,163,184,0.55)";
+                e.currentTarget.style.color = "#cbd5e1";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(148,163,184,0.04)";
+                e.currentTarget.style.borderColor = "rgba(148,163,184,0.35)";
+                e.currentTarget.style.color = "#94a3b8";
+              }}
+            >
               {busy === "silver" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               Apply for Silver
             </button>
@@ -278,19 +320,61 @@ function VerificationTab() {
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-border/60 p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Rocket className="h-4 w-4 text-amber-400" /> Gold — Elite Founder
+      {/* ── Gold card — glassmorphism ── */}
+      <div
+        className="glass-gold rounded-2xl p-5"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(251,191,36,0.12)" }}>
+            <Rocket className="h-4 w-4" style={{ color: "#fbbf24" }} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "#fde68a" }}>Gold — Elite Founder</p>
+            <p className="text-[11px]" style={{ color: "rgba(251,191,36,0.55)" }}>Maximum network prestige</p>
+          </div>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-3 text-xs" style={{ color: "rgba(251,191,36,0.60)" }}>
           Verify with your startup's public URL and a traction link (press, metrics, funding announcement).
         </p>
         <StatusPill request={latestFor("gold")} />
         {profile?.verification_tier !== "gold" ? (
-          <div className="mt-3 space-y-2">
-            <input className={field} placeholder="https://yourstartup.com" value={goldStartup} onChange={(e) => setGoldStartup(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
-            <input className={field} placeholder="Traction link (press / metrics / funding)" value={goldTraction} onChange={(e) => setGoldTraction(e.target.value)} disabled={latestFor("gold")?.status === "pending"} />
-            <button type="button" onClick={() => submit("gold")} disabled={busy !== null || latestFor("gold")?.status === "pending"} className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50">
+          <div className="mt-4 space-y-2.5">
+            <input
+              className="lux-field"
+              placeholder="https://yourstartup.com"
+              value={goldStartup}
+              onChange={(e) => setGoldStartup(e.target.value)}
+              disabled={latestFor("gold")?.status === "pending"}
+            />
+            <input
+              className="lux-field"
+              placeholder="Traction link (press / metrics / funding)"
+              value={goldTraction}
+              onChange={(e) => setGoldTraction(e.target.value)}
+              disabled={latestFor("gold")?.status === "pending"}
+            />
+            {/* Gold CTA — luminous champagne-gold outline */}
+            <button
+              type="button"
+              onClick={() => submit("gold")}
+              disabled={busy !== null || latestFor("gold")?.status === "pending"}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+              style={{
+                border: "1px solid rgba(251,191,36,0.40)",
+                color: "#fbbf24",
+                background: "rgba(251,191,36,0.05)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(251,191,36,0.12)";
+                e.currentTarget.style.borderColor = "rgba(251,191,36,0.65)";
+                e.currentTarget.style.color = "#fde68a";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(251,191,36,0.05)";
+                e.currentTarget.style.borderColor = "rgba(251,191,36,0.40)";
+                e.currentTarget.style.color = "#fbbf24";
+              }}
+            >
               {busy === "gold" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               Apply for Gold
             </button>

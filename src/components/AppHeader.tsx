@@ -1,15 +1,23 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare, ShieldCheck, Bell } from "lucide-react";
+import { LogOut, Rss, PenSquare, Settings as SettingsIcon, MessageSquare, Bell, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { VerificationBadge } from "@/components/VerificationBadge";
 
-const TABS = [
-  { to: "/feed" as const, label: "Explore Feed", icon: Rss },
-  { to: "/studio" as const, label: "Workspace Studio", icon: PenSquare },
-  { to: "/settings" as const, label: "Studio Settings", icon: SettingsIcon },
+// Desktop top nav — primary sections only
+const DESKTOP_NAV = [
+  { to: "/feed" as const, label: "Explore", icon: Rss },
+  { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
+  { to: "/studio" as const, label: "Workspace", icon: PenSquare },
+];
+
+// Mobile bottom bar — three primary zones
+const MOBILE_TABS = [
+  { to: "/feed" as const, label: "Explore", icon: Rss },
+  { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
+  { to: "/studio" as const, label: "Workspace", icon: PenSquare },
 ];
 
 export function AppHeader() {
@@ -18,7 +26,6 @@ export function AppHeader() {
   const qc = useQueryClient();
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Fetch unread notification count
   useEffect(() => {
     if (!user) { setUnreadCount(0); return; }
     let cancelled = false;
@@ -34,35 +41,23 @@ export function AppHeader() {
 
     fetchUnread();
 
-    // Subscribe to new notifications in realtime
     const channel = supabase
       .channel(`notif-badge:${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => setUnreadCount((n) => n + 1),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => fetchUnread(),
-      )
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      }, () => setUnreadCount((n) => n + 1))
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      }, () => fetchUnread())
       .subscribe();
 
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
+    return () => { cancelled = true; supabase.removeChannel(channel); };
   }, [user]);
 
   async function signOut() {
@@ -75,56 +70,66 @@ export function AppHeader() {
   return (
     <>
       {/* ── Top nav ── */}
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-md">
+      <header
+        className="sticky top-0 z-40 border-b backdrop-blur-md"
+        style={{
+          background: "rgba(11,11,12,0.88)",
+          borderColor: "rgba(255,255,255,0.07)",
+        }}
+      >
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-            <span className="grid h-6 w-6 place-items-center rounded-[5px] bg-foreground text-[11px] font-bold text-background">
+            <span
+              className="grid h-6 w-6 place-items-center rounded-[5px] text-[11px] font-bold"
+              style={{ background: "#F5F5F6", color: "#0B0B0C" }}
+            >
               L
             </span>
             <span className="text-sm font-semibold tracking-[-0.01em]">The Ledger</span>
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden items-center text-sm sm:flex">
-            {TABS.map((t) => (
+          <nav className="hidden items-center gap-0.5 sm:flex">
+            {DESKTOP_NAV.map((t) => (
               <Link
                 key={t.to}
                 to={t.to}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-                activeProps={{ className: "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-foreground font-medium" }}
+                activeProps={{
+                  className:
+                    "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-foreground font-medium",
+                  style: { background: "rgba(255,255,255,0.06)" },
+                }}
               >
-                <t.icon className="h-[15px] w-[15px]" />
+                <t.icon className="h-[14px] w-[14px]" />
                 {t.label}
               </Link>
             ))}
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-amber-400/60 transition-colors hover:text-amber-400"
-                activeProps={{ className: "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-amber-400 font-medium bg-amber-500/8" }}
-              >
-                <ShieldCheck className="h-[15px] w-[15px]" /> Admin
-              </Link>
-            )}
           </nav>
 
           {/* Right side */}
           <div className="flex items-center gap-1">
             {loading ? (
-              <span className="h-7 w-24 animate-pulse rounded-full bg-secondary/60" />
+              <span className="h-7 w-20 animate-pulse rounded-full bg-white/6" />
             ) : user ? (
               <>
                 {/* Notifications */}
                 <Link
                   to="/notifications"
                   aria-label="Notifications"
-                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-                  activeProps={{ className: "relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground bg-secondary/60" }}
+                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
+                  style={{ transition: "background 120ms" }}
+                  activeProps={{
+                    className:
+                      "relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
+                    style: { background: "rgba(255,255,255,0.07)" },
+                  }}
                 >
                   <Bell className="h-[15px] w-[15px]" />
                   {unreadCount > 0 && (
-                    <span className="absolute right-1 top-1 flex h-[7px] w-[7px] items-center justify-center rounded-full bg-foreground text-[8px] font-bold text-background ring-1 ring-background" />
+                    <span className="absolute right-1 top-1 h-[6px] w-[6px] rounded-full bg-foreground ring-1 ring-[#0B0B0C]" />
                   )}
                 </Link>
 
@@ -132,27 +137,50 @@ export function AppHeader() {
                 <Link
                   to="/messages"
                   aria-label="Messages"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-                  activeProps={{ className: "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground bg-secondary/60" }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
+                  activeProps={{
+                    className:
+                      "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
+                    style: { background: "rgba(255,255,255,0.07)" },
+                  }}
                 >
                   <MessageSquare className="h-[15px] w-[15px]" />
                 </Link>
 
+                {/* ⚙ Settings gear — replaces Settings tab */}
+                <Link
+                  to="/settings"
+                  aria-label="Studio Settings"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
+                  activeProps={{
+                    className:
+                      "inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground",
+                    style: { background: "rgba(255,255,255,0.07)" },
+                  }}
+                >
+                  <SettingsIcon className="h-[15px] w-[15px]" />
+                </Link>
+
+                {/* Avatar pill */}
                 {profile && (
                   <Link
                     to="/u/$handle"
                     params={{ handle: profile.handle }}
-                    className="ml-0.5 inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                    className="ml-0.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                    style={{ borderColor: "rgba(255,255,255,0.10)" }}
                   >
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
                         alt=""
-                        className="h-[18px] w-[18px] rounded-full object-cover ring-1 ring-border/50"
+                        className="h-[18px] w-[18px] rounded-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-secondary text-[9px] font-semibold">
+                      <span
+                        className="grid h-[18px] w-[18px] place-items-center rounded-full text-[9px] font-semibold"
+                        style={{ background: "rgba(255,255,255,0.09)" }}
+                      >
                         {profile.display_name.charAt(0).toUpperCase()}
                       </span>
                     )}
@@ -163,11 +191,12 @@ export function AppHeader() {
                   </Link>
                 )}
 
+                {/* Sign out */}
                 <button
                   type="button"
                   onClick={signOut}
                   aria-label="Sign out"
-                  className="ml-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                  className="ml-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <LogOut className="h-[15px] w-[15px]" />
                 </button>
@@ -175,7 +204,8 @@ export function AppHeader() {
             ) : (
               <Link
                 to="/"
-                className="rounded-lg bg-foreground px-3.5 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
+                className="rounded-lg px-3.5 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
+                style={{ background: "#F5F5F6" }}
               >
                 Sign in
               </Link>
@@ -184,28 +214,51 @@ export function AppHeader() {
         </div>
       </header>
 
-      {/* ── Mobile bottom tab bar ── */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border/50 bg-background/90 backdrop-blur-md sm:hidden">
-        {TABS.map((t) => (
+      {/* ── Mobile bottom tab bar — three primary zones ── */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
+        style={{
+          background: "rgba(11,11,12,0.92)",
+          borderTop: "1px solid rgba(255,255,255,0.07)",
+          backdropFilter: "blur(20px)",
+        }}
+      >
+        {MOBILE_TABS.map((t) => (
           <Link
             key={t.to}
             to={t.to}
             className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
-            activeProps={{ className: "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground" }}
+            activeProps={{
+              className:
+                "flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
+            }}
           >
-            <t.icon className="h-[18px] w-[18px]" />
-            {t.label.split(" ")[0]}
+            {t.to === "/pulse" ? (
+              <div
+                className="flex h-6 w-6 items-center justify-center rounded-md"
+                style={{ background: "rgba(167,139,250,0.15)" }}
+              >
+                <t.icon className="h-[14px] w-[14px] text-violet-400" />
+              </div>
+            ) : (
+              <t.icon className="h-[18px] w-[18px]" />
+            )}
+            {t.label}
           </Link>
         ))}
-        {/* Notifications in mobile bar */}
+
+        {/* Notification tab for mobile */}
         <Link
           to="/notifications"
           className="relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground transition-colors"
-          activeProps={{ className: "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground" }}
+          activeProps={{
+            className:
+              "relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-foreground",
+          }}
         >
           <Bell className="h-[18px] w-[18px]" />
           {unreadCount > 0 && (
-            <span className="absolute right-[calc(50%-14px)] top-2 h-[7px] w-[7px] rounded-full bg-foreground ring-1 ring-background" />
+            <span className="absolute right-[calc(50%-14px)] top-2 h-[6px] w-[6px] rounded-full bg-foreground ring-1 ring-[#0B0B0C]" />
           )}
           Alerts
         </Link>
