@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users } from "lucide-react";
+import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
