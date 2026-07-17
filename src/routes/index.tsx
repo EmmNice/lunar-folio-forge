@@ -178,7 +178,11 @@ function Landing() {
     if (!email || !password) { toast.error("Enter your email and password."); return; }
     if (password.length < 8) { toast.error("Password must be at least 8 characters."); return; }
     setSubmitting("email-signup");
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/feed` },
+    });
     setSubmitting(null);
     if (error) {
       if (
