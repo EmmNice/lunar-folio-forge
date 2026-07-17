@@ -291,6 +291,7 @@ function FeedPage() {
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [fabVisible, setFabVisible] = useState(true);
+  const [headerHidden, setHeaderHidden] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
   const [exportPost, setExportPost] = useState<FeedPost | null>(null);
 
@@ -302,13 +303,18 @@ function FeedPage() {
     }
   }, [loading, user, profile, navigate]);
 
-  // ── FAB scroll visibility ───────────────────────────────────────────────
+  // ── FAB + tab-bar scroll visibility ────────────────────────────────────
   useEffect(() => {
     let lastY = window.scrollY;
     function onScroll() {
       const y = window.scrollY;
-      if (y > lastY && y > 80) setFabVisible(false);
-      else if (y < lastY) setFabVisible(true);
+      if (y > lastY && y > 64) {
+        setFabVisible(false);
+        setHeaderHidden(true);
+      } else if (y < lastY) {
+        setFabVisible(true);
+        setHeaderHidden(false);
+      }
       lastY = y;
     }
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -426,30 +432,43 @@ function FeedPage() {
           </h1>
         </div>
 
-        {/* ── Signal / Beat tabs ── */}
-        <div className="mb-1 flex gap-0.5 rounded-xl border border-border/50 bg-secondary/15 p-1">
-          {(["signal", "beat"] as FeedTab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={
-                "flex-1 rounded-[9px] py-[7px] text-[13px] font-medium transition-all duration-150 " +
-                (tab === t
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground/80")
-              }
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
+        {/* ── Sticky Signal / Beat tab bar ── */}
+        <div
+          className="sticky top-14 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 pt-3 pb-2"
+          style={{
+            background: "rgba(11,11,12,0.92)",
+            backdropFilter: "blur(20px)",
+            borderBottom: "1px solid rgba(255,255,255,0.05)",
+            transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            transform: headerHidden ? "translateY(calc(-100% - 56px))" : "translateY(0)",
+          }}
+        >
+          <div className="flex gap-0.5 rounded-xl border border-border/50 bg-secondary/15 p-1">
+            {(["signal", "beat"] as FeedTab[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={
+                  "flex-1 rounded-[9px] py-[7px] text-[13px] font-medium transition-all duration-150 " +
+                  (tab === t
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground/80")
+                }
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 mb-1 text-[12px] leading-relaxed text-muted-foreground/80">
+            {tab === "signal"
+              ? "Silver & Gold verified builders — the highest-signal posts on the platform."
+              : "Raw chronological pulse of everything shipping — verified and unverified alike."}
+          </p>
         </div>
 
-        <p className="mb-8 mt-2.5 text-[12px] leading-relaxed text-muted-foreground/80">
-          {tab === "signal"
-            ? "Silver & Gold verified builders — the highest-signal posts on the platform."
-            : "Raw chronological pulse of everything shipping — verified and unverified alike."}
-        </p>
+        {/* Spacer so first post isn't hidden behind sticky tab bar */}
+        <div className="h-6" />
 
         {/* ── Feed ── */}
         {posts === null ? (

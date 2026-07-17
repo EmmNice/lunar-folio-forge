@@ -93,7 +93,7 @@ export function AppHeader() {
         style={{
           background: "rgba(11,11,12,0.88)",
           borderColor: "rgba(255,255,255,0.07)",
-          transition: "transform 320ms cubic-bezier(0.4,0,0.2,1)",
+          transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           transform: hidden ? "translateY(-100%)" : "translateY(0)",
         }}
       >
