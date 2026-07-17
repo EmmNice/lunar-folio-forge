@@ -84,14 +84,32 @@ function ProfilePage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Base columns — always present regardless of which migrations have run
       const { data: pf, error } = await supabase
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, pitch_limit, dm_cloaking_enabled")
+        .select("id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url")
         .eq("handle", handle)
         .maybeSingle();
       if (cancelled) return;
       if (error || !pf) { setProfile(null); return; }
-      setProfile(pf as unknown as ProfileRow);
+
+      // Optional columns added in later migrations — fail silently if absent
+      let pitch_limit: number | null = null;
+      let dm_cloaking_enabled = false;
+      try {
+        const { data: extra } = await supabase
+          .from("profiles")
+          .select("pitch_limit, dm_cloaking_enabled")
+          .eq("id", pf.id)
+          .maybeSingle();
+        if (extra) {
+          pitch_limit = (extra as any).pitch_limit ?? null;
+          dm_cloaking_enabled = (extra as any).dm_cloaking_enabled ?? false;
+        }
+      } catch { /* columns may not exist in older schema — use defaults */ }
+
+      if (cancelled) return;
+      setProfile({ ...(pf as unknown as ProfileRow), pitch_limit, dm_cloaking_enabled });
 
       const { data: postsData } = await supabase
         .from("posts")
