@@ -21,8 +21,10 @@ export const Route = createFileRoute("/_authenticated")({
     }
 
     const onOnboarding = location.pathname === "/onboarding";
+    // Admins can always reach /admin regardless of onboarding status
+    const onAdmin = location.pathname === "/admin";
 
-    if (onboardingCompleted === false && !onOnboarding) {
+    if (onboardingCompleted === false && !onOnboarding && !onAdmin) {
       throw redirect({ to: "/onboarding" });
     }
     if (onboardingCompleted === true && onOnboarding) {

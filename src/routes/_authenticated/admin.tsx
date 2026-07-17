@@ -57,8 +57,18 @@ type ApplicationRow = {
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────────
+/** True if the current user's UUID is listed in VITE_ADMIN_IDS env var */
+function checkEnvAdmin(userId: string): boolean {
+  const ids = (import.meta.env.VITE_ADMIN_IDS ?? "")
+    .split(",")
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+  return ids.includes(userId);
+}
+
 function AdminPage() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin: dbAdmin, loading, user } = useAuth();
+  const isAdmin = dbAdmin || (user ? checkEnvAdmin(user.id) : false);
   const navigate = useNavigate();
   const doReview = useServerFn(reviewApplication);
 
