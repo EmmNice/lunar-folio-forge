@@ -41,6 +41,16 @@ Both point to the same deployment. The `VITE_ADMIN_DOMAIN` env var is what separ
   - Listens on `PORT` env var (Railway injects this automatically)
   - Serves static assets from `.output/public/`
 
+> **Important — `VITE_*` vars are baked in at build time.**
+> Vite inlines `VITE_*` environment variables into the client bundle during
+> `bun run build`. The Dockerfile declares them as `ARG`s so Railway passes
+> them through to the Docker build layer automatically. If they are missing
+> at build time the browser bundle gets empty strings, the Supabase client
+> throws on startup, and every page shows "Something went wrong."
+> Make sure `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and
+> `VITE_ADMIN_IDS` are set in Railway → your service → Variables **before**
+> triggering a deploy.
+
 ## Supabase RLS fix (required if not done yet)
 
 Run `supabase/migrations/20260717_fix_rls_has_role_arg_order.sql`
