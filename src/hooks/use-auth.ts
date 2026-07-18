@@ -104,6 +104,7 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
             ai_credits_reset_at: data.ai_credits_reset_at ?? null,
             pitch_limit: data.pitch_limit ?? null,
             dm_cloaking_enabled: data.dm_cloaking_enabled ?? false,
+            hide_from_search: (data as any).hide_from_search ?? false,
           } as Profile;
         }
       } catch {

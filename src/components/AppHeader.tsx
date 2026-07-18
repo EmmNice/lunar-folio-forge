@@ -84,52 +84,56 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
           <div className="flex items-center gap-1.5">
             {loading ? (
               <span className="h-8 w-20 animate-pulse rounded-full bg-white/5" />
-            ) : user && profile ? (
+            ) : user ? (
               <>
-                {/* Avatar with tier ring */}
-                <Link
-                  to="/u/$handle"
-                  params={{ handle: profile.handle }}
-                  search={{ tab: undefined }}
-                  aria-label="My Profile"
-                  className="group flex items-center gap-2 rounded-full outline-none"
-                >
-                  <span
-                    className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-80"
-                    style={{
-                      boxShadow: `0 0 0 2px ${tierRingColor(profile.verification_tier)}, 0 0 0 3.5px rgba(11,11,12,0.90)`,
-                      background: "rgba(255,255,255,0.07)",
-                    }}
+                {/* Avatar with tier ring — shown once profile is loaded */}
+                {profile ? (
+                  <Link
+                    to="/u/$handle"
+                    params={{ handle: profile.handle }}
+                    search={{ tab: undefined }}
+                    aria-label="My Profile"
+                    className="group flex items-center gap-2 rounded-full outline-none"
                   >
-                    {profile.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="grid h-full w-full place-items-center text-[11px] font-semibold">
-                        {profile.display_name.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
+                    <span
+                      className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-80"
+                      style={{
+                        boxShadow: `0 0 0 2px ${tierRingColor(profile.verification_tier)}, 0 0 0 3.5px rgba(11,11,12,0.90)`,
+                        background: "rgba(255,255,255,0.07)",
+                      }}
+                    >
+                      {profile.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="grid h-full w-full place-items-center text-[11px] font-semibold">
+                          {profile.display_name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </span>
 
-                  {/* @handle + badge — desktop only */}
-                  <span className="hidden items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline-flex">
-                    @{profile.handle}
-                    <VerificationBadge tier={profile.verification_tier} size={11} />
-                  </span>
-                </Link>
+                    {/* @handle + badge — desktop only */}
+                    <span className="hidden items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline-flex">
+                      @{profile.handle}
+                      <VerificationBadge tier={profile.verification_tier} size={11} />
+                    </span>
+                  </Link>
+                ) : (
+                  <span className="h-8 w-8 animate-pulse rounded-full bg-white/5" />
+                )}
 
-                {/* Settings — subtle gear */}
+                {/* Settings gear — always visible when logged in, profile not required */}
                 <Link
                   to="/settings"
                   aria-label="Account Settings"
                   className="inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors"
-                  style={{ color: "rgba(255,255,255,0.28)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.28)")}
+                  style={{ color: "rgba(255,255,255,0.35)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
                 >
                   <SettingsIcon className="h-[13px] w-[13px]" />
                 </Link>
