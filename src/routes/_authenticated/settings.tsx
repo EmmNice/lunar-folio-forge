@@ -253,10 +253,9 @@ function LinkedAccount({
 function PrivacySection() {
   const { profile, user, refreshProfile } = useAuth();
   const [dmRestrict, setDmRestrict] = useState(profile?.dm_cloaking_enabled ?? false);
-  const [hideSearch, setHideSearch] = useState(() => {
-    try { return localStorage.getItem("ledger_hide_search") === "true"; } catch { return false; }
-  });
+  const [hideSearch, setHideSearch] = useState(profile?.hide_from_search ?? false);
   const [busyDm, setBusyDm] = useState(false);
+  const [busyHide, setBusyHide] = useState(false);
 
   async function toggleDm(next: boolean) {
     if (!user) return;
@@ -272,9 +271,17 @@ function PrivacySection() {
     toast.success(next ? "DMs restricted to verified members." : "DM restriction removed.");
   }
 
-  function toggleHideSearch(next: boolean) {
+  async function toggleHideSearch(next: boolean) {
+    if (!user) return;
     setHideSearch(next);
-    try { localStorage.setItem("ledger_hide_search", String(next)); } catch { /* ignore */ }
+    setBusyHide(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ hide_from_search: next } as any)
+      .eq("id", user.id);
+    setBusyHide(false);
+    if (error) { toast.error(error.message); setHideSearch(!next); return; }
+    await refreshProfile();
     toast.success(next ? "Profile hidden from search engines." : "Profile visible to search engines.");
   }
 
@@ -312,7 +319,7 @@ function PrivacySection() {
               </p>
             </div>
           </div>
-          <LuxToggle checked={hideSearch} onChange={toggleHideSearch} />
+          <LuxToggle checked={hideSearch} onChange={toggleHideSearch} disabled={busyHide} />
         </div>
       </Row>
     </Section>

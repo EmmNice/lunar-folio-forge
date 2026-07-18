@@ -25,6 +25,7 @@ export type Profile = {
   ai_credits_reset_at: string | null;
   pitch_limit: number | null;
   dm_cloaking_enabled: boolean;
+  hide_from_search: boolean;
 };
 
 // All profile columns in one query — avoids the previous split into two
@@ -32,7 +33,7 @@ export type Profile = {
 const ALL_PROFILE_COLUMNS =
   "id, handle, display_name, avatar_url, bio, date_of_birth, role_type, company_name, " +
   "onboarding_completed, verification_tier, github_url, portfolio_url, startup_url, traction_url, " +
-  "subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled";
+  "subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled, hide_from_search";
 
 export type AuthState = {
   loading: boolean;

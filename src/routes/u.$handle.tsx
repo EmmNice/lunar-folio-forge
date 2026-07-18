@@ -43,6 +43,7 @@ type ProfileRow = {
   portfolio_url: string | null;
   startup_url: string | null;
   traction_url: string | null;
+  hide_from_search: boolean;
   pitch_limit: number | null;
   dm_cloaking_enabled: boolean;
 };
@@ -82,13 +83,24 @@ function ProfilePage() {
   const [busyMsg, setBusyMsg] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
 
+  // Inject <meta name="robots" content="noindex"> when the viewed profile
+  // has opted out of search-engine indexing.
+  useEffect(() => {
+    if (!profile?.hide_from_search) return;
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex";
+    document.head.appendChild(meta);
+    return () => { document.head.removeChild(meta); };
+  }, [profile?.hide_from_search]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       // Base columns — always present regardless of which migrations have run
       const { data: pf, error } = await supabase
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url")
+        .select("id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search")
         .eq("handle", handle)
         .maybeSingle();
       if (cancelled) return;
