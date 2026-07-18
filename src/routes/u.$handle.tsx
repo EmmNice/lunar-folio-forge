@@ -13,6 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { startConversation } from "@/lib/messaging.functions";
 import { submitVerificationApplication } from "@/lib/verification.functions";
 import { timeAgo } from "@/lib/time";
+import { AvatarPicker } from "@/components/AvatarPicker";
 
 export const Route = createFileRoute("/u/$handle")({
   head: ({ params }) => ({
@@ -593,6 +594,17 @@ function EditProfileForm({
 
   return (
     <div className="space-y-4">
+      {/* Avatar picker — upload or NFT-style PFP */}
+      <div
+        className="rounded-2xl p-4"
+        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+          Profile Photo
+        </p>
+        <AvatarPicker value={avatarUrl} onChange={setAvatarUrl} />
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Display Name">
           <input className="lux-field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
@@ -622,12 +634,6 @@ function EditProfileForm({
           Public Links
         </p>
         <div className="space-y-2 p-2">
-          <input
-            className="lux-field"
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            placeholder="Avatar image URL (https://…)"
-          />
           <input
             className="lux-field"
             value={githubUrl}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { VerificationBadge } from "@/components/VerificationBadge";
+import { ProfileDrawer } from "@/components/ProfileDrawer";
 
 /** The Ledger geometric mark — three ascending signal bars */
 export function LedgerMark({ className }: { className?: string }) {
@@ -52,6 +53,7 @@ const BOTTOM_TABS = [
 export function AppHeader({ controlled = false }: { controlled?: boolean } = {}) {
   const { user, profile, loading } = useAuth();
   const [hidden, setHidden] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (controlled) return;
@@ -86,17 +88,16 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
               <span className="h-8 w-20 animate-pulse rounded-full bg-white/5" />
             ) : user ? (
               <>
-                {/* Avatar with tier ring — shown once profile is loaded */}
+                {/* Avatar — tapping opens the profile drawer */}
                 {profile ? (
-                  <Link
-                    to="/u/$handle"
-                    params={{ handle: profile.handle }}
-                    search={{ tab: undefined }}
-                    aria-label="My Profile"
+                  <button
+                    type="button"
+                    aria-label="Open profile menu"
+                    onClick={() => setDrawerOpen(true)}
                     className="group flex items-center gap-2 rounded-full outline-none"
                   >
                     <span
-                      className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-80"
+                      className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-75"
                       style={{
                         boxShadow: `0 0 0 2px ${tierRingColor(profile.verification_tier)}, 0 0 0 3.5px rgba(11,11,12,0.90)`,
                         background: "rgba(255,255,255,0.07)",
@@ -121,7 +122,7 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
                       @{profile.handle}
                       <VerificationBadge tier={profile.verification_tier} size={11} />
                     </span>
-                  </Link>
+                  </button>
                 ) : (
                   <span className="h-8 w-8 animate-pulse rounded-full bg-white/5" />
                 )}
@@ -185,6 +186,9 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
       </header>
 
       {!controlled && <MobileNav />}
+
+      {/* Profile slide-in drawer — triggered by avatar tap */}
+      <ProfileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </>
   );
 }
