@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users, Heart, FileText } from "lucide-react";
+import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users, Heart, FileText, Plus } from "lucide-react";
+import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
@@ -103,6 +104,7 @@ function ProfilePage() {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [likedPosts, setLikedPosts] = useState<LikedPostRow[]>([]);
   const [editOpen, setEditOpen] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
   const [busyMsg, setBusyMsg] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
 
@@ -556,6 +558,41 @@ function ProfilePage() {
 
           </div>
         </main>
+
+        {/* ── Floating compose button ── */}
+        {user && (
+          <button
+            type="button"
+            onClick={() => setShowComposer(true)}
+            aria-label="Write a new card"
+            className="fixed right-5 z-40 flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 sm:right-8"
+            style={{
+              bottom: "calc(env(safe-area-inset-bottom) + 72px)",
+              width: "52px",
+              height: "52px",
+              background: "#F5F5F6",
+              color: "#0B0B0C",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30)",
+            }}
+          >
+            <Plus className="h-5 w-5" strokeWidth={2.5} />
+          </button>
+        )}
+
+        {/* ── Composer modal ── */}
+        {showComposer && (
+          <ComposerModal
+            onClose={() => setShowComposer(false)}
+            onPublished={(post) => {
+              setPosts((prev) => [{
+                id: post.id,
+                content: post.content,
+                background: post.background,
+                created_at: post.created_at,
+              }, ...prev]);
+            }}
+          />
+        )}
 
         {/* ── Edit Profile bottom sheet ── */}
         {editOpen && (
