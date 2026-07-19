@@ -148,23 +148,9 @@ function StudioPage() {
           </p>
         </div>
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
-          {/* ── Preview ── */}
-          <div className="order-2 lg:order-1">
-            <div className="mx-auto w-full max-w-[320px]">
-              <StatusCard
-                name={name}
-                handle={handle}
-                avatarUrl={avatarUrl}
-                content={content}
-                background={background}
-                verificationTier={profile?.verification_tier}
-              />
-            </div>
-          </div>
-
-          {/* ── Controls ── */}
-          <div className="order-1 space-y-6 lg:order-2">
+        <div className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)]">
+          {/* ── Controls ── (left column on desktop, top on mobile) */}
+          <div className="space-y-6">
 
             {/* ── Content textarea ── */}
             <div className="space-y-1.5">
@@ -430,6 +416,26 @@ function StudioPage() {
             <p className="text-[11px] text-muted-foreground/60">
               Download exports at 1080×1920 · perfect for WhatsApp Status.
             </p>
+          </div>
+
+          {/* ── Live Preview ── (right column on desktop, below controls on mobile) */}
+          <div className="flex flex-col items-center">
+            <p className="mb-3 self-start text-xs font-medium uppercase tracking-wider text-muted-foreground lg:self-auto">
+              Preview
+            </p>
+            {/* Sticky so it stays in view while scrolling controls on desktop */}
+            <div className="w-full lg:sticky lg:top-24">
+              <div className="mx-auto w-full max-w-[280px] sm:max-w-[320px]">
+                <StatusCard
+                  name={name}
+                  handle={handle}
+                  avatarUrl={avatarUrl}
+                  content={content}
+                  background={background}
+                  verificationTier={profile?.verification_tier}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

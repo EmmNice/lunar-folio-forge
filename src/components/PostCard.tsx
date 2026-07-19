@@ -189,9 +189,242 @@ export function PostCard({
 
   const actionBtn = "inline-flex items-center gap-1.5 text-xs transition-colors disabled:opacity-40 select-none";
 
+  // Studio card posts (non-noir theme) get an entirely different visual treatment
+  const isCardPost = post.background !== "noir";
+
+  /* ── Shared delete toggle ── */
+  const deleteControl = isSelf && onDeleted ? (
+    <div className="shrink-0">
+      {confirmDelete ? (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Delete?</span>
+          <button
+            type="button"
+            onClick={deletePost}
+            disabled={busyDelete}
+            className="text-xs text-red-400 transition-colors hover:text-red-300"
+          >
+            {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            No
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+          aria-label="Delete post"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  ) : null;
+
+  /* ── Shared actions row ── */
+  const actionsRow = (
+    <div className="mt-3 flex items-center gap-5 text-muted-foreground">
+      <button
+        type="button"
+        onClick={toggleLike}
+        disabled={busyLike}
+        className={actionBtn + (liked ? " text-rose-400" : " hover:text-foreground")}
+        aria-label="Like"
+      >
+        <Heart className="h-4 w-4" fill={liked ? "currentColor" : "none"} />
+        {likeCount > 0 ? likeCount : ""}
+      </button>
+
+      {commentsEnabled && (
+        <button
+          type="button"
+          onClick={toggleThread}
+          className={actionBtn + " hover:text-foreground"}
+          aria-label="Comment"
+        >
+          <MessageCircle className="h-4 w-4" />
+          {commentCount > 0 ? commentCount : ""}
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={toggleRepost}
+        disabled={busyRepost || isSelf}
+        className={actionBtn + (reposted ? " text-emerald-400" : " hover:text-foreground")}
+        aria-label="Re-Ship"
+      >
+        <Repeat2 className="h-4 w-4" />
+        {repostCount > 0 ? repostCount : ""}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onDownload(post)}
+        className={actionBtn + " hover:text-foreground"}
+        aria-label="Download status card"
+      >
+        <Download className="h-4 w-4" />
+      </button>
+
+      <button
+        type="button"
+        onClick={report}
+        disabled={reported}
+        className={actionBtn + " ml-auto hover:text-foreground"}
+        aria-label="Report post"
+      >
+        <Flag className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+
+  /* ── Shared comments thread ── */
+  const commentsThread = (
+    <>
+      {!commentsEnabled ? (
+        threadOpen && (
+          <div className="mt-4 border-t border-border/50 pt-3">
+            <p className="text-xs text-muted-foreground">Comments have been disabled for this post.</p>
+          </div>
+        )
+      ) : threadOpen ? (
+        <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
+          {comments === null ? (
+            <p className="text-xs text-muted-foreground">Loading comments…</p>
+          ) : comments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No replies yet.</p>
+          ) : (
+            comments.map((c) => (
+              <div key={c.id} className="flex items-start gap-2.5 pl-2">
+                <div className="grid h-7 w-7 shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
+                  {c.author.avatar_url ? (
+                    <img
+                      src={c.author.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="grid h-full w-full place-items-center">
+                      {c.author.display_name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1 text-xs">
+                    <Link
+                      to="/u/$handle"
+                      params={{ handle: c.author.handle }}
+                      search={{ tab: undefined }}
+                      className="flex items-center gap-1 font-medium text-foreground hover:underline underline-offset-2"
+                    >
+                      {c.author.display_name}
+                      <VerificationBadge tier={c.author.verification_tier} size={11} />
+                    </Link>
+                    <span className="text-muted-foreground">@{c.author.handle}</span>
+                    <span className="text-muted-foreground">· {timeAgo(c.created_at)}</span>
+                  </div>
+                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90">
+                    {c.content}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+
+          {user ? (
+            <div className="flex w-full items-center gap-2 px-2 pt-1">
+              <input
+                value={commentDraft}
+                onChange={(e) => setCommentDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitComment(); }}
+                maxLength={280}
+                placeholder="Reply…"
+                className="min-w-0 flex-1 rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm outline-none focus:border-foreground/40"
+              />
+              <button
+                type="button"
+                onClick={submitComment}
+                disabled={postingComment || !commentDraft.trim()}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-50"
+                aria-label="Send reply"
+              >
+                {postingComment ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+
+  /* ── Card post (Studio-crafted, non-noir theme) ── */
+  if (isCardPost) {
+    return (
+      <article className={`rounded-2xl border bg-card/40 overflow-hidden ${tierBorder}`}>
+        {/* Compact meta strip */}
+        <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+            {(isVerifiedOnly || isWhisper) && (
+              <span className="mr-1 flex items-center gap-1">
+                <Lock className="h-3 w-3" />
+                {isWhisper
+                  ? <span className="font-medium text-violet-400/80">Whisper</span>
+                  : <span>Verified only</span>}
+                <span>·</span>
+              </span>
+            )}
+            <Link
+              to="/u/$handle"
+              params={{ handle: post.author.handle }}
+              search={{ tab: undefined }}
+              className="flex items-center gap-1 font-semibold text-foreground/80 hover:text-foreground hover:underline underline-offset-2"
+            >
+              {post.author.display_name}
+              <VerificationBadge tier={post.author.verification_tier} size={12} />
+            </Link>
+            <span>@{post.author.handle}</span>
+            <span>· {timeAgo(post.created_at)}</span>
+          </div>
+          {deleteControl}
+        </div>
+
+        {/* Clipped StatusCard — shows top ~55% of the card (avatar + name + content) */}
+        <div className="relative overflow-hidden" style={{ height: "260px" }}>
+          <StatusCard
+            name={post.author.display_name}
+            handle={post.author.handle}
+            avatarUrl={post.author.avatar_url}
+            content={post.content}
+            background={post.background}
+            verificationTier={post.author.verification_tier}
+          />
+        </div>
+
+        {/* Actions + comments below the card */}
+        <div className="px-4 pb-3">
+          {actionsRow}
+          {commentsThread}
+        </div>
+      </article>
+    );
+  }
+
+  /* ── Regular text post ── */
   return (
     <article className={`rounded-2xl border bg-card/40 p-4 sm:p-5 ${tierBorder}`}>
-      {/* ── Visibility badges ── */}
       {(isVerifiedOnly || isWhisper) && (
         <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock className="h-3 w-3" />
@@ -239,40 +472,7 @@ export function PostCard({
               <span className="text-muted-foreground">@{post.author.handle}</span>
               <span className="text-muted-foreground">· {timeAgo(post.created_at)}</span>
             </div>
-            {/* Delete own post */}
-            {isSelf && onDeleted && (
-              <div className="shrink-0">
-                {confirmDelete ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">Delete?</span>
-                    <button
-                      type="button"
-                      onClick={deletePost}
-                      disabled={busyDelete}
-                      className="text-xs text-red-400 transition-colors hover:text-red-300"
-                    >
-                      {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(false)}
-                      className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      No
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-                    aria-label="Delete post"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
+            {deleteControl}
           </div>
 
           {/* Content */}
@@ -280,142 +480,8 @@ export function PostCard({
             {post.content}
           </p>
 
-          {/* Actions row */}
-          <div className="mt-3 flex items-center gap-5 text-muted-foreground">
-            <button
-              type="button"
-              onClick={toggleLike}
-              disabled={busyLike}
-              className={actionBtn + (liked ? " text-rose-400" : " hover:text-foreground")}
-              aria-label="Like"
-            >
-              <Heart className="h-4 w-4" fill={liked ? "currentColor" : "none"} />
-              {likeCount > 0 ? likeCount : ""}
-            </button>
-
-            {commentsEnabled && (
-              <button
-                type="button"
-                onClick={toggleThread}
-                className={actionBtn + " hover:text-foreground"}
-                aria-label="Comment"
-              >
-                <MessageCircle className="h-4 w-4" />
-                {commentCount > 0 ? commentCount : ""}
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={toggleRepost}
-              disabled={busyRepost || isSelf}
-              className={actionBtn + (reposted ? " text-emerald-400" : " hover:text-foreground")}
-              aria-label="Re-Ship"
-            >
-              <Repeat2 className="h-4 w-4" />
-              {repostCount > 0 ? repostCount : ""}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onDownload(post)}
-              className={actionBtn + " hover:text-foreground"}
-              aria-label="Download status card"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={report}
-              disabled={reported}
-              className={actionBtn + " ml-auto hover:text-foreground"}
-              aria-label="Report post"
-            >
-              <Flag className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {/* Comments section */}
-          {!commentsEnabled ? (
-            threadOpen && (
-              <div className="mt-4 border-t border-border/50 pt-3">
-                <p className="text-xs text-muted-foreground">Comments have been disabled for this post.</p>
-              </div>
-            )
-          ) : threadOpen ? (
-            <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
-              {comments === null ? (
-                <p className="text-xs text-muted-foreground">Loading comments…</p>
-              ) : comments.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No replies yet.</p>
-              ) : (
-                comments.map((c) => (
-                  <div key={c.id} className="flex items-start gap-2.5 pl-2">
-                    <div className="grid h-7 w-7 shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
-                      {c.author.avatar_url ? (
-                        <img
-                          src={c.author.avatar_url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="grid h-full w-full place-items-center">
-                          {c.author.display_name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1 text-xs">
-                        <Link
-                          to="/u/$handle"
-                          params={{ handle: c.author.handle }}
-                          search={{ tab: undefined }}
-                          className="flex items-center gap-1 font-medium text-foreground hover:underline underline-offset-2"
-                        >
-                          {c.author.display_name}
-                          <VerificationBadge tier={c.author.verification_tier} size={11} />
-                        </Link>
-                        <span className="text-muted-foreground">@{c.author.handle}</span>
-                        <span className="text-muted-foreground">· {timeAgo(c.created_at)}</span>
-                      </div>
-                      <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90">
-                        {c.content}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-
-              {user ? (
-                <div className="flex w-full items-center gap-2 px-2 pt-1">
-                  <input
-                    value={commentDraft}
-                    onChange={(e) => setCommentDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") submitComment(); }}
-                    maxLength={280}
-                    placeholder="Reply…"
-                    className="min-w-0 flex-1 rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm outline-none focus:border-foreground/40"
-                  />
-                  <button
-                    type="button"
-                    onClick={submitComment}
-                    disabled={postingComment || !commentDraft.trim()}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-50"
-                    aria-label="Send reply"
-                  >
-                    {postingComment ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          {actionsRow}
+          {commentsThread}
         </div>
       </div>
     </article>
