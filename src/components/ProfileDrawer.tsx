@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-  LogOut, User, Rss, PenSquare, Zap,
+  LogOut, User, PenSquare,
   MessageSquare, Bell, Settings as SettingsIcon,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -17,8 +17,6 @@ function tierRingColor(tier?: string | null) {
 }
 
 const NAV = [
-  { label: "Feed",          icon: Rss,           to: "/feed"          },
-  { label: "PulseAssist",   icon: Zap,           to: "/pulse"         },
   { label: "Studio",        icon: PenSquare,     to: "/studio"        },
   { label: "Messages",      icon: MessageSquare, to: "/messages"      },
   { label: "Notifications", icon: Bell,          to: "/notifications" },
@@ -105,8 +103,8 @@ export function ProfileDrawer({
             </p>
           </div>
 
-          {/* "My Profile" CTA */}
-          {profile && (
+          {/* Profile CTA — adapts to whether profile row exists */}
+          {profile ? (
             <Link
               to="/u/$handle"
               params={{ handle: profile.handle }}
@@ -117,6 +115,16 @@ export function ProfileDrawer({
             >
               <User className="h-3 w-3" />
               View profile
+            </Link>
+          ) : (
+            <Link
+              to="/onboarding"
+              onClick={close}
+              className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-background transition-opacity hover:opacity-90"
+              style={{ background: "#FBBF24" }}
+            >
+              <User className="h-3 w-3" />
+              Complete your profile
             </Link>
           )}
 

@@ -128,17 +128,7 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
                   )}
                 </button>
 
-                {/* Settings gear — always visible when logged in, profile not required */}
-                <Link
-                  to="/settings"
-                  aria-label="Account Settings"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors"
-                  style={{ color: "rgba(255,255,255,0.35)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
-                >
-                  <SettingsIcon className="h-[13px] w-[13px]" />
-                </Link>
+                {/* Settings moved to profile drawer — no gear in header */}
               </>
             ) : null}
           </div>
