@@ -356,26 +356,23 @@ function FeedPage() {
         )}
       </main>
 
-      {/* ── Floating Action Button ── */}
-      {user && profile && (
+      {/* ── Floating Action Button ── always visible once logged in ── */}
+      {user && (
         <button
           type="button"
           onClick={() => setShowModal(true)}
           aria-label="Write a new card"
-          className="fixed right-5 z-40 flex items-center justify-center rounded-full shadow-2xl transition-all duration-300 sm:right-8"
+          className="fixed right-5 z-40 flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 sm:right-8"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom) + 72px)",
-            width: "52px",
-            height: "52px",
-            background: "#F5F5F6",
+            bottom: "calc(env(safe-area-inset-bottom) + 76px)",
+            width: "58px",
+            height: "58px",
+            background: "#FBBF24",
             color: "#0B0B0C",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30)",
-            transform: fabVisible ? "scale(1) translateY(0)" : "scale(0.7) translateY(12px)",
-            opacity: fabVisible ? 1 : 0,
-            pointerEvents: fabVisible ? "auto" : "none",
+            boxShadow: "0 8px 32px rgba(251,191,36,0.35), 0 2px 8px rgba(0,0,0,0.40)",
           }}
         >
-          <Plus className="h-5 w-5" strokeWidth={2.5} />
+          <Plus className="h-6 w-6" strokeWidth={2.5} />
         </button>
       )}
 
