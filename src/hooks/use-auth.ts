@@ -28,15 +28,39 @@ export type Profile = {
   hide_from_search: boolean;
 };
 
-// All profile columns in one query — avoids the previous split into two
-// parallel requests on the same table with the same filter.
-// Core columns — always present regardless of which migrations have run.
-// Optional columns added by later migrations are fetched separately with
-// error handling so a missing column never blocks the entire profile load.
+// Profile columns split into tiers so a missing column from an unapplied
+// migration never blocks the whole profile load.
+//
+// Tier 1 — initial schema (always present):
+const BASE_PROFILE_COLUMNS = "id, handle, display_name, avatar_url, bio";
+// Tier 2 — ledger_v2_social_and_verification migration:
+const V2_PROFILE_COLUMNS =
+  BASE_PROFILE_COLUMNS +
+  ", date_of_birth, role_type, company_name, onboarding_completed, verification_tier";
+// Tier 3 — later optional migrations (002_overhaul, 003_privacy, v2_dual_track):
 const ALL_PROFILE_COLUMNS =
-  "id, handle, display_name, avatar_url, bio, date_of_birth, role_type, company_name, " +
-  "onboarding_completed, verification_tier, github_url, portfolio_url, startup_url, traction_url, " +
-  "subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled";
+  V2_PROFILE_COLUMNS +
+  ", github_url, portfolio_url, startup_url, traction_url" +
+  ", subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled";
+
+// Defaults used when optional columns are absent from the DB.
+const OPTIONAL_COLUMN_DEFAULTS = {
+  date_of_birth: null,
+  role_type: null,
+  company_name: null,
+  onboarding_completed: false,
+  verification_tier: "none" as const,
+  github_url: null,
+  portfolio_url: null,
+  startup_url: null,
+  traction_url: null,
+  subscription_status: "active",
+  ai_credits_used: 0,
+  ai_credits_reset_at: null,
+  pitch_limit: null,
+  dm_cloaking_enabled: false,
+  hide_from_search: false,
+};
 
 export type AuthState = {
   loading: boolean;
@@ -86,25 +110,38 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
         });
 
   // ── Profile fetch ──────────────────────────────────────────────────────────
-  // Single query with all columns — previously split into two parallel queries
-  // on the same table, wasting one full round-trip.
-  // Retry loop handles new-account race where the trigger hasn't fired yet.
+  // Tiered fallback: try all columns first, then v2 columns, then base.
+  // This means a missing column from an unapplied migration never prevents
+  // the profile from loading — we just fill in defaults for absent columns.
+  // The retry loop handles the new-account race where the DB trigger hasn't
+  // fired yet (profile row not yet created).
   const profilePromise: Promise<Profile | null> = (async () => {
+    // Try to fetch the profile row, falling back to progressively fewer
+    // columns if a "column does not exist" error is returned.
+    async function fetchProfileRow(userId: string): Promise<Record<string, unknown> | null> {
+      for (const cols of [ALL_PROFILE_COLUMNS, V2_PROFILE_COLUMNS, BASE_PROFILE_COLUMNS]) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select(cols)
+          .eq("id", userId)
+          .maybeSingle();
+        if (!error) return data as Record<string, unknown> | null;
+        console.error(`[auth] profile fetch error (cols="${cols.slice(0, 40)}…"):`, error.message);
+        // Only retry with fewer columns on a "column does not exist" class error.
+        // Other errors (network, RLS) should just break out so the retry loop retries later.
+        if (!error.message.includes("column") && error.code !== "42703") break;
+      }
+      return null;
+    }
+
     const delays = [0, 300, 700];
     for (let i = 0; i < delays.length; i++) {
       if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
       try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(ALL_PROFILE_COLUMNS)
-          .eq("id", user.id)
-          .maybeSingle();
-        if (error) {
-          console.error("[auth] profile fetch error:", error.message);
-          continue; // retry
-        }
+        const data = await fetchProfileRow(user.id);
         if (data) {
-          // Try to read optional migration columns — fail silently if not yet run
+          // Try to read hide_from_search separately — it was added in its own
+          // migration and may not be in any of the column tiers above.
           let hide_from_search = false;
           try {
             const { data: extra } = await supabase
@@ -116,12 +153,8 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
           } catch { /* column doesn't exist yet — use default */ }
 
           return {
+            ...OPTIONAL_COLUMN_DEFAULTS,
             ...data,
-            subscription_status: data.subscription_status ?? "active",
-            ai_credits_used: data.ai_credits_used ?? 0,
-            ai_credits_reset_at: data.ai_credits_reset_at ?? null,
-            pitch_limit: data.pitch_limit ?? null,
-            dm_cloaking_enabled: data.dm_cloaking_enabled ?? false,
             hide_from_search,
           } as Profile;
         }
