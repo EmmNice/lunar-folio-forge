@@ -82,6 +82,12 @@ const ROLE_LABEL: Record<RoleType, string> = {
   investor: "VC / Investor",
 };
 
+function tierRingColor(tier?: string | null) {
+  if (tier === "gold")   return "rgba(251,191,36,0.85)";
+  if (tier === "silver") return "rgba(148,163,184,0.70)";
+  return "rgba(255,255,255,0.15)";
+}
+
 // ─── Auto-redirect to the user's real handle ─────────────────────────────────
 function RedirectToOwnProfile({ handle }: { handle: string }) {
   const navigate = useNavigate();
