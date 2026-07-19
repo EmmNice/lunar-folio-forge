@@ -88,44 +88,45 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
               <span className="h-8 w-20 animate-pulse rounded-full bg-white/5" />
             ) : user ? (
               <>
-                {/* Avatar — tapping opens the profile drawer */}
-                {profile ? (
-                  <button
-                    type="button"
-                    aria-label="Open profile menu"
-                    onClick={() => setDrawerOpen(true)}
-                    className="group flex items-center gap-2 rounded-full outline-none"
+                {/* Avatar — always tappable once user is logged in; opens profile drawer */}
+                <button
+                  type="button"
+                  aria-label="Open profile menu"
+                  onClick={() => setDrawerOpen(true)}
+                  className="group flex items-center gap-2 rounded-full outline-none"
+                >
+                  <span
+                    className="relative flex h-9 w-9 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-75"
+                    style={{
+                      boxShadow: `0 0 0 2px ${tierRingColor(profile?.verification_tier)}, 0 0 0 3.5px rgba(11,11,12,0.90)`,
+                      background: profile?.avatar_url ? "transparent" : "rgba(251,191,36,0.18)",
+                    }}
                   >
-                    <span
-                      className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-75"
-                      style={{
-                        boxShadow: `0 0 0 2px ${tierRingColor(profile.verification_tier)}, 0 0 0 3.5px rgba(11,11,12,0.90)`,
-                        background: "rgba(255,255,255,0.07)",
-                      }}
-                    >
-                      {profile.avatar_url ? (
-                        <img
-                          src={profile.avatar_url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="grid h-full w-full place-items-center text-[11px] font-semibold">
-                          {profile.display_name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </span>
+                    {profile?.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span
+                        className="grid h-full w-full place-items-center text-[13px] font-bold"
+                        style={{ color: "#FBBF24" }}
+                      >
+                        {profile?.display_name?.charAt(0).toUpperCase() ?? "?"}
+                      </span>
+                    )}
+                  </span>
 
-                    {/* @handle + badge — desktop only */}
+                  {/* @handle + badge — desktop only */}
+                  {profile && (
                     <span className="hidden items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline-flex">
                       @{profile.handle}
                       <VerificationBadge tier={profile.verification_tier} size={11} />
                     </span>
-                  </button>
-                ) : (
-                  <span className="h-8 w-8 animate-pulse rounded-full bg-white/5" />
-                )}
+                  )}
+                </button>
 
                 {/* Settings gear — always visible when logged in, profile not required */}
                 <Link
