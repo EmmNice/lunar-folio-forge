@@ -92,7 +92,7 @@ function tierRingColor(tier?: string | null) {
 function RedirectToOwnProfile({ handle }: { handle: string }) {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate({ to: "/u/$handle", params: { handle }, replace: true });
+    navigate({ to: "/u/$handle", params: { handle }, search: { tab: undefined }, replace: true });
   }, [handle, navigate]);
   return null;
 }
@@ -136,6 +136,7 @@ function ProfilePage() {
         .maybeSingle();
       if (cancelled) return;
       if (error || !pf) { setProfile(null); return; }
+      const pfAny = pf as any;
 
       // Optional columns added in later migrations — fail silently if absent
       let pitch_limit: number | null = null;
@@ -144,7 +145,7 @@ function ProfilePage() {
         const { data: extra } = await supabase
           .from("profiles")
           .select("pitch_limit, dm_cloaking_enabled")
-          .eq("id", pf.id)
+          .eq("id", pfAny.id)
           .maybeSingle();
         if (extra) {
           pitch_limit = (extra as any).pitch_limit ?? null;
@@ -153,13 +154,13 @@ function ProfilePage() {
       } catch { /* columns may not exist in older schema — use defaults */ }
 
       if (cancelled) return;
-      setProfile({ ...(pf as unknown as ProfileRow), pitch_limit, dm_cloaking_enabled });
+      setProfile({ ...(pfAny as ProfileRow), pitch_limit, dm_cloaking_enabled });
 
       // Posts
       const { data: postsData } = await supabase
         .from("posts")
         .select("id, content, background, created_at")
-        .eq("author_id", pf.id)
+        .eq("author_id", pfAny.id)
         .order("created_at", { ascending: false })
         .limit(30);
       if (cancelled) return;
@@ -169,7 +170,7 @@ function ProfilePage() {
       const { data: commentsData } = await supabase
         .from("comments")
         .select("id, content, created_at, post_id")
-        .eq("author_id", pf.id)
+        .eq("author_id", pfAny.id)
         .order("created_at", { ascending: false })
         .limit(30);
       if (cancelled) return;
@@ -179,7 +180,7 @@ function ProfilePage() {
       const { data: likesData } = await supabase
         .from("likes")
         .select("post_id")
-        .eq("user_id", pf.id)
+        .eq("user_id", pfAny.id)
         .limit(30);
       if (cancelled) return;
       if (likesData && likesData.length > 0) {
@@ -981,23 +982,45 @@ type VerificationRequestRow = {
   created_at: string;
 };
 
+// ── URL validation helper ─────────────────────────────────────────────────────
+function isValidUrl(value: string): boolean {
+  if (!value) return true; // empty = optional, treated as valid (required check is separate)
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function VerificationSection({ profile }: { profile: SelfProfile & { verification_tier: VerificationTier } }) {
   const { user } = useAuth();
   const doSubmit = useServerFn(submitVerificationApplication);
   const [activeTab, setActiveTab] = useState<"silver" | "gold">("silver");
   const [requests, setRequests] = useState<VerificationRequestRow[] | null>(null);
 
+  // Track optimistic pending state so form hides immediately after submit
+  const [localPending, setLocalPending] = useState<{ silver?: boolean; gold?: boolean }>({});
+
   // ── Silver fields ──────────────────────────────────────────────────────────
   const [sGithub, setSGithub] = useState("");
-  const [sContract, setSContract] = useState("");
   const [sLiveUrl, setSLiveUrl] = useState("");
+  const [sContract, setSContract] = useState("");
   const [sShipDesc, setSShipDesc] = useState("");
+
+  // ── Silver field errors ────────────────────────────────────────────────────
+  const [sGithubErr, setSGithubErr] = useState("");
+  const [sLiveUrlErr, setSLiveUrlErr] = useState("");
 
   // ── Gold fields ────────────────────────────────────────────────────────────
   const [gFundName, setGFundName] = useState("");
   const [gPortfolio, setGPortfolio] = useState("");
   const [gLinkedin, setGLinkedin] = useState("");
   const [gInviteCode, setGInviteCode] = useState("");
+
+  // ── Gold field errors ──────────────────────────────────────────────────────
+  const [gPortfolioErr, setGPortfolioErr] = useState("");
+  const [gLinkedinErr, setGLinkedinErr] = useState("");
 
   const [busy, setBusy] = useState(false);
 
@@ -1017,9 +1040,57 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
     return requests?.find((r) => r.tier === tier) ?? null;
   }
 
+  // ── Silver validation ──────────────────────────────────────────────────────
+  function validateSilver(): boolean {
+    let ok = true;
+    const g = sGithub.trim();
+    if (!g) {
+      setSGithubErr("GitHub URL is required.");
+      ok = false;
+    } else if (!isValidUrl(g)) {
+      setSGithubErr("Enter a valid URL starting with https://");
+      ok = false;
+    } else {
+      setSGithubErr("");
+    }
+    const l = sLiveUrl.trim();
+    if (l && !isValidUrl(l)) {
+      setSLiveUrlErr("Enter a valid URL starting with https://");
+      ok = false;
+    } else {
+      setSLiveUrlErr("");
+    }
+    return ok;
+  }
+
+  // ── Gold validation ────────────────────────────────────────────────────────
+  function validateGold(): boolean {
+    let ok = true;
+    const p = gPortfolio.trim();
+    if (p && !isValidUrl(p)) {
+      setGPortfolioErr("Enter a valid URL starting with https://");
+      ok = false;
+    } else {
+      setGPortfolioErr("");
+    }
+    const l = gLinkedin.trim();
+    if (l && !isValidUrl(l)) {
+      setGLinkedinErr("Enter a valid URL starting with https://");
+      ok = false;
+    } else {
+      setGLinkedinErr("");
+    }
+    return ok;
+  }
+
   async function handleSubmit() {
     if (!user) return;
+    const valid = activeTab === "silver" ? validateSilver() : validateGold();
+    if (!valid) return;
+
     setBusy(true);
+    // Optimistically mark pending so the form hides right away
+    setLocalPending((p) => ({ ...p, [activeTab]: true }));
     try {
       await doSubmit({
         data: activeTab === "silver"
@@ -1041,6 +1112,8 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
       toast.success("Application submitted — your credentials are now under review.");
       await loadRequests();
     } catch (e) {
+      // Revert optimistic update on failure
+      setLocalPending((p) => ({ ...p, [activeTab]: false }));
       toast.error(e instanceof Error ? e.message : "Submission failed.");
     } finally {
       setBusy(false);
@@ -1055,7 +1128,7 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
 
   const activeLatest   = activeTab === "silver" ? silverLatest : goldLatest;
   const activeVerified = activeTab === "silver" ? isSilverVerified : isGoldVerified;
-  const isPending      = activeLatest?.status === "pending";
+  const isPending      = activeLatest?.status === "pending" || !!localPending[activeTab];
   const isRejected     = activeLatest?.status === "rejected";
   const canApply       = !activeVerified && !isPending;
 
@@ -1098,7 +1171,6 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground/80")}
         >
-          <Github className="h-3.5 w-3.5" style={activeTab === "silver" ? { color: "#94a3b8" } : {}} />
           Silver · Builder
           {isSilverVerified && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
         </button>
@@ -1110,7 +1182,6 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground/80")}
         >
-          <Users className="h-3.5 w-3.5" style={activeTab === "gold" ? { color: "#fbbf24" } : {}} />
           Gold · Investor
           {isGoldVerified && <CheckCircle2 className="h-3 w-3 text-amber-400" />}
         </button>
@@ -1121,20 +1192,13 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
 
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: ts.iconBg }}>
-              {activeTab === "silver"
-                ? <Github className="h-4 w-4" style={{ color: ts.accent }} />
-                : <Building2 className="h-4 w-4" style={{ color: ts.accent }} />}
-            </div>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: ts.title }}>
-                {activeTab === "silver" ? "Silver — Recognized Builder" : "Gold — Verified Investor"}
-              </p>
-              <p className="text-[11px]" style={{ color: ts.subtitle }}>
-                {activeTab === "silver" ? "For active builders who ship" : "For fund managers & angels"}
-              </p>
-            </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: ts.title }}>
+              {activeTab === "silver" ? "Silver — Recognized Builder" : "Gold — Verified Investor"}
+            </p>
+            <p className="text-[11px]" style={{ color: ts.subtitle }}>
+              {activeTab === "silver" ? "For active builders who ship" : "For fund managers & angels"}
+            </p>
           </div>
           {activeVerified && (
             <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
@@ -1143,176 +1207,198 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
           )}
         </div>
 
-        {/* Description */}
-        <p className="text-xs" style={{ color: ts.desc }}>
-          {activeTab === "silver"
-            ? "Provide your GitHub profile and at least one live project so we can verify you're an active builder."
-            : "Provide your fund or company name and portfolio. An invite code from an existing Gold member accelerates review."}
-        </p>
-
-        {/* Status pill */}
-        {activeLatest && (
-          <div
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium"
-            style={
-              activeLatest.status === "pending"
-                ? { background: "rgba(251,191,36,0.10)", color: "#fbbf24" }
-                : activeLatest.status === "approved"
-                  ? { background: "rgba(34,197,94,0.10)", color: "#4ade80" }
-                  : { background: "rgba(239,68,68,0.10)", color: "#f87171" }
-            }
-          >
-            {activeLatest.status === "pending" && "⏳ Under Review"}
-            {activeLatest.status === "approved" && "✓ Approved"}
-            {activeLatest.status === "rejected" && "✕ Not Approved — you can reapply below"}
-            <span className="opacity-60">· {timeAgo(activeLatest.created_at)}</span>
-          </div>
-        )}
-
-        {/* ── Silver form ────────────────────────────────────────────────────── */}
-        {canApply && activeTab === "silver" && (
-          <div className="space-y-2.5">
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                GitHub Profile URL <span style={{ color: ts.accent }}>*</span>
-              </label>
-              <div className="relative">
-                <Github className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
-                <input
-                  className="lux-field pl-8"
-                  placeholder="https://github.com/yourhandle"
-                  value={sGithub}
-                  onChange={(e) => setSGithub(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                Live DApp / Project URL
-              </label>
-              <div className="relative">
-                <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
-                <input
-                  className="lux-field pl-8"
-                  placeholder="https://yourproject.xyz"
-                  value={sLiveUrl}
-                  onChange={(e) => setSLiveUrl(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                Deployed Contract Address
-              </label>
-              <div className="relative">
-                <FileCode2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
-                <input
-                  className="lux-field pl-8 font-mono text-xs"
-                  placeholder="0x…"
-                  value={sContract}
-                  onChange={(e) => setSContract(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                <span>What did you ship this week?</span>
-                <span style={{ color: sShipDesc.length > 90 ? "#f87171" : ts.subtitle }}>{sShipDesc.length}/100</span>
-              </label>
-              <textarea
-                className="lux-field resize-none"
-                rows={2}
-                placeholder="One sentence — the more specific the better."
-                maxLength={100}
-                value={sShipDesc}
-                onChange={(e) => setSShipDesc(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── Gold form ──────────────────────────────────────────────────────── */}
-        {canApply && activeTab === "gold" && (
-          <div className="space-y-2.5">
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                Fund or Company Name <span style={{ color: ts.accent }}>*</span>
-              </label>
-              <div className="relative">
-                <Building2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
-                <input
-                  className="lux-field pl-8"
-                  placeholder="Acme Ventures"
-                  value={gFundName}
-                  onChange={(e) => setGFundName(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                Portfolio / Fund Website
-              </label>
-              <div className="relative">
-                <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
-                <input
-                  className="lux-field pl-8"
-                  placeholder="https://acmeventures.com"
-                  value={gPortfolio}
-                  onChange={(e) => setGPortfolio(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                LinkedIn or X Profile
-              </label>
-              <div className="relative">
-                <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: ts.accent }} />
-                <input
-                  className="lux-field pl-8"
-                  placeholder="https://linkedin.com/in/yourname"
-                  value={gLinkedin}
-                  onChange={(e) => setGLinkedin(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                Invite Code <span className="normal-case" style={{ color: ts.subtitle }}>(optional — speeds up review)</span>
-              </label>
-              <input
-                className="lux-field font-mono tracking-widest text-xs"
-                placeholder="LEDGER-XXXX"
-                value={gInviteCode}
-                onChange={(e) => setGInviteCode(e.target.value.toUpperCase())}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Already verified message */}
+        {/* ── Already verified — nothing more to do ───────────────────────── */}
         {activeVerified && (
           <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)", color: "#4ade80" }}>
             You already hold {activeTab === "silver" ? "Silver (or higher)" : "Gold"} verification — no action needed.
           </div>
         )}
 
-        {/* Submit button */}
+        {/* ── Pending state — form hidden, show waiting message ───────────── */}
+        {!activeVerified && isPending && (
+          <div className="space-y-3">
+            <div
+              className="rounded-xl px-4 py-3 text-sm"
+              style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.20)", color: "#fbbf24" }}
+            >
+              <p className="font-medium">⏳ Application under review</p>
+              <p className="mt-1 text-xs opacity-80">
+                Your {activeTab === "silver" ? "Silver Builder" : "Gold Investor"} application has been received and is being reviewed by our team.
+                You'll receive a notification here and by email once a decision is made.
+              </p>
+            </div>
+            {activeLatest && (
+              <p className="text-[11px]" style={{ color: ts.subtitle }}>
+                Submitted {timeAgo(activeLatest.created_at)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── Application form — only shown when user can still apply ─────── */}
         {canApply && (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={busy}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-            style={{ border: `1px solid ${ts.btnBorder}`, color: ts.accent, background: ts.btnBg }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = ts.btnHoverBg; e.currentTarget.style.color = ts.accentBright; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = ts.btnBg; e.currentTarget.style.color = ts.accent; }}
-          >
-            {busy
-              ? <Loader2 className="h-4 w-4 animate-spin" />
-              : <ShieldCheck className="h-4 w-4" />}
-            {isRejected ? "Reapply" : `Apply for ${activeTab === "silver" ? "Silver Builder" : "Gold Investor"}`}
-          </button>
+          <>
+            <p className="text-xs" style={{ color: ts.desc }}>
+              {activeTab === "silver"
+                ? "Provide your GitHub profile and at least one live project so we can verify you're an active builder."
+                : "Provide your fund or company name and portfolio. An invite code from an existing Gold member accelerates review."}
+            </p>
+
+            {/* Status pill for rejected state */}
+            {isRejected && activeLatest && (
+              <div
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium"
+                style={{ background: "rgba(239,68,68,0.10)", color: "#f87171" }}
+              >
+                ✕ Previous application not approved — you can reapply below
+                <span className="opacity-60">· {timeAgo(activeLatest.created_at)}</span>
+              </div>
+            )}
+
+            {/* ── Silver form ──────────────────────────────────────────────── */}
+            {activeTab === "silver" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    GitHub Profile URL <span style={{ color: ts.accent }}>*</span>
+                  </label>
+                  <input
+                    className={`lux-field${sGithubErr ? " border-red-500/60 focus:border-red-500" : ""}`}
+                    placeholder="https://github.com/yourhandle"
+                    value={sGithub}
+                    onChange={(e) => { setSGithub(e.target.value); if (sGithubErr) setSGithubErr(""); }}
+                    onBlur={() => {
+                      const v = sGithub.trim();
+                      if (!v) setSGithubErr("GitHub URL is required.");
+                      else if (!isValidUrl(v)) setSGithubErr("Enter a valid URL starting with https://");
+                      else setSGithubErr("");
+                    }}
+                  />
+                  {sGithubErr && <p className="text-[11px] text-red-400">{sGithubErr}</p>}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    Live DApp / Project URL
+                  </label>
+                  <input
+                    className={`lux-field${sLiveUrlErr ? " border-red-500/60 focus:border-red-500" : ""}`}
+                    placeholder="https://yourproject.xyz"
+                    value={sLiveUrl}
+                    onChange={(e) => { setSLiveUrl(e.target.value); if (sLiveUrlErr) setSLiveUrlErr(""); }}
+                    onBlur={() => {
+                      const v = sLiveUrl.trim();
+                      if (v && !isValidUrl(v)) setSLiveUrlErr("Enter a valid URL starting with https://");
+                      else setSLiveUrlErr("");
+                    }}
+                  />
+                  {sLiveUrlErr && <p className="text-[11px] text-red-400">{sLiveUrlErr}</p>}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    Deployed Contract Address <span className="normal-case opacity-60">(optional)</span>
+                  </label>
+                  <input
+                    className="lux-field font-mono text-xs"
+                    placeholder="0x…"
+                    value={sContract}
+                    onChange={(e) => setSContract(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    <span>What did you ship this week?</span>
+                    <span style={{ color: sShipDesc.length > 90 ? "#f87171" : ts.subtitle }}>{sShipDesc.length}/100</span>
+                  </label>
+                  <textarea
+                    className="lux-field resize-none"
+                    rows={2}
+                    placeholder="One sentence — the more specific the better."
+                    maxLength={100}
+                    value={sShipDesc}
+                    onChange={(e) => setSShipDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── Gold form ────────────────────────────────────────────────── */}
+            {activeTab === "gold" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    Fund or Company Name <span style={{ color: ts.accent }}>*</span>
+                  </label>
+                  <input
+                    className="lux-field"
+                    placeholder="Acme Ventures"
+                    value={gFundName}
+                    onChange={(e) => setGFundName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    Portfolio / Fund Website
+                  </label>
+                  <input
+                    className={`lux-field${gPortfolioErr ? " border-red-500/60 focus:border-red-500" : ""}`}
+                    placeholder="https://acmeventures.com"
+                    value={gPortfolio}
+                    onChange={(e) => { setGPortfolio(e.target.value); if (gPortfolioErr) setGPortfolioErr(""); }}
+                    onBlur={() => {
+                      const v = gPortfolio.trim();
+                      if (v && !isValidUrl(v)) setGPortfolioErr("Enter a valid URL starting with https://");
+                      else setGPortfolioErr("");
+                    }}
+                  />
+                  {gPortfolioErr && <p className="text-[11px] text-red-400">{gPortfolioErr}</p>}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    LinkedIn or X Profile
+                  </label>
+                  <input
+                    className={`lux-field${gLinkedinErr ? " border-red-500/60 focus:border-red-500" : ""}`}
+                    placeholder="https://linkedin.com/in/yourname"
+                    value={gLinkedin}
+                    onChange={(e) => { setGLinkedin(e.target.value); if (gLinkedinErr) setGLinkedinErr(""); }}
+                    onBlur={() => {
+                      const v = gLinkedin.trim();
+                      if (v && !isValidUrl(v)) setGLinkedinErr("Enter a valid URL starting with https://");
+                      else setGLinkedinErr("");
+                    }}
+                  />
+                  {gLinkedinErr && <p className="text-[11px] text-red-400">{gLinkedinErr}</p>}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                    Invite Code <span className="normal-case opacity-60">(optional — speeds up review)</span>
+                  </label>
+                  <input
+                    className="lux-field font-mono tracking-widest text-xs"
+                    placeholder="LEDGER-XXXX"
+                    value={gInviteCode}
+                    onChange={(e) => setGInviteCode(e.target.value.toUpperCase())}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={busy}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
+              style={{ border: `1px solid ${ts.btnBorder}`, color: ts.accent, background: ts.btnBg }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = ts.btnHoverBg; e.currentTarget.style.color = ts.accentBright; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = ts.btnBg; e.currentTarget.style.color = ts.accent; }}
+            >
+              {busy
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <ShieldCheck className="h-4 w-4" />}
+              {isRejected ? "Reapply" : `Apply for ${activeTab === "silver" ? "Silver Builder" : "Gold Investor"}`}
+            </button>
+          </>
         )}
       </div>
     </div>
