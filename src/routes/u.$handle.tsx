@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users } from "lucide-react";
+import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users, Heart, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background } from "@/components/StatusCard";
@@ -24,8 +24,8 @@ export const Route = createFileRoute("/u/$handle")({
     ],
   }),
   validateSearch: (s: Record<string, unknown>) => ({
-    tab: (["posts", "edit", "verification"] as const).includes(s.tab as any)
-      ? (s.tab as "posts" | "edit" | "verification")
+    tab: (["posts", "comments", "likes", "edit", "verification"] as const).includes(s.tab as any)
+      ? (s.tab as "posts" | "comments" | "likes" | "edit" | "verification")
       : undefined,
   }),
   component: ProfilePage,
@@ -56,6 +56,24 @@ type PostRow = {
   created_at: string;
 };
 
+type CommentRow = {
+  id: string;
+  content: string;
+  created_at: string;
+  post_id: string;
+};
+
+type LikedPostRow = {
+  id: string;
+  content: string;
+  background: Background;
+  created_at: string;
+  author_display_name: string;
+  author_handle: string;
+  author_avatar_url: string | null;
+  author_verification_tier: VerificationTier;
+};
+
 const ROLE_LABEL: Record<RoleType, string> = {
   founder: "Startup Founder",
   developer: "Core Developer",
@@ -79,8 +97,12 @@ function ProfilePage() {
   const navigate = useNavigate();
   const start = useServerFn(startConversation);
 
+  const { tab } = Route.useSearch();
   const [profile, setProfile] = useState<ProfileRow | null | undefined>(undefined);
   const [posts, setPosts] = useState<PostRow[]>([]);
+  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [likedPosts, setLikedPosts] = useState<LikedPostRow[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
   const [busyMsg, setBusyMsg] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
 
@@ -125,6 +147,7 @@ function ProfilePage() {
       if (cancelled) return;
       setProfile({ ...(pf as unknown as ProfileRow), pitch_limit, dm_cloaking_enabled });
 
+      // Posts
       const { data: postsData } = await supabase
         .from("posts")
         .select("id, content, background, created_at")
@@ -133,6 +156,47 @@ function ProfilePage() {
         .limit(30);
       if (cancelled) return;
       setPosts((postsData ?? []) as PostRow[]);
+
+      // Comments by this user
+      const { data: commentsData } = await supabase
+        .from("comments")
+        .select("id, content, created_at, post_id")
+        .eq("author_id", pf.id)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (cancelled) return;
+      setComments((commentsData ?? []) as CommentRow[]);
+
+      // Posts this user has liked
+      const { data: likesData } = await supabase
+        .from("likes")
+        .select("post_id")
+        .eq("user_id", pf.id)
+        .limit(30);
+      if (cancelled) return;
+      if (likesData && likesData.length > 0) {
+        const postIds = likesData.map((l: any) => l.post_id).filter(Boolean);
+        if (postIds.length > 0) {
+          const { data: likedPostsRaw } = await supabase
+            .from("posts")
+            .select("id, content, background, created_at, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url, verification_tier)")
+            .in("id", postIds)
+            .order("created_at", { ascending: false });
+          if (!cancelled) {
+            const shaped = (likedPostsRaw ?? []).map((p: any) => ({
+              id: p.id,
+              content: p.content,
+              background: p.background,
+              created_at: p.created_at,
+              author_display_name: p.profiles?.display_name ?? "Unknown",
+              author_handle: p.profiles?.handle ?? "unknown",
+              author_avatar_url: p.profiles?.avatar_url ?? null,
+              author_verification_tier: p.profiles?.verification_tier ?? "none",
+            }));
+            setLikedPosts(shaped);
+          }
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [handle]);
@@ -261,70 +325,278 @@ function ProfilePage() {
 
   // ── SELF VIEW ─────────────────────────────────────────────────────────────
   if (isSelf && me) {
-    return (
-      <div className="min-h-screen pb-16 sm:pb-0">
-        <AppHeader />
-        <main className="mx-auto max-w-2xl px-4 pt-10 pb-28 sm:px-6">
+    const activeTab = (tab === "comments" || tab === "likes") ? tab : "posts";
 
-          {/* ── Profile Card ── */}
-          <SelfProfileCard
-            profile={me as any}
-            onSaved={refreshProfile}
+    function setTab(t: "posts" | "comments" | "likes") {
+      navigate({ to: "/u/$handle", params: { handle }, search: { tab: t } });
+    }
+
+    const PROFILE_TABS = [
+      { key: "posts" as const,    label: "Posts",    icon: FileText },
+      { key: "comments" as const, label: "Comments", icon: MessageSquare },
+      { key: "likes" as const,    label: "Likes",    icon: Heart },
+    ];
+
+    return (
+      <div className="min-h-screen pb-20 sm:pb-0">
+        <AppHeader />
+        <main className="mx-auto max-w-2xl">
+
+          {/* ── Cover banner ── */}
+          <div
+            className="h-28 sm:h-36 w-full"
+            style={{
+              background: "linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(251,191,36,0.04) 60%, rgba(255,255,255,0.02) 100%)",
+            }}
           />
 
-          {/* ── Verification Portal ── */}
-          <section className="mt-10">
-            <div className="mb-4 flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Verification Portal
-              </p>
-            </div>
-            <VerificationSection profile={me as any} />
-          </section>
-
-          {/* ── My Cards ── */}
-          <section className="mt-10">
-            <p className="mb-5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              My Cards
-            </p>
-            {posts.length === 0 ? (
+          {/* ── Profile header ── */}
+          <div className="px-4 sm:px-6">
+            {/* Avatar + action buttons row */}
+            <div className="flex items-end justify-between -mt-10 sm:-mt-12 mb-4">
+              {/* Avatar */}
               <div
-                className="flex flex-col items-center rounded-2xl py-12 text-center"
-                style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
+                className="h-20 w-20 sm:h-24 sm:w-24 rounded-full overflow-hidden shrink-0 text-2xl font-semibold grid"
+                style={{
+                  border: "4px solid hsl(var(--background))",
+                  background: "rgba(255,255,255,0.06)",
+                  boxShadow: `0 0 0 2px ${tierRingColor(me.verification_tier)}`,
+                }}
               >
-                <p className="text-sm font-medium">No cards published yet.</p>
-                <p className="mt-1 text-xs text-muted-foreground">Head to Workspace to write your first card.</p>
+                {me.avatar_url ? (
+                  <img src={me.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="grid h-full w-full place-items-center text-2xl">
+                    {me.display_name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center gap-2 pb-1">
                 <Link
-                  to="/studio"
-                  search={{ draft: undefined }}
-                  className="mt-4 rounded-xl px-4 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
-                  style={{ background: "#F5F5F6" }}
+                  to="/settings"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                  style={{ border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)" }}
                 >
-                  Open Workspace
+                  <Settings className="h-3.5 w-3.5" />
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="rounded-full px-4 py-1.5 text-sm font-semibold transition-colors hover:bg-white/10"
+                  style={{ border: "1px solid rgba(255,255,255,0.30)", color: "inherit" }}
+                >
+                  Edit profile
+                </button>
               </div>
-            ) : (
-              <div className="columns-1 gap-5 sm:columns-2 [column-fill:_balance]">
-                {posts.map((p) => (
-                  <div key={p.id} className="mb-5 break-inside-avoid">
-                    <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-                      <StatusCard
-                        name={profile.display_name}
-                        handle={profile.handle}
-                        avatarUrl={profile.avatar_url}
-                        content={p.content}
-                        background={p.background}
-                        verificationTier={profile.verification_tier}
-                      />
-                    </div>
-                    <div className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</div>
-                  </div>
-                ))}
-              </div>
+            </div>
+
+            {/* Name / handle / bio */}
+            <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+              {me.display_name}
+              <VerificationBadge tier={me.verification_tier} size={18} />
+            </h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              @{me.handle}
+              {(me as any).role_type ? ` · ${ROLE_LABEL[(me as any).role_type as RoleType]}` : ""}
+            </p>
+            {(me as any).bio && (
+              <p className="mt-2 max-w-prose text-sm text-foreground/85">{(me as any).bio}</p>
             )}
-          </section>
+          </div>
+
+          {/* ── Tab bar ── */}
+          <div
+            className="sticky top-[57px] z-10 mt-5 flex border-b"
+            style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(11,11,12,0.90)", backdropFilter: "blur(12px)" }}
+          >
+            {PROFILE_TABS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className="relative flex flex-1 items-center justify-center gap-1.5 py-3.5 text-sm font-medium transition-colors"
+                style={{ color: activeTab === key ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))" }}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+                {activeTab === key && (
+                  <span
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-12 rounded-full"
+                    style={{ background: "#FBBF24" }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Tab content ── */}
+          <div className="px-4 sm:px-6 py-6 pb-28">
+
+            {/* POSTS */}
+            {activeTab === "posts" && (
+              posts.length === 0 ? (
+                <div
+                  className="flex flex-col items-center rounded-2xl py-16 text-center"
+                  style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
+                >
+                  <FileText className="h-8 w-8 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium">No posts yet.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Head to Studio to write your first card.</p>
+                  <Link
+                    to="/studio"
+                    search={{ draft: undefined }}
+                    className="mt-4 rounded-xl px-4 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
+                    style={{ background: "#F5F5F6" }}
+                  >
+                    Open Studio
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {posts.map((p) => (
+                    <div key={p.id}>
+                      <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <StatusCard
+                          name={profile.display_name}
+                          handle={profile.handle}
+                          avatarUrl={profile.avatar_url}
+                          content={p.content}
+                          background={p.background}
+                          verificationTier={profile.verification_tier}
+                        />
+                      </div>
+                      <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* COMMENTS */}
+            {activeTab === "comments" && (
+              comments.length === 0 ? (
+                <div
+                  className="flex flex-col items-center rounded-2xl py-16 text-center"
+                  style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
+                >
+                  <MessageSquare className="h-8 w-8 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium">No comments yet.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Jump into the feed and start a conversation.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {comments.map((c) => (
+                    <div
+                      key={c.id}
+                      className="rounded-2xl p-4"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Small avatar */}
+                        <div
+                          className="h-8 w-8 shrink-0 rounded-full grid overflow-hidden text-[11px] font-semibold"
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
+                        >
+                          {me.avatar_url ? (
+                            <img src={me.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <span className="grid h-full w-full place-items-center">
+                              {me.display_name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-xs font-semibold">{me.display_name}</span>
+                            <VerificationBadge tier={me.verification_tier} size={11} />
+                            <span className="text-[11px] text-muted-foreground">· {timeAgo(c.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-foreground/85 break-words">{c.content}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* LIKES */}
+            {activeTab === "likes" && (
+              likedPosts.length === 0 ? (
+                <div
+                  className="flex flex-col items-center rounded-2xl py-16 text-center"
+                  style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
+                >
+                  <Heart className="h-8 w-8 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium">No likes yet.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Like posts in the feed and they'll appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {likedPosts.map((p) => (
+                    <div key={p.id}>
+                      <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <StatusCard
+                          name={p.author_display_name}
+                          handle={p.author_handle}
+                          avatarUrl={p.author_avatar_url}
+                          content={p.content}
+                          background={p.background}
+                          verificationTier={p.author_verification_tier}
+                        />
+                      </div>
+                      <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+          </div>
         </main>
+
+        {/* ── Edit Profile bottom sheet ── */}
+        {editOpen && (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center" style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}>
+            <div
+              className="w-full sm:max-w-lg sm:rounded-3xl overflow-y-auto max-h-[92vh]"
+              style={{ background: "#0B0B0C", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", borderRadius: "24px 24px 0 0" }}
+            >
+              {/* Header */}
+              <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4" style={{ background: "rgba(11,11,12,0.95)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <h2 className="text-base font-semibold">Edit profile</h2>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                  style={{ background: "rgba(255,255,255,0.06)" }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {/* Edit form */}
+              <div className="px-5 py-6">
+                <EditProfileForm
+                  profile={me as any}
+                  onSaved={async () => {
+                    await refreshProfile();
+                    setEditOpen(false);
+                  }}
+                />
+                {/* Verification portal link inside edit sheet */}
+                <div className="mt-6 pt-5" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Verification Portal</p>
+                  </div>
+                  <VerificationSection profile={me as any} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
