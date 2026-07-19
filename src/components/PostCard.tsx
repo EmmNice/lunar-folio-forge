@@ -212,6 +212,7 @@ export function PostCard({
                 src={post.author.avatar_url}
                 alt=""
                 className="h-full w-full object-cover"
+                crossOrigin="anonymous"
                 referrerPolicy="no-referrer"
               />
             ) : (
@@ -357,6 +358,7 @@ export function PostCard({
                           src={c.author.avatar_url}
                           alt=""
                           className="h-full w-full object-cover"
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                         />
                       ) : (
