@@ -30,10 +30,13 @@ export type Profile = {
 
 // All profile columns in one query — avoids the previous split into two
 // parallel requests on the same table with the same filter.
+// Core columns — always present regardless of which migrations have run.
+// Optional columns added by later migrations are fetched separately with
+// error handling so a missing column never blocks the entire profile load.
 const ALL_PROFILE_COLUMNS =
   "id, handle, display_name, avatar_url, bio, date_of_birth, role_type, company_name, " +
   "onboarding_completed, verification_tier, github_url, portfolio_url, startup_url, traction_url, " +
-  "subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled, hide_from_search";
+  "subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled";
 
 export type AuthState = {
   loading: boolean;
@@ -91,12 +94,27 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
     for (let i = 0; i < delays.length; i++) {
       if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("profiles")
           .select(ALL_PROFILE_COLUMNS)
           .eq("id", user.id)
           .maybeSingle();
+        if (error) {
+          console.error("[auth] profile fetch error:", error.message);
+          continue; // retry
+        }
         if (data) {
+          // Try to read optional migration columns — fail silently if not yet run
+          let hide_from_search = false;
+          try {
+            const { data: extra } = await supabase
+              .from("profiles")
+              .select("hide_from_search")
+              .eq("id", user.id)
+              .maybeSingle();
+            hide_from_search = (extra as any)?.hide_from_search ?? false;
+          } catch { /* column doesn't exist yet — use default */ }
+
           return {
             ...data,
             subscription_status: data.subscription_status ?? "active",
@@ -104,7 +122,7 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
             ai_credits_reset_at: data.ai_credits_reset_at ?? null,
             pitch_limit: data.pitch_limit ?? null,
             dm_cloaking_enabled: data.dm_cloaking_enabled ?? false,
-            hide_from_search: (data as any).hide_from_search ?? false,
+            hide_from_search,
           } as Profile;
         }
       } catch {
