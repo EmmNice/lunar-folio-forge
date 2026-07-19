@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Rocket, Settings, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users, Heart, FileText, Plus } from "lucide-react";
+import { MessageSquare, Github, Rocket, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users, Heart, FileText, Plus } from "lucide-react";
 import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
@@ -382,13 +382,6 @@ function ProfilePage() {
 
               {/* Buttons */}
               <div className="flex items-center gap-2 pb-1">
-                <Link
-                  to="/settings"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                  style={{ border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)" }}
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                </Link>
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
@@ -829,14 +822,6 @@ function SelfProfileCard({
                   <><Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit</span></>
                 )}
               </button>
-              <Link
-                to="/settings"
-                aria-label="Account Settings"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:text-foreground"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-              >
-                <Settings className="h-3.5 w-3.5" />
-              </Link>
             </div>
           </div>
 

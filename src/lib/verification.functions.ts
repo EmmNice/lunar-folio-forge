@@ -155,15 +155,15 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
   .validator((input) =>
     z.object({
       tier: z.enum(["silver", "gold"]),
-      // Silver fields
-      github_url: z.string().url().optional().or(z.literal("")),
+      // Silver fields — accept any non-empty string; admins verify the links manually
+      github_url: z.string().max(500).optional().or(z.literal("")),
       deployed_contract_address: z.string().max(200).optional().or(z.literal("")),
-      live_project_url: z.string().url().optional().or(z.literal("")),
+      live_project_url: z.string().max(500).optional().or(z.literal("")),
       recent_ship_desc: z.string().max(100).optional().or(z.literal("")),
       // Gold fields
       fund_or_company_name: z.string().max(120).optional().or(z.literal("")),
-      portfolio_url: z.string().url().optional().or(z.literal("")),
-      linkedin_or_x_url: z.string().url().optional().or(z.literal("")),
+      portfolio_url: z.string().max(500).optional().or(z.literal("")),
+      linkedin_or_x_url: z.string().max(500).optional().or(z.literal("")),
       invite_code: z.string().max(60).optional().or(z.literal("")),
     }).parse(input),
   )
@@ -213,7 +213,7 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       invite_code: data.invite_code || null,
     };
 
-    const { error } = await supabase.from("verification_requests").insert(row);
+    const { error } = await supabase.from("verification_requests").insert(row as any);
     if (error) throw new Error(error.message);
 
     return { ok: true };
@@ -301,8 +301,23 @@ export const reviewApplication = createServerFn({ method: "POST" })
         .eq("id", app.user_id);
     }
 
+    // Insert in-app notification so the user sees it immediately in the bell
+    const notifType = data.action === "approve" ? "verification_approved" : "verification_rejected";
+    await supabaseAdmin
+      .from("notifications")
+      .insert({
+        user_id: app.user_id,
+        actor_id: null,
+        type: notifType as any,
+        post_id: null,
+        metadata: { tier: app.tier },
+      } as any)
+      .then(({ error: nErr }) => {
+        if (nErr) console.warn("[Verification] Failed to insert notification:", nErr.message);
+      });
+
     // Fetch user's email via admin auth API
-    const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.getUserById(app.user_id);
+    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(app.user_id);
     const email = userData?.user?.email;
 
     if (email) {

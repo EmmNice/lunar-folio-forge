@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bell, Heart, MessageCircle, Repeat2 } from "lucide-react";
+import { Bell, Heart, MessageCircle, Repeat2, ShieldCheck, ShieldOff } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
@@ -14,17 +14,20 @@ export const Route = createFileRoute("/_authenticated/notifications")({
 
 type NotificationRow = {
   id: string;
-  type: "like" | "comment" | "repost";
+  type: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected";
   read: boolean;
   created_at: string;
+  metadata: { tier?: "silver" | "gold" } | null;
   actor: { id: string; handle: string; display_name: string; avatar_url: string | null } | null;
   post: { id: string; content: string } | null;
 };
 
-const TYPE_ICON = {
+const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   like: Heart,
   comment: MessageCircle,
   repost: Repeat2,
+  verification_approved: ShieldCheck,
+  verification_rejected: ShieldOff,
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -32,6 +35,22 @@ const TYPE_LABEL: Record<string, string> = {
   comment: "commented on your post",
   repost: "re-shipped your post",
 };
+
+const TYPE_ICON_COLOR: Record<string, string> = {
+  like: "text-rose-400",
+  comment: "text-sky-400",
+  repost: "text-emerald-400",
+  verification_approved: "text-amber-400",
+  verification_rejected: "text-red-400",
+};
+
+function verificationLabel(type: "verification_approved" | "verification_rejected", tier?: "silver" | "gold") {
+  const tierLabel = tier === "gold" ? "Gold Investor" : "Silver Builder";
+  if (type === "verification_approved") {
+    return `🎉 Congratulations! Your ${tierLabel} verification has been approved.`;
+  }
+  return `Your ${tierLabel} verification application was not approved. You can reapply at any time.`;
+}
 
 function NotificationsPage() {
   const { user } = useAuth();
@@ -45,7 +64,7 @@ function NotificationsPage() {
       const { data } = await supabase
         .from("notifications")
         .select(
-          "id, type, read, created_at, actor:profiles!notifications_actor_id_fkey(id, handle, display_name, avatar_url), post:posts!notifications_post_id_fkey(id, content)",
+          "id, type, read, created_at, metadata, actor:profiles!notifications_actor_id_fkey(id, handle, display_name, avatar_url), post:posts!notifications_post_id_fkey(id, content)",
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -76,7 +95,7 @@ function NotificationsPage() {
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Notifications</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Activity on your posts — likes, comments, and re-ships.
+          Activity on your posts and account.
         </p>
 
         <div className="mt-8">
@@ -98,19 +117,16 @@ function NotificationsPage() {
               <Bell className="mx-auto h-8 w-8 text-border" />
               <p className="mt-3 text-sm text-muted-foreground">No notifications yet.</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                When someone likes, comments, or re-ships your posts, it'll show here.
+                Likes, comments, re-ships, and verification updates will appear here.
               </p>
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
               {notifications.map((n) => {
+                const isVerification = n.type === "verification_approved" || n.type === "verification_rejected";
                 const Icon = TYPE_ICON[n.type] ?? Bell;
-                const iconColor =
-                  n.type === "like"
-                    ? "text-rose-400"
-                    : n.type === "comment"
-                      ? "text-sky-400"
-                      : "text-emerald-400";
+                const iconColor = TYPE_ICON_COLOR[n.type] ?? "text-muted-foreground";
+
                 return (
                   <li
                     key={n.id}
@@ -129,8 +145,8 @@ function NotificationsPage() {
                       <Icon className="h-4 w-4" />
                     </div>
 
-                    {/* Actor avatar */}
-                    {n.actor && (
+                    {/* Actor avatar (only for social notifications) */}
+                    {!isVerification && n.actor && (
                       <Link
                         to="/u/$handle"
                         params={{ handle: n.actor.handle }}
@@ -156,25 +172,44 @@ function NotificationsPage() {
 
                     {/* Text */}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-foreground">
-                        {n.actor ? (
-                          <Link
-                            to="/u/$handle"
-                            params={{ handle: n.actor.handle }}
-                            search={{ tab: undefined }}
-                            className="font-medium hover:underline"
-                          >
-                            {n.actor.display_name}
-                          </Link>
-                        ) : (
-                          <span className="font-medium">Someone</span>
-                        )}{" "}
-                        <span className="text-muted-foreground">{TYPE_LABEL[n.type]}</span>
-                      </p>
-                      {n.post && (
+                      {isVerification ? (
+                        /* Verification notification */
+                        <p className="text-sm text-foreground">
+                          <span className="font-medium">The Ledger</span>{" "}
+                          <span className="text-muted-foreground">
+                            {verificationLabel(n.type as "verification_approved" | "verification_rejected", n.metadata?.tier)}
+                          </span>
+                        </p>
+                      ) : (
+                        /* Social notification */
+                        <p className="text-sm text-foreground">
+                          {n.actor ? (
+                            <Link
+                              to="/u/$handle"
+                              params={{ handle: n.actor.handle }}
+                              search={{ tab: undefined }}
+                              className="font-medium hover:underline"
+                            >
+                              {n.actor.display_name}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">Someone</span>
+                          )}{" "}
+                          <span className="text-muted-foreground">{TYPE_LABEL[n.type]}</span>
+                        </p>
+                      )}
+                      {!isVerification && n.post && (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           "{n.post.content.slice(0, 80)}{n.post.content.length > 80 ? "…" : ""}"
                         </p>
+                      )}
+                      {isVerification && n.type === "verification_approved" && (
+                        <a
+                          href="/feed"
+                          className="mt-1 inline-block text-xs font-medium text-amber-400 hover:underline"
+                        >
+                          Open The Ledger →
+                        </a>
                       )}
                       <p className="mt-1 text-[11px] text-muted-foreground/60">
                         {timeAgo(n.created_at)}
