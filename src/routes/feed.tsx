@@ -49,28 +49,19 @@ function FeedPage() {
     }
   }, [loading, user, profile, navigate]);
 
-  // ── FAB + combined-header scroll visibility ─────────────────────────────
-  // Mirrors X's "For You / Following" behaviour:
-  //   • Any downward movement past the header height → hide immediately
-  //   • Any upward movement (even 1 px) → show immediately
+  // ── FAB visibility: hide while scrolling, reappear when scroll stops ───
   useEffect(() => {
-    let lastY = window.scrollY;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     function onScroll() {
-      const y = window.scrollY;
-      const delta = y - lastY;
-      if (delta > 0 && y > 56) {
-        // Scrolling down and past the top bar — hide both header and FAB
-        setFabVisible(false);
-        setHeaderHidden(true);
-      } else if (delta < 0) {
-        // Any upward motion — show both immediately
-        setFabVisible(true);
-        setHeaderHidden(false);
-      }
-      lastY = y;
+      setFabVisible(false);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setFabVisible(true), 800);
     }
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   // ── Shared visibility filter ──────────────────────────────────────────
