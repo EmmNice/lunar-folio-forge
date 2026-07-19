@@ -122,7 +122,11 @@ function FeedPage() {
       data = full.data;
     }
 
-    setBeatPosts(applyVisibility(normalisePosts(data ?? [])));
+    // Beat = unverified + silver only (gold authors belong in Signal only)
+    const beatFiltered = normalisePosts(data ?? []).filter(
+      (p) => p.author.verification_tier !== "gold",
+    );
+    setBeatPosts(applyVisibility(beatFiltered));
   }
 
   // ── Signal fetch: VERIFIED AUTHORS ONLY — backend-filtered ─────────────
@@ -273,7 +277,7 @@ function FeedPage() {
         <p className="mb-5 text-[12px] leading-relaxed text-muted-foreground/70">
           {tab === "signal"
             ? "Silver & Gold verified builders — the highest-signal posts on the platform."
-            : "Raw chronological pulse of everything shipping — verified and unverified alike."}
+            : "Unverified and Silver builders — everything shipping, chronologically."}
         </p>
 
         {/* ── Feed ── */}
@@ -375,11 +379,13 @@ function FeedPage() {
         <ComposerModal
           onClose={() => setShowModal(false)}
           onPublished={(post) => {
-            // Prepend to Beat immediately; Signal only gets it if author is verified
-            setBeatPosts((prev) => (prev ? [post, ...prev] : [post]));
+            // Beat = unverified + silver; Signal = silver + gold
+            const isGold = post.author.verification_tier === "gold";
             const isVerified =
-              post.author.verification_tier === "silver" ||
-              post.author.verification_tier === "gold";
+              post.author.verification_tier === "silver" || isGold;
+            if (!isGold) {
+              setBeatPosts((prev) => (prev ? [post, ...prev] : [post]));
+            }
             if (isVerified) {
               setSignalPosts((prev) => (prev ? [post, ...prev] : [post]));
             }
