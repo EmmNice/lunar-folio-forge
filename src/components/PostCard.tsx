@@ -13,7 +13,7 @@ import {
   Lock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { StatusCard, type Background } from "@/components/StatusCard";
+import { THEMES, type Background } from "@/components/StatusCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
@@ -370,51 +370,106 @@ export function PostCard({
     </>
   );
 
-  /* ── Card post (Studio-crafted, non-noir theme) ── */
+  /* ── Beat post (Studio-crafted, non-noir theme) ── */
   if (isCardPost) {
+    const theme = THEMES[post.background ?? "cream"] ?? THEMES.cream;
+    const dotPattern = `radial-gradient(${theme.dot} 1px, transparent 1px)`;
+
     return (
-      <article className={`rounded-2xl border bg-card/40 overflow-hidden ${tierBorder}`}>
-        {/* Compact meta strip */}
-        <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-            {(isVerifiedOnly || isWhisper) && (
-              <span className="mr-1 flex items-center gap-1">
-                <Lock className="h-3 w-3" />
-                {isWhisper
-                  ? <span className="font-medium text-violet-400/80">Whisper</span>
-                  : <span>Verified only</span>}
-                <span>·</span>
-              </span>
-            )}
-            <Link
-              to="/u/$handle"
-              params={{ handle: post.author.handle }}
-              search={{ tab: undefined }}
-              className="flex items-center gap-1 font-semibold text-foreground/80 hover:text-foreground hover:underline underline-offset-2"
+      <article className={`rounded-2xl border bg-card/50 overflow-hidden ${tierBorder}`}>
+        {/* Author header — same layout as regular posts */}
+        <div className="flex items-start gap-3 px-4 pt-4 pb-0 sm:px-5">
+          {/* Avatar */}
+          <Link
+            to="/u/$handle"
+            params={{ handle: post.author.handle }}
+            search={{ tab: undefined }}
+            className="shrink-0 self-start"
+          >
+            <div
+              className={`grid h-11 w-11 overflow-hidden rounded-full bg-secondary/60 text-sm font-semibold transition-opacity hover:opacity-85 ${
+                post.author.verification_tier === "gold"
+                  ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-background"
+                  : post.author.verification_tier === "silver"
+                    ? "ring-2 ring-slate-400/60 ring-offset-1 ring-offset-background"
+                    : "ring-1 ring-border/60"
+              }`}
             >
-              {post.author.display_name}
-              <VerificationBadge tier={post.author.verification_tier} size={12} />
-            </Link>
-            <span>@{post.author.handle}</span>
-            <span>· {timeAgo(post.created_at)}</span>
+              {post.author.avatar_url ? (
+                <img
+                  src={post.author.avatar_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="grid h-full w-full place-items-center text-[15px] font-bold text-foreground/70">
+                  {post.author.display_name.charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+          </Link>
+
+          {/* Name / handle / time */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                {(isVerifiedOnly || isWhisper) && (
+                  <span
+                    className="mb-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                    style={{
+                      background: isWhisper ? "rgba(167,139,250,0.10)" : "rgba(255,255,255,0.06)",
+                      color: isWhisper ? "#c4b5fd" : "#94a3b8",
+                      border: `1px solid ${isWhisper ? "rgba(167,139,250,0.20)" : "rgba(255,255,255,0.08)"}`,
+                    }}
+                  >
+                    <Lock className="h-2.5 w-2.5" />
+                    {isWhisper ? "Whisper Feed" : "Verified only"}
+                  </span>
+                )}
+                <Link
+                  to="/u/$handle"
+                  params={{ handle: post.author.handle }}
+                  search={{ tab: undefined }}
+                  className="inline-flex items-center gap-1.5 font-semibold leading-tight text-foreground hover:underline underline-offset-2"
+                >
+                  {post.author.display_name}
+                  <VerificationBadge tier={post.author.verification_tier} size={15} />
+                </Link>
+                <p className="mt-0.5 text-[12px] text-muted-foreground/70">
+                  @{post.author.handle}
+                  <span className="mx-1.5 opacity-50">·</span>
+                  {timeAgo(post.created_at)}
+                </p>
+              </div>
+              {deleteControl}
+            </div>
           </div>
-          {deleteControl}
         </div>
 
-        {/* Clipped StatusCard — shows top ~55% of the card (avatar + name + content) */}
-        <div className="relative overflow-hidden" style={{ height: "260px" }}>
-          <StatusCard
-            name={post.author.display_name}
-            handle={post.author.handle}
-            avatarUrl={post.author.avatar_url}
-            content={post.content}
-            background={post.background}
-            verificationTier={post.author.verification_tier}
-          />
+        {/* Themed content block */}
+        <div className="px-4 pt-3 pb-1 sm:px-5">
+          <div
+            className="rounded-xl px-4 py-4"
+            style={{
+              backgroundColor: theme.bg,
+              backgroundImage: dotPattern,
+              backgroundSize: "18px 18px",
+              border: `1px solid ${theme.border}`,
+            }}
+          >
+            <p
+              className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.6] tracking-[-0.01em]"
+              style={{ color: theme.body }}
+            >
+              {post.content}
+            </p>
+          </div>
         </div>
 
-        {/* Actions + comments below the card */}
-        <div className="px-4 pb-3">
+        {/* Actions + comments */}
+        <div className="px-4 pb-3 sm:px-5">
           {actionsRow}
           {commentsThread}
         </div>

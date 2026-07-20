@@ -39,7 +39,7 @@ type ThemeConfig = {
   avatarBg: string;
 };
 
-const THEMES: Record<Background, ThemeConfig> = {
+export const THEMES: Record<Background, ThemeConfig> = {
   noir: {
     bg: "#0b0b0c",
     dot: "rgba(255,255,255,0.07)",
