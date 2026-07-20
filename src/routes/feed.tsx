@@ -87,77 +87,41 @@ function FeedPage() {
     }));
   }
 
-  // ── Signal fetch: regular text posts (noir background), ALL tiers ────────
-  async function fetchSignal() {
+  // ── Single fetch, split client-side ──────────────────────────────────────
+  // Signal = noir/null background (plain text posts), all tiers
+  // Beat   = any non-noir background (Studio cards), all tiers
+  async function fetchAllPosts() {
     const FULL_SELECT =
       `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
 
     const { data, error } = await supabase
       .from("posts")
       .select(FULL_SELECT)
-      .or("background.eq.noir,background.is.null")
       .order("created_at", { ascending: false })
-      .limit(80);
+      .limit(200);
 
     if (error) {
-      // Fallback: fetch all, client-side filter
-      const fallback = await supabase
-        .from("posts")
-        .select("id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)")
-        .order("created_at", { ascending: false })
-        .limit(80);
-      if (fallback.error) { setSignalPosts([]); return; }
-      setSignalPosts(applyVisibility(normalisePosts((fallback.data ?? []).filter(
-        (p: any) => !p.background || p.background === "noir",
-      ))));
+      toast.error("Couldn't load the feed. Check your connection.");
+      setSignalPosts([]);
+      setBeatPosts([]);
       return;
     }
-    setSignalPosts(applyVisibility(normalisePosts(data ?? [])));
-  }
 
-  // ── Beat fetch: Studio card posts (non-noir background), ALL tiers ───────
-  async function fetchBeat() {
-    const FULL_SELECT =
-      `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
-
-    const { data, error } = await supabase
-      .from("posts")
-      .select(FULL_SELECT)
-      .not("background", "is", null)
-      .neq("background", "noir")
-      .order("created_at", { ascending: false })
-      .limit(80);
-
-    if (error) {
-      // Fallback: fetch all, client-side filter
-      const fallback = await supabase
-        .from("posts")
-        .select("id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)")
-        .order("created_at", { ascending: false })
-        .limit(80);
-      if (fallback.error) { setBeatPosts([]); return; }
-      setBeatPosts(applyVisibility(normalisePosts((fallback.data ?? []).filter(
-        (p: any) => p.background && p.background !== "noir",
-      ))));
-      return;
-    }
-    setBeatPosts(applyVisibility(normalisePosts(data ?? [])));
+    const all = applyVisibility(normalisePosts(data ?? []));
+    setSignalPosts(all.filter((p) => !p.background || p.background === "noir"));
+    setBeatPosts(all.filter((p) => p.background && p.background !== "noir"));
   }
 
   useEffect(() => {
-    // Fetch both tabs in parallel so switching is always instant
-    fetchBeat();
-    fetchSignal();
+    fetchAllPosts();
 
     const channel = supabase
       .channel("public:posts")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
-        fetchBeat();
-        fetchSignal();
+        fetchAllPosts();
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => {
-        fetchBeat();
-        fetchSignal();
+        fetchAllPosts();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
