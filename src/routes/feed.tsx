@@ -87,84 +87,61 @@ function FeedPage() {
     }));
   }
 
-  // ── Beat fetch: ALL posts, strictly chronological ──────────────────────
-  // Two-step: try with optional columns first; fall back to base schema if
-  // they don't exist yet (e.g. migrations not applied).
-  async function fetchBeat() {
-    const BASE_SELECT =
-      "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)";
+  // ── Signal fetch: regular text posts (noir background), ALL tiers ────────
+  async function fetchSignal() {
     const FULL_SELECT =
       `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
 
-    let data: any[] | null = null;
-
-    const full = await supabase
+    const { data, error } = await supabase
       .from("posts")
       .select(FULL_SELECT)
+      .or("background.eq.noir,background.is.null")
       .order("created_at", { ascending: false })
       .limit(80);
 
-    if (full.error) {
-      // Column probably doesn't exist yet — retry without optional columns
-      const base = await supabase
+    if (error) {
+      // Fallback: fetch all, client-side filter
+      const fallback = await supabase
         .from("posts")
-        .select(BASE_SELECT)
+        .select("id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)")
         .order("created_at", { ascending: false })
         .limit(80);
-
-      if (base.error) {
-        toast.error("Couldn't load the feed. Check your connection.");
-        setBeatPosts([]);
-        return;
-      }
-      data = base.data;
-    } else {
-      data = full.data;
-    }
-
-    // Beat = unverified + silver only (gold authors belong in Signal only)
-    const beatFiltered = normalisePosts(data ?? []).filter(
-      (p) => p.author.verification_tier !== "gold",
-    );
-    setBeatPosts(applyVisibility(beatFiltered));
-  }
-
-  // ── Signal fetch: VERIFIED AUTHORS ONLY — backend-filtered ─────────────
-  // Uses !inner join so the DB only returns posts whose author has
-  // verification_tier = 'silver' | 'gold'. Falls back to client-side filter
-  // if the inner-join syntax isn't supported by the schema version.
-  async function fetchSignal() {
-    const BASE_SELECT =
-      "id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)";
-    const FULL_SELECT =
-      "id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey!inner(id, handle, display_name, avatar_url, verification_tier)";
-
-    // Try backend-filtered query first
-    const full = await supabase
-      .from("posts")
-      .select(FULL_SELECT)
-      .in("profiles.verification_tier", ["silver", "gold"])
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (!full.error) {
-      setSignalPosts(applyVisibility(normalisePosts(full.data ?? [])));
+      if (fallback.error) { setSignalPosts([]); return; }
+      setSignalPosts(applyVisibility(normalisePosts((fallback.data ?? []).filter(
+        (p: any) => !p.background || p.background === "noir",
+      ))));
       return;
     }
+    setSignalPosts(applyVisibility(normalisePosts(data ?? [])));
+  }
 
-    // Fallback: base columns + client-side filter for verified authors
-    const base = await supabase
+  // ── Beat fetch: Studio card posts (non-noir background), ALL tiers ───────
+  async function fetchBeat() {
+    const FULL_SELECT =
+      `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
+
+    const { data, error } = await supabase
       .from("posts")
-      .select(BASE_SELECT)
+      .select(FULL_SELECT)
+      .not("background", "is", null)
+      .neq("background", "noir")
       .order("created_at", { ascending: false })
       .limit(80);
 
-    if (base.error) { setSignalPosts([]); return; }
-
-    const verified = normalisePosts(base.data ?? []).filter(
-      (p) => p.author.verification_tier === "silver" || p.author.verification_tier === "gold",
-    );
-    setSignalPosts(applyVisibility(verified));
+    if (error) {
+      // Fallback: fetch all, client-side filter
+      const fallback = await supabase
+        .from("posts")
+        .select("id, content, background, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)")
+        .order("created_at", { ascending: false })
+        .limit(80);
+      if (fallback.error) { setBeatPosts([]); return; }
+      setBeatPosts(applyVisibility(normalisePosts((fallback.data ?? []).filter(
+        (p: any) => p.background && p.background !== "noir",
+      ))));
+      return;
+    }
+    setBeatPosts(applyVisibility(normalisePosts(data ?? [])));
   }
 
   useEffect(() => {
@@ -276,8 +253,8 @@ function FeedPage() {
         {/* Tab description */}
         <p className="mb-5 text-[12px] leading-relaxed text-muted-foreground/70">
           {tab === "signal"
-            ? "Silver & Gold verified builders — the highest-signal posts on the platform."
-            : "Unverified and Silver builders — everything shipping, chronologically."}
+            ? "All builders, all tiers — the live pulse of everything being shipped."
+            : "Studio cards — crafted status posts from every builder on the platform."}
         </p>
 
         {/* ── Feed ── */}
@@ -311,25 +288,19 @@ function FeedPage() {
           <div className="rounded-2xl border border-dashed border-border/60 p-12 text-center">
             {tab === "signal" ? (
               <>
-                <p className="text-sm font-semibold text-foreground">No verified posts yet</p>
+                <p className="text-sm font-semibold text-foreground">No posts yet</p>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  Signal shows only Silver & Gold verified builders.
+                  Signal shows all text posts from every builder.
                   <br />
-                  Switch to{" "}
-                  <button
-                    type="button"
-                    onClick={() => setTab("beat")}
-                    className="font-medium text-foreground underline underline-offset-3 hover:opacity-80"
-                  >
-                    Beat
-                  </button>{" "}
-                  to see everything.
+                  Be the first to ship something worth reading.
                 </p>
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold text-foreground">Nothing here yet</p>
-                <p className="mt-2 text-xs text-muted-foreground">Be the first to ship something.</p>
+                <p className="text-sm font-semibold text-foreground">No studio cards yet</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Cards crafted in the Studio will appear here.
+                </p>
               </>
             )}
           </div>
@@ -379,14 +350,11 @@ function FeedPage() {
         <ComposerModal
           onClose={() => setShowModal(false)}
           onPublished={(post) => {
-            // Beat = unverified + silver; Signal = silver + gold
-            const isGold = post.author.verification_tier === "gold";
-            const isVerified =
-              post.author.verification_tier === "silver" || isGold;
-            if (!isGold) {
+            // Signal = noir/text posts; Beat = studio card posts (non-noir)
+            const isCardPost = post.background && post.background !== "noir";
+            if (isCardPost) {
               setBeatPosts((prev) => (prev ? [post, ...prev] : [post]));
-            }
-            if (isVerified) {
+            } else {
               setSignalPosts((prev) => (prev ? [post, ...prev] : [post]));
             }
           }}

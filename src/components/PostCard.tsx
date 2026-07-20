@@ -422,66 +422,101 @@ export function PostCard({
     );
   }
 
-  /* ── Regular text post ── */
+  /* ── Regular text post — polished layout ── */
+  const avatarRing =
+    post.author.verification_tier === "gold"
+      ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-background"
+      : post.author.verification_tier === "silver"
+        ? "ring-2 ring-slate-400/60 ring-offset-1 ring-offset-background"
+        : "ring-1 ring-border/60";
+
   return (
-    <article className={`rounded-2xl border bg-card/40 p-4 sm:p-5 ${tierBorder}`}>
-      {(isVerifiedOnly || isWhisper) && (
-        <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Lock className="h-3 w-3" />
-          {isWhisper ? (
-            <span className="font-medium text-violet-400/80">Whisper Feed</span>
-          ) : (
-            <span>Verified only</span>
-          )}
-        </div>
+    <article
+      className={`group relative rounded-2xl border bg-card/50 transition-colors hover:bg-card/70 ${tierBorder}`}
+    >
+      {/* Gold accent top bar */}
+      {post.author.verification_tier === "gold" && (
+        <div
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl"
+          style={{ background: "linear-gradient(90deg, transparent, rgba(251,191,36,0.5), transparent)" }}
+        />
       )}
 
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
-        <Link to="/u/$handle" params={{ handle: post.author.handle }} search={{ tab: undefined }} className="shrink-0">
-          <div className="grid h-10 w-10 overflow-hidden rounded-full border border-border bg-secondary/50 text-sm font-semibold">
-            {post.author.avatar_url ? (
-              <img
-                src={post.author.avatar_url}
-                alt=""
-                className="h-full w-full object-cover"
-                crossOrigin="anonymous"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="grid h-full w-full place-items-center">
-                {post.author.display_name.charAt(0).toUpperCase()}
-              </span>
-            )}
+      <div className="px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
+        {/* Visibility pill */}
+        {(isVerifiedOnly || isWhisper) && (
+          <div className="mb-3 flex items-center gap-1.5">
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                background: isWhisper ? "rgba(167,139,250,0.10)" : "rgba(255,255,255,0.06)",
+                color: isWhisper ? "#c4b5fd" : "#94a3b8",
+                border: `1px solid ${isWhisper ? "rgba(167,139,250,0.20)" : "rgba(255,255,255,0.08)"}`,
+              }}
+            >
+              <Lock className="h-2.5 w-2.5" />
+              {isWhisper ? "Whisper Feed" : "Verified only"}
+            </span>
           </div>
-        </Link>
+        )}
 
-        <div className="min-w-0 flex-1">
-          {/* Meta row */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
-              <Link
-                to="/u/$handle"
-                params={{ handle: post.author.handle }}
-                search={{ tab: undefined }}
-                className="flex items-center gap-1 font-semibold text-foreground hover:underline underline-offset-2"
-              >
-                {post.author.display_name}
-                <VerificationBadge tier={post.author.verification_tier} size={14} />
-              </Link>
-              <span className="text-muted-foreground">@{post.author.handle}</span>
-              <span className="text-muted-foreground">· {timeAgo(post.created_at)}</span>
+        <div className="flex gap-3.5">
+          {/* Avatar with tier ring */}
+          <Link
+            to="/u/$handle"
+            params={{ handle: post.author.handle }}
+            search={{ tab: undefined }}
+            className="shrink-0 self-start"
+          >
+            <div
+              className={`grid h-11 w-11 overflow-hidden rounded-full bg-secondary/60 text-sm font-semibold transition-opacity hover:opacity-85 ${avatarRing}`}
+            >
+              {post.author.avatar_url ? (
+                <img
+                  src={post.author.avatar_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="grid h-full w-full place-items-center text-[15px] font-bold text-foreground/70">
+                  {post.author.display_name.charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
-            {deleteControl}
+          </Link>
+
+          <div className="min-w-0 flex-1">
+            {/* Meta: name on top, handle + time below */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <Link
+                  to="/u/$handle"
+                  params={{ handle: post.author.handle }}
+                  search={{ tab: undefined }}
+                  className="inline-flex items-center gap-1.5 font-semibold leading-tight text-foreground hover:underline underline-offset-2"
+                >
+                  {post.author.display_name}
+                  <VerificationBadge tier={post.author.verification_tier} size={15} />
+                </Link>
+                <p className="mt-0.5 text-[12px] text-muted-foreground/70">
+                  @{post.author.handle}
+                  <span className="mx-1.5 opacity-50">·</span>
+                  {timeAgo(post.created_at)}
+                </p>
+              </div>
+              {deleteControl}
+            </div>
+
+            {/* Content */}
+            <p className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground/95 tracking-[-0.01em]">
+              {post.content}
+            </p>
+
+            {actionsRow}
+            {commentsThread}
           </div>
-
-          {/* Content */}
-          <p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-foreground">
-            {post.content}
-          </p>
-
-          {actionsRow}
-          {commentsThread}
         </div>
       </div>
     </article>
