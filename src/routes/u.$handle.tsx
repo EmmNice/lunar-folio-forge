@@ -5,7 +5,8 @@ import { MessageSquare, Github, Rocket, ShieldCheck, Loader2, Pencil, X, CheckCi
 import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
-import { StatusCard, type Background } from "@/components/StatusCard";
+import { type Background } from "@/components/StatusCard";
+import { PostCard, type FeedPost } from "@/components/PostCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PitchModal, type PitchTarget } from "@/components/PitchModal";
 import { useAuth } from "@/hooks/use-auth";
@@ -54,6 +55,8 @@ type PostRow = {
   id: string;
   content: string;
   background: Background;
+  comments_enabled: boolean;
+  visibility: string;
   created_at: string;
 };
 
@@ -68,7 +71,10 @@ type LikedPostRow = {
   id: string;
   content: string;
   background: Background;
+  comments_enabled: boolean;
+  visibility: string;
   created_at: string;
+  author_id: string;
   author_display_name: string;
   author_handle: string;
   author_avatar_url: string | null;
@@ -159,7 +165,7 @@ function ProfilePage() {
       // Posts
       const { data: postsData } = await supabase
         .from("posts")
-        .select("id, content, background, created_at")
+        .select("id, content, background, comments_enabled, visibility, created_at")
         .eq("author_id", pfAny.id)
         .order("created_at", { ascending: false })
         .limit(30);
@@ -196,7 +202,10 @@ function ProfilePage() {
               id: p.id,
               content: p.content,
               background: p.background,
+              comments_enabled: p.comments_enabled ?? true,
+              visibility: p.visibility ?? "public",
               created_at: p.created_at,
+              author_id: p.author_id,
               author_display_name: p.profiles?.display_name ?? "Unknown",
               author_handle: p.profiles?.handle ?? "unknown",
               author_avatar_url: p.profiles?.avatar_url ?? null,
@@ -457,21 +466,32 @@ function ProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {posts.map((p) => (
-                    <div key={p.id}>
-                      <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-                        <StatusCard
-                          name={profile.display_name}
-                          handle={profile.handle}
-                          avatarUrl={profile.avatar_url}
-                          content={p.content}
-                          background={p.background}
-                          verificationTier={profile.verification_tier}
-                        />
-                      </div>
-                      <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</p>
-                    </div>
-                  ))}
+                  {posts.map((p) => {
+                    const feedPost: FeedPost = {
+                      id: p.id,
+                      content: p.content,
+                      background: p.background,
+                      comments_enabled: p.comments_enabled,
+                      visibility: p.visibility,
+                      created_at: p.created_at,
+                      author: {
+                        id: profile.id,
+                        handle: profile.handle,
+                        display_name: profile.display_name,
+                        avatar_url: profile.avatar_url,
+                        verification_tier: profile.verification_tier,
+                      },
+                    };
+                    return (
+                      <PostCard
+                        key={p.id}
+                        post={feedPost}
+                        currentUserId={user?.id}
+                        onDownload={() => {}}
+                        onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                      />
+                    );
+                  })}
                 </div>
               )
             )}
@@ -537,21 +557,31 @@ function ProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {likedPosts.map((p) => (
-                    <div key={p.id}>
-                      <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-                        <StatusCard
-                          name={p.author_display_name}
-                          handle={p.author_handle}
-                          avatarUrl={p.author_avatar_url}
-                          content={p.content}
-                          background={p.background}
-                          verificationTier={p.author_verification_tier}
-                        />
-                      </div>
-                      <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{timeAgo(p.created_at)}</p>
-                    </div>
-                  ))}
+                  {likedPosts.map((p) => {
+                    const feedPost: FeedPost = {
+                      id: p.id,
+                      content: p.content,
+                      background: p.background,
+                      comments_enabled: p.comments_enabled,
+                      visibility: p.visibility,
+                      created_at: p.created_at,
+                      author: {
+                        id: p.author_id,
+                        handle: p.author_handle,
+                        display_name: p.author_display_name,
+                        avatar_url: p.author_avatar_url,
+                        verification_tier: p.author_verification_tier,
+                      },
+                    };
+                    return (
+                      <PostCard
+                        key={p.id}
+                        post={feedPost}
+                        currentUserId={user?.id}
+                        onDownload={() => {}}
+                      />
+                    );
+                  })}
                 </div>
               )
             )}
@@ -718,22 +748,33 @@ function ProfilePage() {
           {posts.length === 0 ? (
             <p className="mt-4 text-sm text-muted-foreground">Nothing published yet.</p>
           ) : (
-            <div className="mt-6 columns-1 gap-6 sm:columns-2 lg:columns-3 [column-fill:_balance]">
-              {posts.map((p) => (
-                <div key={p.id} className="mb-6 break-inside-avoid">
-                  <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <StatusCard
-                      name={profile.display_name}
-                      handle={profile.handle}
-                      avatarUrl={profile.avatar_url}
-                      content={p.content}
-                      background={p.background}
-                      verificationTier={profile.verification_tier}
-                    />
-                  </div>
-                  <div className="mt-2 px-1 text-xs text-muted-foreground">{timeAgo(p.created_at)}</div>
-                </div>
-              ))}
+            <div className="mt-4 space-y-4">
+              {posts.map((p) => {
+                const feedPost: FeedPost = {
+                  id: p.id,
+                  content: p.content,
+                  background: p.background,
+                  comments_enabled: p.comments_enabled,
+                  visibility: p.visibility,
+                  created_at: p.created_at,
+                  author: {
+                    id: profile.id,
+                    handle: profile.handle,
+                    display_name: profile.display_name,
+                    avatar_url: profile.avatar_url,
+                    verification_tier: profile.verification_tier,
+                  },
+                };
+                return (
+                  <PostCard
+                    key={p.id}
+                    post={feedPost}
+                    currentUserId={user?.id}
+                    onDownload={() => {}}
+                    onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                  />
+                );
+              })}
             </div>
           )}
         </section>
