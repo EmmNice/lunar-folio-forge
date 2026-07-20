@@ -20,6 +20,9 @@ import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authentic
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedAccountSecurityRouteImport } from './routes/_authenticated/account-security'
+import { Route as AuthenticatedAccountPrivacyRouteImport } from './routes/_authenticated/account-privacy'
+import { Route as AuthenticatedAccountNotificationsRouteImport } from './routes/_authenticated/account-notifications'
 import { Route as AuthenticatedMessagesIdRouteImport } from './routes/_authenticated/messages.$id'
 
 const FeedRoute = FeedRouteImport.update({
@@ -77,6 +80,24 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAccountSecurityRoute =
+  AuthenticatedAccountSecurityRouteImport.update({
+    id: '/account-security',
+    path: '/account-security',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAccountPrivacyRoute =
+  AuthenticatedAccountPrivacyRouteImport.update({
+    id: '/account-privacy',
+    path: '/account-privacy',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAccountNotificationsRoute =
+  AuthenticatedAccountNotificationsRouteImport.update({
+    id: '/account-notifications',
+    path: '/account-notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMessagesIdRoute = AuthenticatedMessagesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -86,6 +107,9 @@ const AuthenticatedMessagesIdRoute = AuthenticatedMessagesIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
+  '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
+  '/account-security': typeof AuthenticatedAccountSecurityRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -99,6 +123,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
+  '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
+  '/account-security': typeof AuthenticatedAccountSecurityRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/notifications': typeof AuthenticatedNotificationsRoute
@@ -114,6 +141,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/feed': typeof FeedRoute
+  '/_authenticated/account-notifications': typeof AuthenticatedAccountNotificationsRoute
+  '/_authenticated/account-privacy': typeof AuthenticatedAccountPrivacyRoute
+  '/_authenticated/account-security': typeof AuthenticatedAccountSecurityRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
@@ -129,6 +159,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/feed'
+    | '/account-notifications'
+    | '/account-privacy'
+    | '/account-security'
     | '/admin'
     | '/messages'
     | '/notifications'
@@ -142,6 +175,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/feed'
+    | '/account-notifications'
+    | '/account-privacy'
+    | '/account-security'
     | '/admin'
     | '/messages'
     | '/notifications'
@@ -156,6 +192,9 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/feed'
+    | '/_authenticated/account-notifications'
+    | '/_authenticated/account-privacy'
+    | '/_authenticated/account-security'
     | '/_authenticated/admin'
     | '/_authenticated/messages'
     | '/_authenticated/notifications'
@@ -253,6 +292,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/account-security': {
+      id: '/_authenticated/account-security'
+      path: '/account-security'
+      fullPath: '/account-security'
+      preLoaderRoute: typeof AuthenticatedAccountSecurityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/account-privacy': {
+      id: '/_authenticated/account-privacy'
+      path: '/account-privacy'
+      fullPath: '/account-privacy'
+      preLoaderRoute: typeof AuthenticatedAccountPrivacyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/account-notifications': {
+      id: '/_authenticated/account-notifications'
+      path: '/account-notifications'
+      fullPath: '/account-notifications'
+      preLoaderRoute: typeof AuthenticatedAccountNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/messages/$id': {
       id: '/_authenticated/messages/$id'
       path: '/$id'
@@ -277,6 +337,9 @@ const AuthenticatedMessagesRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAccountNotificationsRoute: typeof AuthenticatedAccountNotificationsRoute
+  AuthenticatedAccountPrivacyRoute: typeof AuthenticatedAccountPrivacyRoute
+  AuthenticatedAccountSecurityRoute: typeof AuthenticatedAccountSecurityRoute
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
@@ -287,6 +350,10 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAccountNotificationsRoute:
+    AuthenticatedAccountNotificationsRoute,
+  AuthenticatedAccountPrivacyRoute: AuthenticatedAccountPrivacyRoute,
+  AuthenticatedAccountSecurityRoute: AuthenticatedAccountSecurityRoute,
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
