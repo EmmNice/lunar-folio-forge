@@ -78,7 +78,9 @@ export type AuthState = {
  * Parallelises the admin-role DB check with the profile fetch so neither
  * blocks the other. The env-var fast path skips the DB entirely.
  */
-async function loadProfile(user: User | null): Promise<{ profile: Profile | null; isAdmin: boolean }> {
+async function loadProfile(
+  user: User | null,
+): Promise<{ profile: Profile | null; isAdmin: boolean }> {
   if (!user) return { profile: null, isAdmin: false };
 
   // ── Admin check ────────────────────────────────────────────────────────────
@@ -150,7 +152,9 @@ async function loadProfile(user: User | null): Promise<{ profile: Profile | null
               .eq("id", user.id)
               .maybeSingle();
             hide_from_search = (extra as any)?.hide_from_search ?? false;
-          } catch { /* column doesn't exist yet — use default */ }
+          } catch {
+            /* column doesn't exist yet — use default */
+          }
 
           return {
             ...OPTIONAL_COLUMN_DEFAULTS,

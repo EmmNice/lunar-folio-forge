@@ -14,18 +14,18 @@ Originally built on [Lovable](https://lovable.dev), now running on Replit.
 
 ## Key pages
 
-| Route | What it does |
-|---|---|
-| `/` | Landing + sign-in |
-| `/feed` | Global timeline — "Signal" (verified only) + "Beat" (all) tabs |
-| `/u/:handle` | Public profile with status cards |
-| `/_authenticated/onboarding` | Required first-time profile setup |
-| `/_authenticated/studio` | Card creator — pick theme, write, export image |
-| `/_authenticated/pulse` | PulseAssist — AI chat to draft posts |
-| `/_authenticated/messages` | DM inbox and threads |
-| `/_authenticated/notifications` | Activity feed |
-| `/_authenticated/settings` | Privacy, notification prefs, pitch limits |
-| `/_authenticated/admin` | Verification review + member tier management |
+| Route                           | What it does                                                   |
+| ------------------------------- | -------------------------------------------------------------- |
+| `/`                             | Landing + sign-in                                              |
+| `/feed`                         | Global timeline — "Signal" (verified only) + "Beat" (all) tabs |
+| `/u/:handle`                    | Public profile with status cards                               |
+| `/_authenticated/onboarding`    | Required first-time profile setup                              |
+| `/_authenticated/studio`        | Card creator — pick theme, write, export image                 |
+| `/_authenticated/pulse`         | PulseAssist — AI chat to draft posts                           |
+| `/_authenticated/messages`      | DM inbox and threads                                           |
+| `/_authenticated/notifications` | Activity feed                                                  |
+| `/_authenticated/settings`      | Privacy, notification prefs, pitch limits                      |
+| `/_authenticated/admin`         | Verification review + member tier management                   |
 
 ## Database
 

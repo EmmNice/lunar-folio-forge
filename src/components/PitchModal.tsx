@@ -35,9 +35,18 @@ export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!companyName.trim()) { toast.error("Company name is required."); return; }
-    if (!pitch.trim()) { toast.error("Your pitch is required."); return; }
-    if (pitch.length > MAX_PITCH) { toast.error(`Pitch must be ${MAX_PITCH} characters or fewer.`); return; }
+    if (!companyName.trim()) {
+      toast.error("Company name is required.");
+      return;
+    }
+    if (!pitch.trim()) {
+      toast.error("Your pitch is required.");
+      return;
+    }
+    if (pitch.length > MAX_PITCH) {
+      toast.error(`Pitch must be ${MAX_PITCH} characters or fewer.`);
+      return;
+    }
     if (deckUrl && !/^https?:\/\//.test(deckUrl.trim())) {
       toast.error("Deck / demo link must be a valid URL starting with https://");
       return;

@@ -44,7 +44,10 @@ const TYPE_ICON_COLOR: Record<string, string> = {
   verification_rejected: "text-red-400",
 };
 
-function verificationLabel(type: "verification_approved" | "verification_rejected", tier?: "silver" | "gold") {
+function verificationLabel(
+  type: "verification_approved" | "verification_rejected",
+  tier?: "silver" | "gold",
+) {
   const tierLabel = tier === "gold" ? "Gold Investor" : "Silver Builder";
   if (type === "verification_approved") {
     return `🎉 Congratulations! Your ${tierLabel} verification has been approved.`;
@@ -76,14 +79,13 @@ function NotificationsPage() {
       // Mark all unread as read
       const unreadIds = (data ?? []).filter((n: any) => !n.read).map((n: any) => n.id);
       if (unreadIds.length > 0) {
-        await supabase
-          .from("notifications")
-          .update({ read: true })
-          .in("id", unreadIds);
+        await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   return (
@@ -94,20 +96,30 @@ function NotificationsPage() {
           <Bell className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Notifications</h1>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Activity on your posts and account.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Activity on your posts and account.</p>
 
         <div className="mt-8">
           {notifications === null ? (
             <div className="space-y-0 divide-y divide-border/60">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i} className="flex items-start gap-3 py-4">
-                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 50}ms` }} />
+                  <div
+                    className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  />
                   <div className="flex-1 space-y-2 pt-0.5">
-                    <div className="h-3 w-48 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 50 + 25}ms` }} />
-                    <div className="h-3 w-64 animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 50 + 50}ms` }} />
-                    <div className="h-2.5 w-16 animate-pulse rounded-full bg-secondary/25" style={{ animationDelay: `${i * 50 + 75}ms` }} />
+                    <div
+                      className="h-3 w-48 animate-pulse rounded-full bg-secondary/60"
+                      style={{ animationDelay: `${i * 50 + 25}ms` }}
+                    />
+                    <div
+                      className="h-3 w-64 animate-pulse rounded-full bg-secondary/40"
+                      style={{ animationDelay: `${i * 50 + 50}ms` }}
+                    />
+                    <div
+                      className="h-2.5 w-16 animate-pulse rounded-full bg-secondary/25"
+                      style={{ animationDelay: `${i * 50 + 75}ms` }}
+                    />
                   </div>
                 </div>
               ))}
@@ -123,7 +135,8 @@ function NotificationsPage() {
           ) : (
             <ul className="divide-y divide-border/60">
               {notifications.map((n) => {
-                const isVerification = n.type === "verification_approved" || n.type === "verification_rejected";
+                const isVerification =
+                  n.type === "verification_approved" || n.type === "verification_rejected";
                 const Icon = TYPE_ICON[n.type] ?? Bell;
                 const iconColor = TYPE_ICON_COLOR[n.type] ?? "text-muted-foreground";
 
@@ -177,7 +190,10 @@ function NotificationsPage() {
                         <p className="text-sm text-foreground">
                           <span className="font-medium">The Ledger</span>{" "}
                           <span className="text-muted-foreground">
-                            {verificationLabel(n.type as "verification_approved" | "verification_rejected", n.metadata?.tier)}
+                            {verificationLabel(
+                              n.type as "verification_approved" | "verification_rejected",
+                              n.metadata?.tier,
+                            )}
                           </span>
                         </p>
                       ) : (
@@ -200,7 +216,8 @@ function NotificationsPage() {
                       )}
                       {!isVerification && n.post && (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          "{n.post.content.slice(0, 80)}{n.post.content.length > 80 ? "…" : ""}"
+                          "{n.post.content.slice(0, 80)}
+                          {n.post.content.length > 80 ? "…" : ""}"
                         </p>
                       )}
                       {isVerification && n.type === "verification_approved" && (

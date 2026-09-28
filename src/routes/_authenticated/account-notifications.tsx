@@ -10,19 +10,25 @@ export const Route = createFileRoute("/_authenticated/account-notifications")({
 
 const NOTIF_KEYS = {
   messages: "ledger_notif_messages",
-  pitches:  "ledger_notif_pitches",
-  system:   "ledger_notif_system",
+  pitches: "ledger_notif_pitches",
+  system: "ledger_notif_system",
 } as const;
 function readNotif(k: keyof typeof NOTIF_KEYS) {
-  try { return localStorage.getItem(NOTIF_KEYS[k]) !== "false"; } catch { return true; }
+  try {
+    return localStorage.getItem(NOTIF_KEYS[k]) !== "false";
+  } catch {
+    return true;
+  }
 }
 function writeNotif(k: keyof typeof NOTIF_KEYS, v: boolean) {
-  try { localStorage.setItem(NOTIF_KEYS[k], String(v)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(NOTIF_KEYS[k], String(v));
+  } catch {
+    /* ignore */
+  }
 }
 
-function LuxToggle({
-  checked, onChange,
-}: { checked: boolean; onChange: (v: boolean) => void }) {
+function LuxToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       type="button"
@@ -47,8 +53,8 @@ function NotificationSettingsPage() {
   const navigate = useNavigate();
 
   const [messages, setMessages] = useState(() => readNotif("messages"));
-  const [pitches,  setPitches]  = useState(() => readNotif("pitches"));
-  const [system,   setSystem]   = useState(() => readNotif("system"));
+  const [pitches, setPitches] = useState(() => readNotif("pitches"));
+  const [system, setSystem] = useState(() => readNotif("system"));
 
   function toggle(k: keyof typeof NOTIF_KEYS, val: boolean, setter: (v: boolean) => void) {
     setter(val);
@@ -111,7 +117,9 @@ function NotificationSettingsPage() {
             <div
               key={r.label}
               className="flex items-center justify-between gap-6 px-5 py-4"
-              style={i < rows.length - 1 ? { borderBottom: "1px solid rgba(255,255,255,0.05)" } : {}}
+              style={
+                i < rows.length - 1 ? { borderBottom: "1px solid rgba(255,255,255,0.05)" } : {}
+              }
             >
               <div className="flex items-center gap-3">
                 <div

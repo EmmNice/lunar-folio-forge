@@ -19,12 +19,30 @@ const DB = "https://api.dicebear.com/7.x/pixel-art/svg";
 
 // 24 curated seeds with Web3 culture names — each generates a unique PFP
 const NFT_SEEDS = [
-  "satoshi",   "vitalik",  "nakamoto", "genesis",
-  "defi",      "nouns",    "cryptonaut","wagmi",
-  "dao",       "degen",    "gm",        "lfg",
-  "hodler",    "fren",     "anon",      "based",
-  "alpha",     "sigma",    "zkproof",   "l2giant",
-  "ethmaxi",   "builder",  "founder",   "shiller",
+  "satoshi",
+  "vitalik",
+  "nakamoto",
+  "genesis",
+  "defi",
+  "nouns",
+  "cryptonaut",
+  "wagmi",
+  "dao",
+  "degen",
+  "gm",
+  "lfg",
+  "hodler",
+  "fren",
+  "anon",
+  "based",
+  "alpha",
+  "sigma",
+  "zkproof",
+  "l2giant",
+  "ethmaxi",
+  "builder",
+  "founder",
+  "shiller",
 ];
 
 function nftUrl(seed: string) {

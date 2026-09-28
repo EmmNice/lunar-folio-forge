@@ -7,10 +7,12 @@ const DAILY_CREDITS = 3;
 export const pulseAssistDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
-    z.object({
-      content: z.string().min(1).max(1000),
-      mode: z.enum(["polish", "expand", "shorten"]).default("polish"),
-    }).parse(input),
+    z
+      .object({
+        content: z.string().min(1).max(1000),
+        mode: z.enum(["polish", "expand", "shorten"]).default("polish"),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -24,8 +26,7 @@ export const pulseAssistDraft = createServerFn({ method: "POST" })
 
     const verificationTier = profile?.verification_tier ?? "none";
     const subscriptionStatus = (profile as any)?.subscription_status ?? "active";
-    const isUnlimited =
-      verificationTier !== "none" || subscriptionStatus === "active";
+    const isUnlimited = verificationTier !== "none" || subscriptionStatus === "active";
 
     if (!isUnlimited) {
       // Check 24h credit window

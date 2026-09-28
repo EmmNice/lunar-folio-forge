@@ -45,9 +45,10 @@ function approvalEmailHtml(tierLabel: string) {
 
     <!-- Badge -->
     <div style="margin-bottom:28px;">
-      ${tierLabel === "Silver Builder"
-        ? `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.30);border-radius:100px;padding:5px 12px;font-size:12px;font-weight:600;color:#94a3b8;">✦ Silver Verified</span>`
-        : `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:100px;padding:5px 12px;font-size:12px;font-weight:600;color:#fbbf24;">✦ Gold Verified</span>`
+      ${
+        tierLabel === "Silver Builder"
+          ? `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.30);border-radius:100px;padding:5px 12px;font-size:12px;font-weight:600;color:#94a3b8;">✦ Silver Verified</span>`
+          : `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:100px;padding:5px 12px;font-size:12px;font-weight:600;color:#fbbf24;">✦ Gold Verified</span>`
       }
     </div>
 
@@ -64,7 +65,9 @@ function approvalEmailHtml(tierLabel: string) {
       <p style="margin:0 0 16px;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#6B6B7A;">
         What you've unlocked
       </p>
-      ${tierLabel === "Silver Builder" ? `
+      ${
+        tierLabel === "Silver Builder"
+          ? `
       <div style="display:flex;flex-direction:column;gap:12px;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
           <span style="font-size:16px;line-height:1;">⚡</span>
@@ -78,7 +81,8 @@ function approvalEmailHtml(tierLabel: string) {
           <span style="font-size:16px;line-height:1;">🔰</span>
           <span style="font-size:14px;color:rgba(245,245,246,0.80);"><strong style="color:#F5F5F6;">Silver badge</strong> — displayed on your profile and every post you publish.</span>
         </div>
-      </div>` : `
+      </div>`
+          : `
       <div style="display:flex;flex-direction:column;gap:12px;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
           <span style="font-size:16px;line-height:1;">♾️</span>
@@ -92,7 +96,8 @@ function approvalEmailHtml(tierLabel: string) {
           <span style="font-size:16px;line-height:1;">🥇</span>
           <span style="font-size:14px;color:rgba(245,245,246,0.80);"><strong style="color:#F5F5F6;">Gold badge</strong> — the highest prestige tier on The Ledger.</span>
         </div>
-      </div>`}
+      </div>`
+      }
     </div>
 
     <!-- CTA -->
@@ -153,19 +158,21 @@ function rejectionEmailHtml() {
 export const submitVerificationApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
-    z.object({
-      tier: z.enum(["silver", "gold"]),
-      // Silver fields — accept any non-empty string; admins verify the links manually
-      github_url: z.string().max(500).optional().or(z.literal("")),
-      deployed_contract_address: z.string().max(200).optional().or(z.literal("")),
-      live_project_url: z.string().max(500).optional().or(z.literal("")),
-      recent_ship_desc: z.string().max(100).optional().or(z.literal("")),
-      // Gold fields
-      fund_or_company_name: z.string().max(120).optional().or(z.literal("")),
-      portfolio_url: z.string().max(500).optional().or(z.literal("")),
-      linkedin_or_x_url: z.string().max(500).optional().or(z.literal("")),
-      invite_code: z.string().max(60).optional().or(z.literal("")),
-    }).parse(input),
+    z
+      .object({
+        tier: z.enum(["silver", "gold"]),
+        // Silver fields — accept any non-empty string; admins verify the links manually
+        github_url: z.string().max(500).optional().or(z.literal("")),
+        deployed_contract_address: z.string().max(200).optional().or(z.literal("")),
+        live_project_url: z.string().max(500).optional().or(z.literal("")),
+        recent_ship_desc: z.string().max(100).optional().or(z.literal("")),
+        // Gold fields
+        fund_or_company_name: z.string().max(120).optional().or(z.literal("")),
+        portfolio_url: z.string().max(500).optional().or(z.literal("")),
+        linkedin_or_x_url: z.string().max(500).optional().or(z.literal("")),
+        invite_code: z.string().max(60).optional().or(z.literal("")),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -196,12 +203,12 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       user_id: userId,
       tier: data.tier,
       // Keep link_primary populated for backward-compat with old admin panel
-      link_primary: data.tier === "silver"
-        ? (data.github_url ?? "")
-        : (data.portfolio_url ?? data.fund_or_company_name ?? ""),
-      link_secondary: data.tier === "silver"
-        ? (data.live_project_url ?? null)
-        : (data.linkedin_or_x_url ?? null),
+      link_primary:
+        data.tier === "silver"
+          ? (data.github_url ?? "")
+          : (data.portfolio_url ?? data.fund_or_company_name ?? ""),
+      link_secondary:
+        data.tier === "silver" ? (data.live_project_url ?? null) : (data.linkedin_or_x_url ?? null),
       // New specific fields
       github_url: data.github_url || null,
       deployed_contract_address: data.deployed_contract_address || null,
@@ -236,7 +243,8 @@ export const listPendingApplications = createServerFn({ method: "GET" })
 
     const { data, error } = await supabaseAdmin
       .from("verification_requests")
-      .select(`
+      .select(
+        `
         id, tier, status, created_at,
         github_url, deployed_contract_address, live_project_url, recent_ship_desc,
         fund_or_company_name, portfolio_url, linkedin_or_x_url, invite_code,
@@ -244,7 +252,8 @@ export const listPendingApplications = createServerFn({ method: "GET" })
         profiles!verification_requests_user_id_fkey(
           id, handle, display_name, avatar_url, company_name
         )
-      `)
+      `,
+      )
       .eq("status", "pending")
       .order("created_at", { ascending: true });
 
@@ -256,10 +265,12 @@ export const listPendingApplications = createServerFn({ method: "GET" })
 export const reviewApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
-    z.object({
-      applicationId: z.string().uuid(),
-      action: z.enum(["approve", "reject"]),
-    }).parse(input),
+    z
+      .object({
+        applicationId: z.string().uuid(),
+        action: z.enum(["approve", "reject"]),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;

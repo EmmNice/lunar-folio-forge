@@ -1,4 +1,3 @@
-
 # Godson — Multi-User Rebuild Plan
 
 Turning the current single-page Status Studio into a real product: signed-in users, a personal Studio, a public Feed, profiles, and gated DMs. Backed by Lovable Cloud (Supabase under the hood).
@@ -74,6 +73,7 @@ Auth-gated routes live under `_authenticated/` (managed layout).
 ## 7. Messaging (`/messages`, `/messages/$id`)
 
 Gating rules enforced server-side:
+
 - **Start a new conversation** only if:
   - both users follow each other (mutual follow), OR
   - the sender has started < 3 new conversations today (tracked in `daily_request_counts`).

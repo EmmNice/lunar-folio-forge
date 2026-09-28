@@ -15,9 +15,7 @@ const DAILY_LIMIT = 3;
  */
 export const startConversation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input) =>
-    z.object({ recipientId: z.string().uuid() }).parse(input),
-  )
+  .validator((input) => z.object({ recipientId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const recipientId = data.recipientId;

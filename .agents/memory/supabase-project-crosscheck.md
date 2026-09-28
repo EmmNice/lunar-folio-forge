@@ -5,7 +5,7 @@ description: How to catch a mismatched Supabase project ref before wasting time 
 
 When a user pastes a `SUPABASE_DB_URL`, `SUPABASE_SERVICE_ROLE_KEY`, or similar credential, extract the project ref from it
 (DB URL: the `postgres.<ref>` username segment or host subdomain; JWT keys: base64-decode the payload and read `ref`) and
-diff it against the project ref already baked into the app's `SUPABASE_URL` / `VITE_SUPABASE_PROJECT_ID`. Do this *before*
+diff it against the project ref already baked into the app's `SUPABASE_URL` / `VITE_SUPABASE_PROJECT_ID`. Do this _before_
 running any SQL or trusting connection success/failure as a signal.
 
 **Why:** A pasted credential for the wrong project produces confusing, unrelated-looking failures (auth errors, "function

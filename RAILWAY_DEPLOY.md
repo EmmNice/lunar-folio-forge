@@ -7,20 +7,20 @@
 
 ### Required vars
 
-| Variable | Value / Where to get it |
-|---|---|
-| `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → `anon public` key |
-| `VITE_SUPABASE_URL` | Same as `SUPABASE_URL` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Same as `SUPABASE_PUBLISHABLE_KEY` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → `service_role` key (keep secret) |
-| `VITE_ADMIN_IDS` | Comma-separated Supabase user UUIDs for super-admins |
-| `SESSION_SECRET` | Any long random string (32+ chars) |
+| Variable                        | Value / Where to get it                                              |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `SUPABASE_URL`                  | Supabase → Project Settings → API → Project URL                      |
+| `SUPABASE_PUBLISHABLE_KEY`      | Supabase → Project Settings → API → `anon public` key                |
+| `VITE_SUPABASE_URL`             | Same as `SUPABASE_URL`                                               |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Same as `SUPABASE_PUBLISHABLE_KEY`                                   |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Supabase → Project Settings → API → `service_role` key (keep secret) |
+| `VITE_ADMIN_IDS`                | Comma-separated Supabase user UUIDs for super-admins                 |
+| `SESSION_SECRET`                | Any long random string (32+ chars)                                   |
 
 ### Admin domain gating
 
-| Variable | Example | Purpose |
-|---|---|---|
+| Variable            | Example             | Purpose                                                                        |
+| ------------------- | ------------------- | ------------------------------------------------------------------------------ |
 | `VITE_ADMIN_DOMAIN` | `admin.yourapp.com` | Only this hostname can reach `/admin`. Leave unset in dev to disable the gate. |
 
 ## Custom domains (Railway)

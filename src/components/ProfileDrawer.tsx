@@ -1,8 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  User, LogOut, ShieldCheck, EyeOff, Bell, ChevronRight, Loader2,
-} from "lucide-react";
+import { User, LogOut, ShieldCheck, EyeOff, Bell, ChevronRight, Loader2 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +9,7 @@ import { VerificationBadge } from "@/components/VerificationBadge";
 import { LedgerMark } from "@/components/AppHeader";
 
 function tierRingColor(tier?: string | null) {
-  if (tier === "gold")   return "rgba(251,191,36,0.85)";
+  if (tier === "gold") return "rgba(251,191,36,0.85)";
   if (tier === "silver") return "rgba(148,163,184,0.70)";
   return "rgba(255,255,255,0.15)";
 }
@@ -19,21 +17,21 @@ function tierRingColor(tier?: string | null) {
 const SETTINGS_NAV = [
   {
     label: "Security & Auth",
-    desc:  "Password & linked accounts",
-    icon:  ShieldCheck,
-    to:    "/account-security",
+    desc: "Password & linked accounts",
+    icon: ShieldCheck,
+    to: "/account-security",
   },
   {
     label: "Privacy & Network",
-    desc:  "DM toggles & visibility",
-    icon:  EyeOff,
-    to:    "/account-privacy",
+    desc: "DM toggles & visibility",
+    icon: EyeOff,
+    to: "/account-privacy",
   },
   {
     label: "Notification Preferences",
-    desc:  "Alerts & system updates",
-    icon:  Bell,
-    to:    "/account-notifications",
+    desc: "Alerts & system updates",
+    icon: Bell,
+    to: "/account-notifications",
   },
 ] as const;
 
@@ -49,7 +47,9 @@ export function ProfileDrawer({
   const qc = useQueryClient();
   const [signingOut, setSigningOut] = useState(false);
 
-  function close() { onOpenChange(false); }
+  function close() {
+    onOpenChange(false);
+  }
 
   async function signOut() {
     setSigningOut(true);
@@ -111,9 +111,7 @@ export function ProfileDrawer({
               {profile?.display_name ?? "—"}
               {profile && <VerificationBadge tier={profile.verification_tier} size={13} />}
             </p>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              @{profile?.handle ?? "…"}
-            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">@{profile?.handle ?? "…"}</p>
           </div>
 
           {/* View profile CTA */}
@@ -156,7 +154,10 @@ export function ProfileDrawer({
             <button
               key={item.label}
               type="button"
-              onClick={() => { close(); navigate({ to: item.to }); }}
+              onClick={() => {
+                close();
+                navigate({ to: item.to });
+              }}
               className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
             >
               <div
@@ -166,7 +167,9 @@ export function ProfileDrawer({
                 <item.icon className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.8} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">{item.label}</p>
+                <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
+                  {item.label}
+                </p>
                 <p className="text-[11px] text-muted-foreground/60 leading-snug">{item.desc}</p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
@@ -186,10 +189,11 @@ export function ProfileDrawer({
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
               style={{ background: "rgba(239,68,68,0.12)" }}
             >
-              {signingOut
-                ? <Loader2 className="h-[15px] w-[15px] animate-spin text-red-400" />
-                : <LogOut className="h-[15px] w-[15px] text-red-400" strokeWidth={1.8} />
-              }
+              {signingOut ? (
+                <Loader2 className="h-[15px] w-[15px] animate-spin text-red-400" />
+              ) : (
+                <LogOut className="h-[15px] w-[15px] text-red-400" strokeWidth={1.8} />
+              )}
             </div>
             <span className="text-[13.5px] font-medium text-red-400">Sign out</span>
           </button>

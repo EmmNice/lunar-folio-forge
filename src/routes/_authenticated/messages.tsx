@@ -50,10 +50,19 @@ function MessagesIndex() {
             <div className="divide-y divide-border/60">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-3 py-4">
-                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 60}ms` }} />
+                  <div
+                    className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary/60"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 w-40 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 60 + 30}ms` }} />
-                    <div className="h-3 w-24 animate-pulse rounded-full bg-secondary/35" style={{ animationDelay: `${i * 60 + 60}ms` }} />
+                    <div
+                      className="h-3 w-40 animate-pulse rounded-full bg-secondary/60"
+                      style={{ animationDelay: `${i * 60 + 30}ms` }}
+                    />
+                    <div
+                      className="h-3 w-24 animate-pulse rounded-full bg-secondary/35"
+                      style={{ animationDelay: `${i * 60 + 60}ms` }}
+                    />
                   </div>
                   <div className="h-2.5 w-10 animate-pulse rounded-full bg-secondary/30" />
                 </div>
@@ -62,7 +71,10 @@ function MessagesIndex() {
           ) : rows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
               No conversations yet. Message someone from{" "}
-              <Link to="/feed" className="underline underline-offset-4">The Ledger</Link>.
+              <Link to="/feed" className="underline underline-offset-4">
+                The Ledger
+              </Link>
+              .
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -78,7 +90,12 @@ function MessagesIndex() {
                     >
                       <div className="grid h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-sm font-semibold">
                         {other.avatar_url ? (
-                          <img src={other.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          <img
+                            src={other.avatar_url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
                         ) : (
                           <span className="grid h-full w-full place-items-center">
                             {other.display_name.charAt(0).toUpperCase()}

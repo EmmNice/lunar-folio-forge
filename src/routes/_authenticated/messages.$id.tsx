@@ -57,7 +57,12 @@ function ThreadPage() {
       .channel(`messages:${id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${id}` },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${id}`,
+        },
         (payload) => {
           const m = payload.new as Message;
           setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
@@ -109,7 +114,12 @@ function ThreadPage() {
             >
               <div className="grid h-8 w-8 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
                 {other.avatar_url ? (
-                  <img src={other.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  <img
+                    src={other.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
                   <span className="grid h-full w-full place-items-center">
                     {other.display_name.charAt(0).toUpperCase()}

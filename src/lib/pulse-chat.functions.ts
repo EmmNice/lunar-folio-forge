@@ -12,9 +12,11 @@ const MessageSchema = z.object({
 export const pulseAssistChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) =>
-    z.object({
-      messages: z.array(MessageSchema).min(1).max(40),
-    }).parse(input),
+    z
+      .object({
+        messages: z.array(MessageSchema).min(1).max(40),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -76,10 +78,7 @@ Format: use plain text. Be concise. Lead with value. No unnecessary preamble.`;
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: system },
-          ...data.messages,
-        ],
+        messages: [{ role: "system", content: system }, ...data.messages],
         max_tokens: 400,
         temperature: 0.75,
       }),

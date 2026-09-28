@@ -26,7 +26,9 @@ export function ComposerModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-focus on open
-  useEffect(() => { textareaRef.current?.focus(); }, []);
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   // Handle graphic export
   useEffect(() => {
@@ -55,16 +57,24 @@ export function ComposerModal({
 
   // Close on Escape
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   async function publish() {
-    if (!user || !profile) { toast.error("Sign in to publish."); return; }
+    if (!user || !profile) {
+      toast.error("Sign in to publish.");
+      return;
+    }
     const body = composer.trim();
     if (!body) return;
-    if (body.length > MAX) { toast.error(`Posts are limited to ${MAX} characters.`); return; }
+    if (body.length > MAX) {
+      toast.error(`Posts are limited to ${MAX} characters.`);
+      return;
+    }
     setBusy("publish");
     const { data, error } = await supabase
       .from("posts")
@@ -72,7 +82,10 @@ export function ComposerModal({
       .select("id, content, background, created_at")
       .single();
     setBusy(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Published live to The Ledger.");
     const newPost: FeedPost = {
       id: data.id,
@@ -94,9 +107,15 @@ export function ComposerModal({
   }
 
   async function downloadGraphic() {
-    if (!profile) { toast.error("Sign in to create a graphic."); return; }
+    if (!profile) {
+      toast.error("Sign in to create a graphic.");
+      return;
+    }
     const body = composer.trim();
-    if (!body) { toast.error("Write something first."); return; }
+    if (!body) {
+      toast.error("Write something first.");
+      return;
+    }
     setBusy("download");
     setExportData({
       id: "draft",
@@ -164,10 +183,18 @@ export function ComposerModal({
             <div className="mb-4 flex items-center gap-2.5">
               <div
                 className="grid h-8 w-8 shrink-0 overflow-hidden rounded-full text-xs font-semibold"
-                style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.05)",
+                }}
               >
                 {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
                   <span className="grid h-full w-full place-items-center">
                     {profile.display_name.charAt(0).toUpperCase()}
@@ -194,10 +221,18 @@ export function ComposerModal({
           {/* Card style */}
           <div className="mt-3 flex items-center gap-2">
             <span className="text-[11px] text-muted-foreground/70">Style:</span>
-            <button type="button" onClick={() => setBackground("noir")} className={bgBtn(background === "noir")}>
+            <button
+              type="button"
+              onClick={() => setBackground("noir")}
+              className={bgBtn(background === "noir")}
+            >
               Tech Noir
             </button>
-            <button type="button" onClick={() => setBackground("cream")} className={bgBtn(background === "cream")}>
+            <button
+              type="button"
+              onClick={() => setBackground("cream")}
+              className={bgBtn(background === "cream")}
+            >
               Premium Cream
             </button>
           </div>
@@ -228,7 +263,11 @@ export function ComposerModal({
               disabled={busy !== null || !composer.trim()}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:opacity-40"
             >
-              {busy === "download" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+              {busy === "download" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ImageIcon className="h-3.5 w-3.5" />
+              )}
               Graphic
             </button>
             <button
@@ -238,7 +277,11 @@ export function ComposerModal({
               className="inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ background: "#F5F5F6" }}
             >
-              {busy === "publish" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {busy === "publish" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
               Publish
             </button>
           </div>
@@ -247,7 +290,17 @@ export function ComposerModal({
 
       {/* Off-screen export render */}
       {exportData && (
-        <div aria-hidden style={{ position: "fixed", top: 0, left: 0, pointerEvents: "none", opacity: 0, zIndex: -1 }}>
+        <div
+          aria-hidden
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            pointerEvents: "none",
+            opacity: 0,
+            zIndex: -1,
+          }}
+        >
           <StatusCard
             ref={exportRef}
             name={exportData.author.display_name}
