@@ -26,7 +26,7 @@ import type { VerificationTier } from "@/hooks/use-auth";
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin Panel · The Ledger" }] }),
   // Restrict the panel to a dedicated hostname, set via VITE_ADMIN_DOMAIN
-  // (e.g. "admin.theledger.app"). Authenticated routes are ssr:false, so this
+  // (e.g. "admin.example.com"). Authenticated routes are ssr:false, so this
   // always runs in the browser.
   //
   // In production a missing VITE_ADMIN_DOMAIN fails closed. Forgetting to set a

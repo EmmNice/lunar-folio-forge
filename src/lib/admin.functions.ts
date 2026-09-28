@@ -24,12 +24,12 @@ export const setVerificationTier = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabase } = context;
 
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _role: "admin",
-      _user_id: userId,
-    });
+    // is_admin() is the caller-scoped helper granted to `authenticated`;
+    // has_role() is service_role-only and errors under the user's token.
+    const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
+    if (adminErr) throw new Error(`Admin check failed: ${adminErr.message}`);
     if (!isAdmin) throw new Error("Forbidden: Admin only.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

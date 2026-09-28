@@ -11,4 +11,7 @@ Disallow: /pulse
 Disallow: /onboarding
 Disallow: /admin
 
-Sitemap: https://theledger.app/sitemap.xml
+# No Sitemap line. A sitemap URL must be absolute, and this is a static file with
+# no access to APP_URL. The value that used to be here pointed at an unrelated
+# third-party domain, and this app serves no /sitemap.xml. Add one here if a
+# sitemap route is ever generated.

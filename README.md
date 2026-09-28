@@ -75,9 +75,21 @@ rejects those changes. Tiers are set by verification review; credits by
 `claim_conversation_slot()` check and increment in a single statement so parallel
 requests can't overshoot a cap.
 
-**Admin access** comes from a row in `public.user_roles`, checked server-side with
-`has_role()` on every privileged call. `VITE_ADMIN_DOMAIN` only restricts which
-hostname serves the panel; it is not the security boundary.
+**Admin access** comes from a row in `public.user_roles`, re-checked server-side on
+every privileged call. `VITE_ADMIN_DOMAIN` only restricts which hostname serves
+the panel; it is not the security boundary.
+
+There are two admin helpers, and the distinction matters:
+
+|                            | Scope                                   | Granted to                      |
+| -------------------------- | --------------------------------------- | ------------------------------- |
+| `is_admin()`               | "am _I_ an admin?" — reads `auth.uid()` | `authenticated`, `service_role` |
+| `has_role(uuid, app_role)` | any user, any role                      | `service_role` only             |
+
+RLS policies and the server functions use `is_admin()`, because a policy
+expression runs with the _caller's_ privileges — calling the service-role-only
+`has_role()` from a policy raises `42501` for ordinary users. `has_role()` stays
+locked down so members cannot probe who the admins are.
 
 ## Project layout
 

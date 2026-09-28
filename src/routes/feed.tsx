@@ -46,8 +46,12 @@ function FeedPage() {
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<FeedTab>("signal");
-  const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null); // Beat: all posts
-  const [signalPosts, setSignalPosts] = useState<FeedPost[] | null>(null); // Signal: verified only
+  // The two tabs split one global timeline by post background, not by tier.
+  // Signal was verified-only until 2026-07-20 (6b5085f), when it was opened to
+  // all tiers and re-cut as text-posts-vs-Studio-cards; the tab copy below was
+  // updated to match, but these comments were left behind.
+  const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null); // Beat: Studio cards
+  const [signalPosts, setSignalPosts] = useState<FeedPost[] | null>(null); // Signal: text posts
   const [showModal, setShowModal] = useState(false);
   const [fabVisible, setFabVisible] = useState(true);
   const [headerHidden, setHeaderHidden] = useState(false);

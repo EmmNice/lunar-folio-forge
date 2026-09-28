@@ -202,11 +202,12 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
  * Uses the caller's own token, so this is a real server-side check and not
  * something the browser can talk its way past.
  */
-async function requireAdmin(supabase: SupabaseClient<Database>, userId: string) {
-  const { data: isAdmin } = await supabase.rpc("has_role", {
-    _role: "admin",
-    _user_id: userId,
-  });
+async function requireAdmin(supabase: SupabaseClient<Database>) {
+  // is_admin() is scoped to the caller and granted to `authenticated`.
+  // has_role() is service_role-only, so calling it with the user's token
+  // returned a permission error that read as "not an admin".
+  const { data: isAdmin, error } = await supabase.rpc("is_admin");
+  if (error) throw new Error(`Admin check failed: ${error.message}`);
   if (!isAdmin) throw new Error("Forbidden: Admin only.");
 }
 
@@ -214,8 +215,8 @@ async function requireAdmin(supabase: SupabaseClient<Database>, userId: string) 
 export const listPendingApplications = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context;
-    await requireAdmin(supabase, userId);
+    const { supabase } = context;
+    await requireAdmin(supabase);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -257,7 +258,7 @@ export const reviewApplication = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await requireAdmin(supabase, userId);
+    await requireAdmin(supabase);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 

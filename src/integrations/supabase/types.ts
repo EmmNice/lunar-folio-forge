@@ -607,6 +607,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       refund_ai_credit: {
         Args: {
           _user_id: string

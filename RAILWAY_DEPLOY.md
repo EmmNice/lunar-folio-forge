@@ -52,7 +52,7 @@ Both point at the same deployment; `VITE_ADMIN_DOMAIN` is what separates them.
 
 Note this is a routing convenience, not the security boundary. Admin authority
 comes from a row in `user_roles`, which every privileged server function
-re-checks with `has_role()` using the caller's own token.
+re-checks with `is_admin()` using the caller's own token.
 
 ## How the build works
 
@@ -91,10 +91,21 @@ written to be safe to re-run.
 
 ## Granting the first admin
 
-There is no bootstrap UI, by design. Insert the role directly:
+There is no bootstrap UI, by design. Insert the role directly in
+Supabase → SQL Editor:
 
 ```sql
 insert into public.user_roles (user_id, role)
 values ('<the-user-uuid>', 'admin')
 on conflict do nothing;
 ```
+
+Confirm it took effect, signed in as that user:
+
+```sql
+select public.is_admin();  -- expect true
+```
+
+`/admin` reads admin status from `user_roles` only. There is no environment-variable
+override — `VITE_ADMIN_IDS` was removed because `VITE_*` values are readable by
+every visitor.
