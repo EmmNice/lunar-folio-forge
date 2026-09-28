@@ -52,10 +52,65 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-DNS-Prefetch-Control": "on",
 };
 
+let cachedCsp: string | undefined;
+
+/**
+ * Content-Security-Policy for SSR responses.
+ *
+ * Built once per process because it depends on SUPABASE_URL — preferable to
+ * hardcoding a `*.supabase.co` wildcard that would break on a custom domain.
+ *
+ * Two deliberate relaxations:
+ *   - script-src allows 'unsafe-inline' because TanStack Start emits the
+ *     hydration payload as an inline <script>. Tightening this needs per-request
+ *     nonces threaded through the SSR renderer.
+ *   - img-src allows any https origin: avatars come from GitHub, Google, X and
+ *     Supabase storage, and the card exporter reads blob/data URLs.
+ *
+ * Note this only covers responses that pass through this handler. Nitro serves
+ * files from public/ before the handler runs, so those get no CSP — fine, since
+ * the policy is about what a document is allowed to load.
+ */
+function contentSecurityPolicy(): string {
+  if (cachedCsp) return cachedCsp;
+
+  const supabaseOrigins = new Set<string>();
+  for (const value of [process.env.SUPABASE_URL, process.env.VITE_SUPABASE_URL]) {
+    if (!value) continue;
+    try {
+      const { origin, host } = new URL(value);
+      supabaseOrigins.add(origin);
+      supabaseOrigins.add(`wss://${host}`);
+    } catch {
+      console.error(`[security] Ignoring unparseable Supabase URL: ${value}`);
+    }
+  }
+
+  const connectSrc = ["'self'", ...supabaseOrigins].join(" ");
+
+  cachedCsp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https:",
+    `connect-src ${connectSrc}`,
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join("; ");
+
+  return cachedCsp;
+}
+
 function applySecurityHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(key)) headers.set(key, value);
+  }
+  if (!headers.has("Content-Security-Policy")) {
+    headers.set("Content-Security-Policy", contentSecurityPolicy());
   }
   return new Response(response.body, {
     status: response.status,

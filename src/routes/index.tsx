@@ -17,8 +17,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
 import { LedgerMark } from "@/components/AppHeader";
 
+// Terms live outside the app. Set VITE_TERMS_URL to link them from the consent
+// line; when it's unset the sentence renders as plain text rather than pointing
+// somewhere that isn't the terms.
+const TERMS_URL = import.meta.env.VITE_TERMS_URL as string | undefined;
+
 export const Route = createFileRoute("/")({
-  ssr: false,  // auth is client-only; disable SSR to prevent hydration mismatches
+  ssr: false, // auth is client-only; disable SSR to prevent hydration mismatches
   head: () => ({
     meta: [
       { title: "The Ledger — A high-signal network for tech founders" },
@@ -84,10 +89,22 @@ function GitHubIcon({ className }: { className?: string }) {
 function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden>
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
     </svg>
   );
 }
@@ -121,7 +138,7 @@ function Landing() {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
-  /* ── OAuth sign-in ── */
+  /* OAuth sign-in */
   async function signInWithProvider(provider: "github" | "google" | "twitter") {
     setSubmitting(provider);
     const redirectTo = `${window.location.origin}/feed`;
@@ -133,9 +150,13 @@ function Landing() {
       options: { redirectTo, skipBrowserRedirect: true },
     });
     if (error) {
-      const label = provider === "twitter" ? "X / Twitter" : provider.charAt(0).toUpperCase() + provider.slice(1);
+      const label =
+        provider === "twitter"
+          ? "X / Twitter"
+          : provider.charAt(0).toUpperCase() + provider.slice(1);
       toast.error(
-        error.message.toLowerCase().includes("not enabled") || error.message.toLowerCase().includes("validation_failed")
+        error.message.toLowerCase().includes("not enabled") ||
+          error.message.toLowerCase().includes("validation_failed")
           ? `${label} sign-in isn't enabled on this server yet.`
           : error.message,
       );
@@ -150,14 +171,20 @@ function Landing() {
     }
   }
 
-  /* ── Email sign-in ── */
+  /* Email sign-in */
   async function handleEmailSignIn(e: FormEvent) {
     e.preventDefault();
-    if (!email || !password) { toast.error("Enter your email and password."); return; }
+    if (!email || !password) {
+      toast.error("Enter your email and password.");
+      return;
+    }
     setSubmitting("email-signin");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(null);
-    if (!error) { navigate({ to: "/feed", replace: true }); return; }
+    if (!error) {
+      navigate({ to: "/feed", replace: true });
+      return;
+    }
     if (
       error.message.toLowerCase().includes("not confirmed") ||
       error.message.toLowerCase().includes("email not confirmed")
@@ -174,11 +201,17 @@ function Landing() {
     }
   }
 
-  /* ── Email sign-up ── */
+  /* Email sign-up */
   async function handleEmailSignUp(e: FormEvent) {
     e.preventDefault();
-    if (!email || !password) { toast.error("Enter your email and password."); return; }
-    if (password.length < 8) { toast.error("Password must be at least 8 characters."); return; }
+    if (!email || !password) {
+      toast.error("Enter your email and password.");
+      return;
+    }
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
     setSubmitting("email-signup");
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -206,13 +239,16 @@ function Landing() {
     }
   }
 
-  /* ── Resend confirmation ── */
+  /* Resend confirmation */
   async function resendConfirmation() {
     if (!confirmEmail) return;
     setSubmitting("resend");
     const { error } = await supabase.auth.resend({ type: "signup", email: confirmEmail });
     setSubmitting(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Confirmation email resent — check your inbox.");
   }
 
@@ -222,9 +258,9 @@ function Landing() {
   const providerBtnCls =
     "relative flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card/60 px-4 py-3.5 text-sm font-medium text-foreground transition-all hover:border-border hover:bg-card active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed";
 
-  /* ── Render auth card content inline (NOT as a nested component — doing so
+  /*  Render auth card content inline (NOT as a nested component — doing so
         causes React to unmount/remount the entire subtree on every state change,
-        making buttons appear unresponsive) ── */
+        making buttons appear unresponsive)  */
   const authCardContent = (() => {
     if (view === "check-email") {
       return (
@@ -253,7 +289,10 @@ function Landing() {
             </button>
             <button
               type="button"
-              onClick={() => { setView("social"); setConfirmEmail(""); }}
+              onClick={() => {
+                setView("social");
+                setConfirmEmail("");
+              }}
               className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors"
             >
               ← Back to sign in
@@ -293,9 +332,12 @@ function Landing() {
             >
               {submitting === "email-signin" ? (
                 <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />Signing in…
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in…
                 </span>
-              ) : "Sign in"}
+              ) : (
+                "Sign in"
+              )}
             </button>
           </form>
           <div className="mt-4 space-y-2 text-center text-xs text-muted-foreground">
@@ -357,9 +399,12 @@ function Landing() {
             >
               {submitting === "email-signup" ? (
                 <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />Creating account…
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating account…
                 </span>
-              ) : "Create account"}
+              ) : (
+                "Create account"
+              )}
             </button>
           </form>
           <div className="mt-4 space-y-2 text-center text-xs text-muted-foreground">
@@ -385,7 +430,7 @@ function Landing() {
       );
     }
 
-    /* ── Default: social-first ── */
+    /* Default: social-first */
     return (
       <div className="space-y-2.5">
         {/* GitHub */}
@@ -466,9 +511,18 @@ function Landing() {
 
         <p className="pt-1 text-center text-[11px] leading-relaxed text-muted-foreground/70">
           By signing in you agree to The Ledger's{" "}
-          <Link to="/feed" className="underline underline-offset-2 hover:text-muted-foreground">
-            terms
-          </Link>
+          {TERMS_URL ? (
+            <a
+              href={TERMS_URL}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline underline-offset-2 hover:text-muted-foreground"
+            >
+              terms
+            </a>
+          ) : (
+            "terms"
+          )}
           . A high-signal network — real identity required.
         </p>
       </div>
@@ -477,7 +531,7 @@ function Landing() {
 
   return (
     <div className="min-h-screen">
-      {/* ── Nav ── */}
+      {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
@@ -494,7 +548,7 @@ function Landing() {
       </header>
 
       <main>
-        {/* ── Hero + auth card ── */}
+        {/* Hero + auth card */}
         <section className="mx-auto max-w-5xl px-4 pb-16 pt-16 sm:px-6 sm:pt-24">
           <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
             {/* Left: copy */}
@@ -507,8 +561,8 @@ function Landing() {
                 <br /> like you ship code.
               </h1>
               <p className="mt-5 max-w-md text-base text-muted-foreground">
-                A premium, tech-noir platform for Web3 builders, founders, and
-                investors. One global timeline — no follower games, just signal.
+                A premium, tech-noir platform for Web3 builders, founders, and investors. One global
+                timeline — no follower games, just signal.
               </p>
 
               <div className="mt-7 flex flex-wrap gap-2">
@@ -543,7 +597,7 @@ function Landing() {
           </div>
         </section>
 
-        {/* ── Demo card ── */}
+        {/* Demo card */}
         <section className="mx-auto max-w-xs px-4 pb-12 sm:max-w-sm">
           <StatusCard
             name="Aria Stone"
@@ -553,7 +607,7 @@ function Landing() {
           />
         </section>
 
-        {/* ── Bento grid ── */}
+        {/* Bento grid */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
           <p className="mb-6 text-center text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             Everything on the platform
@@ -568,9 +622,7 @@ function Landing() {
               >
                 <card.icon className="mb-3 h-5 w-5 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground">{card.headline}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  {card.desc}
-                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{card.desc}</p>
               </div>
             ))}
           </div>

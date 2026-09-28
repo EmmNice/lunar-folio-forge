@@ -33,7 +33,7 @@ DROP POLICY IF EXISTS "admins can read all verification requests" ON public.veri
 CREATE POLICY "admins can read all verification requests"
   ON public.verification_requests
   FOR SELECT TO authenticated
-  USING (public.has_role('admin', auth.uid()));
+  USING (public.has_role(auth.uid(), 'admin'));
 
 -- Admins update status when approving / rejecting.
 -- Service-role bypasses RLS anyway, but the explicit policy keeps it tidy.
@@ -41,8 +41,8 @@ DROP POLICY IF EXISTS "admins can update verification requests" ON public.verifi
 CREATE POLICY "admins can update verification requests"
   ON public.verification_requests
   FOR UPDATE TO authenticated
-  USING  (public.has_role('admin', auth.uid()))
-  WITH CHECK (public.has_role('admin', auth.uid()));
+  USING  (public.has_role(auth.uid(), 'admin'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 -- Extend grants so authenticated admins can UPDATE directly.
 GRANT SELECT, INSERT, UPDATE ON public.verification_requests TO authenticated;

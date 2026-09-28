@@ -1,15 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { toPng } from "html-to-image";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { StatusCard, BACKGROUND_BASE_COLORS } from "@/components/StatusCard";
 import { AppHeader, MobileNav } from "@/components/AppHeader";
+import { toBackground } from "@/components/StatusCard";
 import { PostCard, type FeedPost } from "@/components/PostCard";
 import { ComposerModal } from "@/components/ComposerModal";
 import { useAuth } from "@/hooks/use-auth";
-import type { Background } from "@/components/StatusCard";
+import type { VerificationTier } from "@/hooks/use-auth";
+import { useCardExport } from "@/hooks/use-card-export";
+import { FEED_PAGE_SIZE } from "@/lib/limits";
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
@@ -27,21 +28,32 @@ export const Route = createFileRoute("/feed")({
 
 type FeedTab = "signal" | "beat";
 
-// ─── Main feed page ──────────────────────────────────────────────────────────
+/**
+ * A row as it comes back from the feed query. background is free text in the DB,
+ * and comments_enabled/visibility were added after launch, so older rows can
+ * still be null.
+ */
+type RawFeedRow = Omit<FeedPost, "background" | "comments_enabled" | "visibility" | "author"> & {
+  background: string | null;
+  comments_enabled: boolean | null;
+  visibility: string | null;
+  author: Omit<FeedPost["author"], "verification_tier"> & { verification_tier: string };
+};
+
+// Main feed page
 function FeedPage() {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<FeedTab>("signal");
-  const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null);   // Beat: all posts
+  const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null); // Beat: all posts
   const [signalPosts, setSignalPosts] = useState<FeedPost[] | null>(null); // Signal: verified only
   const [showModal, setShowModal] = useState(false);
   const [fabVisible, setFabVisible] = useState(true);
   const [headerHidden, setHeaderHidden] = useState(false);
-  const exportRef = useRef<HTMLDivElement | null>(null);
-  const [exportPost, setExportPost] = useState<FeedPost | null>(null);
+  const { requestExport, exportSurface } = useCardExport();
 
-  // ── Redirect unonboarded users ──────────────────────────────────────────
+  // Redirect unonboarded users
   useEffect(() => {
     if (loading) return;
     if (user && profile && !profile.onboarding_completed) {
@@ -49,7 +61,7 @@ function FeedPage() {
     }
   }, [loading, user, profile, navigate]);
 
-  // ── FAB visibility: hide while scrolling, reappear when scroll stops ───
+  // FAB visibility: hide while scrolling, reappear when scroll stops
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     function onScroll() {
@@ -64,41 +76,45 @@ function FeedPage() {
     };
   }, []);
 
-  // ── Shared visibility filter ──────────────────────────────────────────
+  // Shared visibility filter
   function applyVisibility(all: FeedPost[]): FeedPost[] {
     // Only authenticated, verified members can see restricted posts
     const isVerifiedViewer =
-      !!user && !!profile &&
-      (profile.verification_tier === "silver" ||
-      profile.verification_tier === "gold");
+      !!user &&
+      !!profile &&
+      (profile.verification_tier === "silver" || profile.verification_tier === "gold");
     const isSilverOrGold =
       profile?.verification_tier === "silver" || profile?.verification_tier === "gold";
     return all
       .filter((p) => isVerifiedViewer || (p.visibility ?? "public") === "public")
-      .filter((p) => isSilverOrGold  || (p.visibility ?? "public") !== "whisper");
+      .filter((p) => isSilverOrGold || (p.visibility ?? "public") !== "whisper");
   }
 
-  // ── Shared row normaliser ─────────────────────────────────────────────
-  function normalisePosts(data: any[]): FeedPost[] {
+  // Shared row normaliser
+  function normalisePosts(data: RawFeedRow[]): FeedPost[] {
     return data.map((p) => ({
       ...p,
+      background: toBackground(p.background),
       comments_enabled: p.comments_enabled ?? true,
       visibility: p.visibility ?? "public",
+      author: {
+        ...p.author,
+        verification_tier: p.author.verification_tier as VerificationTier,
+      },
     }));
   }
 
-  // ── Single fetch, split client-side ──────────────────────────────────────
+  // Single fetch, split client-side
   // Signal = noir/null background (plain text posts), all tiers
   // Beat   = any non-noir background (Studio cards), all tiers
   async function fetchAllPosts() {
-    const FULL_SELECT =
-      `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
+    const FULL_SELECT = `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
 
     const { data, error } = await supabase
       .from("posts")
       .select(FULL_SELECT)
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(FEED_PAGE_SIZE);
 
     if (error) {
       toast.error("Couldn't load the feed. Check your connection.");
@@ -124,43 +140,20 @@ function FeedPage() {
         fetchAllPosts();
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // ── Graphic export handler ──────────────────────────────────────────────
-  useEffect(() => {
-    if (!exportPost || !exportRef.current) return;
-    (async () => {
-      try {
-        const dataUrl = await toPng(exportRef.current!, {
-          pixelRatio: 1,
-          cacheBust: true,
-          backgroundColor: BACKGROUND_BASE_COLORS[exportPost.background] ?? "#0b0b0c",
-          width: 1080,
-          height: 1920,
-        });
-        const link = document.createElement("a");
-        link.download = `${exportPost.author.handle}-status.png`;
-        link.href = dataUrl;
-        link.click();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Export failed.");
-      } finally {
-        setExportPost(null);
-      }
-    })();
-  }, [exportPost]);
-
   // Instant tab switch — both caches pre-loaded at mount
   const displayedPosts = tab === "signal" ? (signalPosts ?? []) : (beatPosts ?? []);
-  const feedLoading   = tab === "signal" ? signalPosts === null : beatPosts === null;
+  const feedLoading = tab === "signal" ? signalPosts === null : beatPosts === null;
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
-
       {/*
-        ── Combined sticky header: top nav + Signal/Beat tabs as ONE unit ──
+         Combined sticky header: top nav + Signal/Beat tabs as ONE unit
         NOTE: MobileNav is rendered as a sibling BELOW this div, not inside it.
         A position:fixed element inside a CSS-transformed ancestor gets positioned
         relative to that ancestor instead of the viewport. Keeping MobileNav out
@@ -173,9 +166,7 @@ function FeedPage() {
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           /* Hide fast (150 ms ease-out), reveal instantly (80 ms) — mirrors X's tab bar */
-          transition: headerHidden
-            ? "transform 0.15s ease-out"
-            : "transform 0.08s ease-out",
+          transition: headerHidden ? "transform 0.15s ease-out" : "transform 0.08s ease-out",
           transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
           willChange: "transform",
         }}
@@ -221,7 +212,7 @@ function FeedPage() {
             : "Studio cards — crafted status posts from every builder on the platform."}
         </p>
 
-        {/* ── Feed ── */}
+        {/* Feed */}
         {feedLoading ? (
           <div className="space-y-4" aria-label="Loading feed…">
             {[...Array(4)].map((_, i) => (
@@ -230,17 +221,38 @@ function FeedPage() {
                   <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary/60" />
                   <div className="min-w-0 flex-1 space-y-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="h-3.5 w-28 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 80}ms` }} />
-                      <div className="h-3 w-16 animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 80 + 40}ms` }} />
+                      <div
+                        className="h-3.5 w-28 animate-pulse rounded-full bg-secondary/60"
+                        style={{ animationDelay: `${i * 80}ms` }}
+                      />
+                      <div
+                        className="h-3 w-16 animate-pulse rounded-full bg-secondary/40"
+                        style={{ animationDelay: `${i * 80 + 40}ms` }}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <div className="h-3.5 w-full animate-pulse rounded-full bg-secondary/50" style={{ animationDelay: `${i * 80 + 80}ms` }} />
-                      <div className="h-3.5 w-4/5 animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 80 + 120}ms` }} />
-                      {i % 2 === 0 && <div className="h-3.5 w-2/3 animate-pulse rounded-full bg-secondary/30" style={{ animationDelay: `${i * 80 + 160}ms` }} />}
+                      <div
+                        className="h-3.5 w-full animate-pulse rounded-full bg-secondary/50"
+                        style={{ animationDelay: `${i * 80 + 80}ms` }}
+                      />
+                      <div
+                        className="h-3.5 w-4/5 animate-pulse rounded-full bg-secondary/40"
+                        style={{ animationDelay: `${i * 80 + 120}ms` }}
+                      />
+                      {i % 2 === 0 && (
+                        <div
+                          className="h-3.5 w-2/3 animate-pulse rounded-full bg-secondary/30"
+                          style={{ animationDelay: `${i * 80 + 160}ms` }}
+                        />
+                      )}
                     </div>
                     <div className="flex gap-5 pt-1">
                       {[20, 16, 16, 14].map((w, j) => (
-                        <div key={j} className={`h-3 w-${w} animate-pulse rounded-full bg-secondary/30`} style={{ animationDelay: `${i * 80 + j * 30}ms` }} />
+                        <div
+                          key={j}
+                          className={`h-3 w-${w} animate-pulse rounded-full bg-secondary/30`}
+                          style={{ animationDelay: `${i * 80 + j * 30}ms` }}
+                        />
                       ))}
                     </div>
                   </div>
@@ -274,7 +286,7 @@ function FeedPage() {
               <PostCard
                 key={p.id}
                 post={p}
-                onDownload={setExportPost}
+                onDownload={requestExport}
                 currentUserId={user?.id}
                 onDeleted={(id) => {
                   setBeatPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
@@ -286,7 +298,7 @@ function FeedPage() {
         )}
       </main>
 
-      {/* ── Floating Action Button ── hides while scrolling, reappears on stop ── */}
+      {/* Floating action button: hides while scrolling, reappears on stop */}
       {user && (
         <button
           type="button"
@@ -309,7 +321,7 @@ function FeedPage() {
         </button>
       )}
 
-      {/* ── Composer Modal ── */}
+      {/* Composer Modal */}
       {showModal && (
         <ComposerModal
           onClose={() => setShowModal(false)}
@@ -325,25 +337,7 @@ function FeedPage() {
         />
       )}
 
-      {/* Off-screen full-res render for PostCard downloads */}
-      {exportPost && (
-        <div
-          aria-hidden
-          style={{ position: "fixed", top: 0, left: 0, pointerEvents: "none", opacity: 0, zIndex: -1 }}
-        >
-          <StatusCard
-            ref={exportRef}
-            name={exportPost.author.display_name}
-            handle={exportPost.author.handle}
-            avatarUrl={exportPost.author.avatar_url}
-            content={exportPost.content}
-            background={exportPost.background}
-            verificationTier={exportPost.author.verification_tier}
-            watermark
-            exportMode
-          />
-        </div>
-      )}
+      {exportSurface}
     </div>
   );
 }

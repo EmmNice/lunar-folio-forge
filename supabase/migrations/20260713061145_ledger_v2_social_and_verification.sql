@@ -15,9 +15,15 @@ alter table public.profiles
   add column if not exists traction_url text;
 
 alter table public.profiles
+  drop constraint if exists role_type_valid;
+
+alter table public.profiles
   add constraint role_type_valid check (
     role_type is null or role_type in ('founder', 'developer', 'pm', 'investor')
   );
+
+alter table public.profiles
+  drop constraint if exists verification_tier_valid;
 
 alter table public.profiles
   add constraint verification_tier_valid check (
@@ -25,18 +31,36 @@ alter table public.profiles
   );
 
 alter table public.profiles
+  drop constraint if exists company_name_len;
+
+alter table public.profiles
   add constraint company_name_len check (
     company_name is null or char_length(company_name) <= 80
   );
 
 alter table public.profiles
+  drop constraint if exists github_url_len;
+
+alter table public.profiles
   add constraint github_url_len check (github_url is null or char_length(github_url) <= 300);
+alter table public.profiles
+  drop constraint if exists portfolio_url_len;
+
 alter table public.profiles
   add constraint portfolio_url_len check (portfolio_url is null or char_length(portfolio_url) <= 300);
 alter table public.profiles
+  drop constraint if exists startup_url_len;
+
+alter table public.profiles
   add constraint startup_url_len check (startup_url is null or char_length(startup_url) <= 300);
 alter table public.profiles
+  drop constraint if exists traction_url_len;
+
+alter table public.profiles
   add constraint traction_url_len check (traction_url is null or char_length(traction_url) <= 300);
+
+alter table public.profiles
+  drop constraint if exists dob_min_age;
 
 alter table public.profiles
   add constraint dob_min_age check (
@@ -55,7 +79,7 @@ drop table if exists public.follows cascade;
 -- ============================================================
 -- VERIFICATION REQUESTS
 -- ============================================================
-create table public.verification_requests (
+create table if not exists public.verification_requests (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
   tier text not null check (tier in ('silver', 'gold')),
@@ -68,30 +92,32 @@ create table public.verification_requests (
   constraint link_secondary_len check (link_secondary is null or char_length(link_secondary) <= 300)
 );
 
-create index verification_requests_user_idx on public.verification_requests(user_id, created_at desc);
+create index if not exists verification_requests_user_idx on public.verification_requests(user_id, created_at desc);
 
 grant select, insert on public.verification_requests to authenticated;
 grant all on public.verification_requests to service_role;
 
 alter table public.verification_requests enable row level security;
 
+drop policy if exists "users can view own verification requests" on public.verification_requests;
 create policy "users can view own verification requests" on public.verification_requests
 for select to authenticated using (auth.uid() = user_id);
 
+drop policy if exists "users can apply for verification" on public.verification_requests;
 create policy "users can apply for verification" on public.verification_requests
 for insert to authenticated with check (auth.uid() = user_id);
 
 -- ============================================================
 -- LIKES
 -- ============================================================
-create table public.likes (
+create table if not exists public.likes (
   post_id uuid not null references public.posts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
 );
 
-create index likes_post_idx on public.likes(post_id);
+create index if not exists likes_post_idx on public.likes(post_id);
 
 grant select on public.likes to anon;
 grant select, insert, delete on public.likes to authenticated;
@@ -99,26 +125,29 @@ grant all on public.likes to service_role;
 
 alter table public.likes enable row level security;
 
+drop policy if exists "likes are viewable by everyone" on public.likes;
 create policy "likes are viewable by everyone" on public.likes
 for select to anon, authenticated using (true);
 
+drop policy if exists "users can like posts" on public.likes;
 create policy "users can like posts" on public.likes
 for insert to authenticated with check (auth.uid() = user_id);
 
+drop policy if exists "users can unlike posts" on public.likes;
 create policy "users can unlike posts" on public.likes
 for delete to authenticated using (auth.uid() = user_id);
 
 -- ============================================================
 -- REPOSTS
 -- ============================================================
-create table public.reposts (
+create table if not exists public.reposts (
   post_id uuid not null references public.posts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
 );
 
-create index reposts_post_idx on public.reposts(post_id);
+create index if not exists reposts_post_idx on public.reposts(post_id);
 
 grant select on public.reposts to anon;
 grant select, insert, delete on public.reposts to authenticated;
@@ -126,19 +155,22 @@ grant all on public.reposts to service_role;
 
 alter table public.reposts enable row level security;
 
+drop policy if exists "reposts are viewable by everyone" on public.reposts;
 create policy "reposts are viewable by everyone" on public.reposts
 for select to anon, authenticated using (true);
 
+drop policy if exists "users can repost" on public.reposts;
 create policy "users can repost" on public.reposts
 for insert to authenticated with check (auth.uid() = user_id);
 
+drop policy if exists "users can undo repost" on public.reposts;
 create policy "users can undo repost" on public.reposts
 for delete to authenticated using (auth.uid() = user_id);
 
 -- ============================================================
 -- COMMENTS
 -- ============================================================
-create table public.comments (
+create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references public.posts(id) on delete cascade,
   author_id uuid not null references public.profiles(id) on delete cascade,
@@ -147,7 +179,7 @@ create table public.comments (
   constraint comment_content_len check (char_length(content) between 1 and 280)
 );
 
-create index comments_post_created_idx on public.comments(post_id, created_at);
+create index if not exists comments_post_created_idx on public.comments(post_id, created_at);
 
 grant select on public.comments to anon;
 grant select, insert, delete on public.comments to authenticated;
@@ -155,12 +187,15 @@ grant all on public.comments to service_role;
 
 alter table public.comments enable row level security;
 
+drop policy if exists "comments are viewable by everyone" on public.comments;
 create policy "comments are viewable by everyone" on public.comments
 for select to anon, authenticated using (true);
 
+drop policy if exists "authenticated users can comment" on public.comments;
 create policy "authenticated users can comment" on public.comments
 for insert to authenticated with check (auth.uid() = author_id);
 
+drop policy if exists "users can delete own comments" on public.comments;
 create policy "users can delete own comments" on public.comments
 for delete to authenticated using (auth.uid() = author_id);
 
@@ -169,7 +204,19 @@ for delete to authenticated using (auth.uid() = author_id);
 -- ============================================================
 -- REALTIME
 -- ============================================================
-alter publication supabase_realtime add table public.likes;
-alter publication supabase_realtime add table public.comments;
-alter publication supabase_realtime add table public.reposts;
-alter publication supabase_realtime add table public.profiles;
+do $$ begin
+  alter publication supabase_realtime add table public.likes;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.comments;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.reposts;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.profiles;
+exception when duplicate_object then null;
+end $$;

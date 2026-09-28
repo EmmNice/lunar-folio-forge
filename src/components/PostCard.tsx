@@ -93,13 +93,26 @@ export function PostCard({
       const [likesRes, myLikeRes, repostsRes, myRepostRes, commentsRes] = await Promise.all([
         supabase.from("likes").select("*", { count: "exact", head: true }).eq("post_id", post.id),
         uid
-          ? supabase.from("likes").select("post_id").eq("post_id", post.id).eq("user_id", uid).maybeSingle()
+          ? supabase
+              .from("likes")
+              .select("post_id")
+              .eq("post_id", post.id)
+              .eq("user_id", uid)
+              .maybeSingle()
           : Promise.resolve({ data: null }),
         supabase.from("reposts").select("*", { count: "exact", head: true }).eq("post_id", post.id),
         uid
-          ? supabase.from("reposts").select("post_id").eq("post_id", post.id).eq("user_id", uid).maybeSingle()
+          ? supabase
+              .from("reposts")
+              .select("post_id")
+              .eq("post_id", post.id)
+              .eq("user_id", uid)
+              .maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from("comments").select("*", { count: "exact", head: true }).eq("post_id", post.id),
+        supabase
+          .from("comments")
+          .select("*", { count: "exact", head: true })
+          .eq("post_id", post.id),
       ]);
       if (cancelled) return;
       setLikeCount(likesRes.count ?? 0);
@@ -108,31 +121,62 @@ export function PostCard({
       setReposted(!!(myRepostRes as { data: unknown }).data);
       setCommentCount(commentsRes.count ?? 0);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [post.id, user]);
 
   async function toggleLike() {
-    if (!user) { toast.error("Sign in to like posts."); return; }
+    if (!user) {
+      toast.error("Sign in to like posts.");
+      return;
+    }
     setBusyLike(true);
     if (liked) {
-      const { error } = await supabase.from("likes").delete().eq("post_id", post.id).eq("user_id", user.id);
-      if (!error) { setLiked(false); setLikeCount((c) => Math.max(0, c - 1)); }
+      const { error } = await supabase
+        .from("likes")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("user_id", user.id);
+      if (!error) {
+        setLiked(false);
+        setLikeCount((c) => Math.max(0, c - 1));
+      }
     } else {
       const { error } = await supabase.from("likes").insert({ post_id: post.id, user_id: user.id });
-      if (!error) { setLiked(true); setLikeCount((c) => c + 1); }
+      if (!error) {
+        setLiked(true);
+        setLikeCount((c) => c + 1);
+      }
     }
     setBusyLike(false);
   }
 
   async function toggleRepost() {
-    if (!user) { toast.error("Sign in to re-ship."); return; }
+    if (!user) {
+      toast.error("Sign in to re-ship.");
+      return;
+    }
     setBusyRepost(true);
     if (reposted) {
-      const { error } = await supabase.from("reposts").delete().eq("post_id", post.id).eq("user_id", user.id);
-      if (!error) { setReposted(false); setRepostCount((c) => Math.max(0, c - 1)); }
+      const { error } = await supabase
+        .from("reposts")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("user_id", user.id);
+      if (!error) {
+        setReposted(false);
+        setRepostCount((c) => Math.max(0, c - 1));
+      }
     } else {
-      const { error } = await supabase.from("reposts").insert({ post_id: post.id, user_id: user.id });
-      if (!error) { setReposted(true); setRepostCount((c) => c + 1); toast.success("Re-shipped."); }
+      const { error } = await supabase
+        .from("reposts")
+        .insert({ post_id: post.id, user_id: user.id });
+      if (!error) {
+        setReposted(true);
+        setRepostCount((c) => c + 1);
+        toast.success("Re-shipped.");
+      }
     }
     setBusyRepost(false);
   }
@@ -140,7 +184,9 @@ export function PostCard({
   async function loadComments() {
     const { data, error } = await supabase
       .from("comments")
-      .select("id, content, created_at, author:profiles!comments_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)")
+      .select(
+        "id, content, created_at, author:profiles!comments_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
+      )
       .eq("post_id", post.id)
       .order("created_at", { ascending: true });
     if (!error) setComments((data ?? []) as unknown as CommentRow[]);
@@ -153,7 +199,10 @@ export function PostCard({
   }
 
   async function submitComment() {
-    if (!user || !profile) { toast.error("Sign in to comment."); return; }
+    if (!user || !profile) {
+      toast.error("Sign in to comment.");
+      return;
+    }
     const body = commentDraft.trim();
     if (!body) return;
     setPostingComment(true);
@@ -163,16 +212,27 @@ export function PostCard({
       content: body,
     });
     setPostingComment(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setCommentDraft("");
     setCommentCount((c) => c + 1);
     await loadComments();
   }
 
   async function report() {
-    if (!user) { toast.error("Sign in to report posts."); return; }
-    const { error } = await supabase.from("reports").insert({ post_id: post.id, reporter_id: user.id });
-    if (error && !error.message.includes("duplicate")) { toast.error("Couldn't submit report."); return; }
+    if (!user) {
+      toast.error("Sign in to report posts.");
+      return;
+    }
+    const { error } = await supabase
+      .from("reports")
+      .insert({ post_id: post.id, reporter_id: user.id });
+    if (error && !error.message.includes("duplicate")) {
+      toast.error("Couldn't submit report.");
+      return;
+    }
     setReported(true);
     toast.success("Thanks — the moderators will review.");
   }
@@ -180,54 +240,63 @@ export function PostCard({
   async function deletePost() {
     if (!user || !isSelf) return;
     setBusyDelete(true);
-    const { error } = await supabase.from("posts").delete().eq("id", post.id).eq("author_id", user.id);
+    const { error } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", post.id)
+      .eq("author_id", user.id);
     setBusyDelete(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Post deleted.");
     onDeleted?.(post.id);
   }
 
-  const actionBtn = "inline-flex items-center gap-1.5 text-xs transition-colors disabled:opacity-40 select-none";
+  const actionBtn =
+    "inline-flex items-center gap-1.5 text-xs transition-colors disabled:opacity-40 select-none";
 
   // Studio card posts (non-noir theme) get an entirely different visual treatment
   const isCardPost = post.background !== "noir";
 
-  /* ── Shared delete toggle ── */
-  const deleteControl = isSelf && onDeleted ? (
-    <div className="shrink-0">
-      {confirmDelete ? (
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Delete?</span>
+  /* Shared delete toggle */
+  const deleteControl =
+    isSelf && onDeleted ? (
+      <div className="shrink-0">
+        {confirmDelete ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Delete?</span>
+            <button
+              type="button"
+              onClick={deletePost}
+              disabled={busyDelete}
+              className="text-xs text-red-400 transition-colors hover:text-red-300"
+            >
+              {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              No
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
-            onClick={deletePost}
-            disabled={busyDelete}
-            className="text-xs text-red-400 transition-colors hover:text-red-300"
+            onClick={() => setConfirmDelete(true)}
+            className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+            aria-label="Delete post"
           >
-            {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(false)}
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            No
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-          aria-label="Delete post"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
-  ) : null;
+        )}
+      </div>
+    ) : null;
 
-  /* ── Shared actions row ── */
+  /* Shared actions row */
   const actionsRow = (
     <div className="mt-3 flex items-center gap-5 text-muted-foreground">
       <button
@@ -285,13 +354,15 @@ export function PostCard({
     </div>
   );
 
-  /* ── Shared comments thread ── */
+  /* Shared comments thread */
   const commentsThread = (
     <>
       {!commentsEnabled ? (
         threadOpen && (
           <div className="mt-4 border-t border-border/50 pt-3">
-            <p className="text-xs text-muted-foreground">Comments have been disabled for this post.</p>
+            <p className="text-xs text-muted-foreground">
+              Comments have been disabled for this post.
+            </p>
           </div>
         )
       ) : threadOpen ? (
@@ -345,7 +416,9 @@ export function PostCard({
               <input
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") submitComment(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitComment();
+                }}
                 maxLength={280}
                 placeholder="Reply…"
                 className="min-w-0 flex-1 rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm outline-none focus:border-foreground/40"
@@ -370,7 +443,7 @@ export function PostCard({
     </>
   );
 
-  /* ── Beat post (Studio-crafted, non-noir theme) ── */
+  /* Beat post (Studio-crafted, non-noir theme) */
   if (isCardPost) {
     const theme = THEMES[post.background ?? "cream"] ?? THEMES.cream;
     const dotPattern = `radial-gradient(${theme.dot} 1px, transparent 1px)`;
@@ -477,7 +550,7 @@ export function PostCard({
     );
   }
 
-  /* ── Regular text post — polished layout ── */
+  /* Regular text post — polished layout */
   const avatarRing =
     post.author.verification_tier === "gold"
       ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-background"
@@ -493,7 +566,9 @@ export function PostCard({
       {post.author.verification_tier === "gold" && (
         <div
           className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl"
-          style={{ background: "linear-gradient(90deg, transparent, rgba(251,191,36,0.5), transparent)" }}
+          style={{
+            background: "linear-gradient(90deg, transparent, rgba(251,191,36,0.5), transparent)",
+          }}
         />
       )}
 

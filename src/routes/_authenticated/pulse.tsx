@@ -41,8 +41,7 @@ function PulsePage() {
 
   // Only treat as verified once the profile has actually loaded
   const isVerified =
-    !!profile &&
-    (profile.verification_tier === "silver" || profile.verification_tier === "gold");
+    !!profile && (profile.verification_tier === "silver" || profile.verification_tier === "gold");
 
   useEffect(() => {
     if (isVerified) setIsUnlimited(true);
@@ -92,7 +91,7 @@ function PulsePage() {
         setExhausted(true);
         toast.error("Daily credits used up. Verify to unlock unlimited PulseAssist.");
       } else if (msg.includes("AI_NOT_CONFIGURED")) {
-        toast.error("Add OPENAI_API_KEY to Replit secrets to enable PulseAssist.");
+        toast.error("PulseAssist isn't available right now. Please try again later.");
       } else {
         toast.error("PulseAssist couldn't respond. Try again.");
       }
@@ -116,7 +115,7 @@ function PulsePage() {
     const trimmed = content.slice(0, 280);
     navigate({
       to: "/studio",
-      search: { draft: trimmed } as any,
+      search: { draft: trimmed },
     });
   }
 
@@ -150,7 +149,11 @@ function PulsePage() {
         <span
           className={
             "h-1.5 w-1.5 rounded-full " +
-            (creditsLeft === 0 ? "bg-red-400" : creditsLeft === 1 ? "bg-amber-400" : "bg-violet-400")
+            (creditsLeft === 0
+              ? "bg-red-400"
+              : creditsLeft === 1
+                ? "bg-amber-400"
+                : "bg-violet-400")
           }
         />
         <span
@@ -173,9 +176,11 @@ function PulsePage() {
     <div className="flex min-h-screen flex-col">
       <AppHeader />
 
-      {/* ── Page chrome ── */}
-      <div className="sticky top-14 z-30 flex items-center justify-between border-b px-4 py-2.5 backdrop-blur-md sm:px-6"
-        style={{ background: "rgba(11,11,12,0.85)", borderColor: "rgba(255,255,255,0.07)" }}>
+      {/* Page chrome */}
+      <div
+        className="sticky top-14 z-30 flex items-center justify-between border-b px-4 py-2.5 backdrop-blur-md sm:px-6"
+        style={{ background: "rgba(11,11,12,0.85)", borderColor: "rgba(255,255,255,0.07)" }}
+      >
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500/15">
             <Zap className="h-3.5 w-3.5 text-violet-400" />
@@ -199,14 +204,16 @@ function PulsePage() {
         </div>
       </div>
 
-      {/* ── Chat area ── */}
+      {/* Chat area */}
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pb-6 sm:px-6">
         <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-6">
           {messages.length === 0 ? (
-            /* ── Empty state / starters ── */
+            /* Empty state / starters */
             <div className="flex flex-col items-center py-10 text-center">
-              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border bg-violet-500/10"
-                style={{ borderColor: "rgba(167,139,250,0.20)" }}>
+              <div
+                className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border bg-violet-500/10"
+                style={{ borderColor: "rgba(167,139,250,0.20)" }}
+              >
                 <Zap className="h-6 w-6 text-violet-400" />
               </div>
               <h2 className="text-lg font-semibold tracking-tight">PulseAssist</h2>
@@ -216,10 +223,16 @@ function PulsePage() {
               </p>
 
               {!isVerified && (
-                <div className="mt-4 flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs text-amber-300/80"
-                  style={{ borderColor: "rgba(251,191,36,0.15)", background: "rgba(251,191,36,0.05)" }}>
+                <div
+                  className="mt-4 flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs text-amber-300/80"
+                  style={{
+                    borderColor: "rgba(251,191,36,0.15)",
+                    background: "rgba(251,191,36,0.05)",
+                  }}
+                >
                   <Info className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                  Unverified users get 3 free AI responses per day. Verify your account to unlock unlimited.
+                  Unverified users get 3 free AI responses per day. Verify your account to unlock
+                  unlimited.
                 </div>
               )}
 
@@ -233,10 +246,15 @@ function PulsePage() {
                     type="button"
                     onClick={() => send(s)}
                     className="group flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
-                    style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }}
+                    style={{
+                      borderColor: "rgba(255,255,255,0.07)",
+                      background: "rgba(255,255,255,0.02)",
+                    }}
                   >
                     <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-400/60 transition-colors group-hover:text-violet-400" />
-                    <span className="flex-1 text-muted-foreground transition-colors group-hover:text-foreground">{s}</span>
+                    <span className="flex-1 text-muted-foreground transition-colors group-hover:text-foreground">
+                      {s}
+                    </span>
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground" />
                   </button>
                 ))}
@@ -257,9 +275,7 @@ function PulsePage() {
                   <div
                     className={
                       "whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-relaxed " +
-                      (m.role === "user"
-                        ? "bg-foreground text-background"
-                        : "text-foreground/90")
+                      (m.role === "user" ? "bg-foreground text-background" : "text-foreground/90")
                     }
                     style={
                       m.role === "assistant"
@@ -297,7 +313,10 @@ function PulsePage() {
               </div>
               <div
                 className="flex items-center gap-1.5 rounded-2xl px-4 py-3.5"
-                style={{ background: "rgba(26,26,30,0.80)", border: "1px solid rgba(255,255,255,0.08)" }}
+                style={{
+                  background: "rgba(26,26,30,0.80)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
               >
                 <span className="typing-dot h-1.5 w-1.5 rounded-full bg-violet-400/60" />
                 <span className="typing-dot h-1.5 w-1.5 rounded-full bg-violet-400/60" />
@@ -307,7 +326,7 @@ function PulsePage() {
           )}
         </div>
 
-        {/* ── Input bar ── */}
+        {/* Input bar */}
         <div
           className="sticky bottom-16 rounded-2xl p-1 sm:bottom-4"
           style={{
@@ -317,8 +336,13 @@ function PulsePage() {
           }}
         >
           {exhausted && (
-            <div className="mx-2 mb-2 mt-1 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-red-300/80"
-              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}>
+            <div
+              className="mx-2 mb-2 mt-1 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-red-300/80"
+              style={{
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.15)",
+              }}
+            >
               <Info className="h-3.5 w-3.5 shrink-0" />
               Daily limit reached. Verify your account to unlock unlimited PulseAssist.
             </div>

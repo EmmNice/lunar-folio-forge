@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { parseNotificationPrefs, type NotificationPrefs } from "@/lib/notification-prefs";
 
 export type RoleType = "founder" | "developer" | "pm" | "investor";
 export type VerificationTier = "none" | "silver" | "gold";
@@ -26,41 +27,105 @@ export type Profile = {
   pitch_limit: number | null;
   dm_cloaking_enabled: boolean;
   hide_from_search: boolean;
+  notification_prefs: NotificationPrefs;
 };
 
-// Profile columns split into tiers so a missing column from an unapplied
-// migration never blocks the whole profile load.
-//
-// Tier 1 — initial schema (always present):
-const BASE_PROFILE_COLUMNS = "id, handle, display_name, avatar_url, bio";
-// Tier 2 — ledger_v2_social_and_verification migration:
-const V2_PROFILE_COLUMNS =
-  BASE_PROFILE_COLUMNS +
-  ", date_of_birth, role_type, company_name, onboarding_completed, verification_tier";
-// Tier 3 — later optional migrations (002_overhaul, 003_privacy, v2_dual_track):
-const ALL_PROFILE_COLUMNS =
-  V2_PROFILE_COLUMNS +
-  ", github_url, portfolio_url, startup_url, traction_url" +
-  ", subscription_status, ai_credits_used, ai_credits_reset_at, pitch_limit, dm_cloaking_enabled";
+const PROFILE_COLUMNS = [
+  "id",
+  "handle",
+  "display_name",
+  "avatar_url",
+  "bio",
+  "date_of_birth",
+  "role_type",
+  "company_name",
+  "onboarding_completed",
+  "verification_tier",
+  "github_url",
+  "portfolio_url",
+  "startup_url",
+  "traction_url",
+  "subscription_status",
+  "ai_credits_used",
+  "ai_credits_reset_at",
+  "pitch_limit",
+  "dm_cloaking_enabled",
+  "hide_from_search",
+  "notification_prefs",
+].join(", ");
 
-// Defaults used when optional columns are absent from the DB.
-const OPTIONAL_COLUMN_DEFAULTS = {
-  date_of_birth: null,
-  role_type: null,
-  company_name: null,
-  onboarding_completed: false,
-  verification_tier: "none" as const,
-  github_url: null,
-  portfolio_url: null,
-  startup_url: null,
-  traction_url: null,
-  subscription_status: "active",
-  ai_credits_used: 0,
-  ai_credits_reset_at: null,
-  pitch_limit: null,
-  dm_cloaking_enabled: false,
-  hide_from_search: false,
-};
+/**
+ * A brand-new account can reach the app before the on_auth_user_created trigger
+ * has committed its profile row, so the first read comes back empty. Retry a
+ * couple of times before giving up.
+ */
+const PROFILE_RETRY_DELAYS_MS = [0, 300, 700];
+
+function logAuthIssue(message: string, detail?: unknown) {
+  if (import.meta.env.DEV) console.error(`[auth] ${message}`, detail ?? "");
+}
+
+async function fetchProfile(userId: string): Promise<Profile | null> {
+  for (const delay of PROFILE_RETRY_DELAYS_MS) {
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(PROFILE_COLUMNS)
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      logAuthIssue("profile fetch failed:", error.message);
+      continue;
+    }
+    if (data) {
+      const row = data as unknown as Omit<Profile, "notification_prefs"> & {
+        notification_prefs: unknown;
+      };
+      return { ...row, notification_prefs: parseNotificationPrefs(row.notification_prefs) };
+    }
+  }
+  return null;
+}
+
+async function fetchIsAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .limit(1);
+
+  if (error) {
+    logAuthIssue("admin check failed:", error.message);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Resolves the profile and admin flag for a user. Never throws — a failure here
+ * must not leave the app stuck on a loading screen.
+ */
+async function loadProfile(
+  user: User | null,
+): Promise<{ profile: Profile | null; isAdmin: boolean }> {
+  if (!user) return { profile: null, isAdmin: false };
+
+  const [profile, isAdmin] = await Promise.all([
+    fetchProfile(user.id).catch((error) => {
+      logAuthIssue("profile load threw:", error);
+      return null;
+    }),
+    fetchIsAdmin(user.id).catch((error) => {
+      logAuthIssue("admin check threw:", error);
+      return false;
+    }),
+  ]);
+
+  return { profile, isAdmin };
+}
 
 export type AuthState = {
   loading: boolean;
@@ -70,105 +135,6 @@ export type AuthState = {
   isAdmin: boolean;
   refreshProfile: () => Promise<void>;
 };
-
-/**
- * Loads the full profile for a user. Always resolves — never throws.
- * Returns null profile if the user has no row yet (new-account race) or DB is down.
- *
- * Parallelises the admin-role DB check with the profile fetch so neither
- * blocks the other. The env-var fast path skips the DB entirely.
- */
-async function loadProfile(user: User | null): Promise<{ profile: Profile | null; isAdmin: boolean }> {
-  if (!user) return { profile: null, isAdmin: false };
-
-  // ── Admin check ────────────────────────────────────────────────────────────
-  // Fast path: env var list — no DB round-trip at all.
-  const envAdmins = (import.meta.env.VITE_ADMIN_IDS ?? "")
-    .split(",")
-    .map((s: string) => s.trim())
-    .filter(Boolean);
-
-  const adminPromise: Promise<boolean> = envAdmins.includes(user.id)
-    ? Promise.resolve(true)
-    : supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .limit(10)
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("[auth] user_roles query failed:", error.message, error.code);
-            return false;
-          }
-          const admin = Array.isArray(data) && data.some((r: any) => r.role === "admin");
-          if (!admin) console.warn("[auth] user_roles rows:", JSON.stringify(data));
-          return admin;
-        })
-        .catch((e) => {
-          console.error("[auth] admin check threw:", e);
-          return false;
-        });
-
-  // ── Profile fetch ──────────────────────────────────────────────────────────
-  // Tiered fallback: try all columns first, then v2 columns, then base.
-  // This means a missing column from an unapplied migration never prevents
-  // the profile from loading — we just fill in defaults for absent columns.
-  // The retry loop handles the new-account race where the DB trigger hasn't
-  // fired yet (profile row not yet created).
-  const profilePromise: Promise<Profile | null> = (async () => {
-    // Try to fetch the profile row, falling back to progressively fewer
-    // columns if a "column does not exist" error is returned.
-    async function fetchProfileRow(userId: string): Promise<Record<string, unknown> | null> {
-      for (const cols of [ALL_PROFILE_COLUMNS, V2_PROFILE_COLUMNS, BASE_PROFILE_COLUMNS]) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(cols)
-          .eq("id", userId)
-          .maybeSingle();
-        if (!error) return data as Record<string, unknown> | null;
-        console.error(`[auth] profile fetch error (cols="${cols.slice(0, 40)}…"):`, error.message);
-        // Only retry with fewer columns on a "column does not exist" class error.
-        // Other errors (network, RLS) should just break out so the retry loop retries later.
-        if (!error.message.includes("column") && error.code !== "42703") break;
-      }
-      return null;
-    }
-
-    const delays = [0, 300, 700];
-    for (let i = 0; i < delays.length; i++) {
-      if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
-      try {
-        const data = await fetchProfileRow(user.id);
-        if (data) {
-          // Try to read hide_from_search separately — it was added in its own
-          // migration and may not be in any of the column tiers above.
-          let hide_from_search = false;
-          try {
-            const { data: extra } = await supabase
-              .from("profiles")
-              .select("hide_from_search")
-              .eq("id", user.id)
-              .maybeSingle();
-            hide_from_search = (extra as any)?.hide_from_search ?? false;
-          } catch { /* column doesn't exist yet — use default */ }
-
-          return {
-            ...OPTIONAL_COLUMN_DEFAULTS,
-            ...data,
-            hide_from_search,
-          } as Profile;
-        }
-      } catch {
-        // DB error on this attempt — will retry or give up gracefully
-      }
-    }
-    return null;
-  })();
-
-  // ── Both in parallel ───────────────────────────────────────────────────────
-  const [isAdmin, profile] = await Promise.all([adminPromise, profilePromise]);
-  return { profile, isAdmin };
-}
 
 export function useAuth(): AuthState {
   const [state, setState] = useState<Omit<AuthState, "refreshProfile">>({
@@ -182,23 +148,23 @@ export function useAuth(): AuthState {
   useEffect(() => {
     let cancelled = false;
 
-    // Initial session load — always resolves, never freezes
     async function init() {
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
+
         const user = data.session?.user ?? null;
         const { profile, isAdmin } = await loadProfile(user);
         if (cancelled) return;
+
         setState({ loading: false, session: data.session, user, profile, isAdmin });
-      } catch {
-        // Absolute worst case (getSession itself throws) — unfreeze loading
+      } catch (error) {
+        logAuthIssue("session load failed:", error);
         if (!cancelled) setState((s) => ({ ...s, loading: false }));
       }
     }
     init();
 
-    // Listen for auth changes; errors are swallowed so they never freeze the UI
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       try {
@@ -206,8 +172,8 @@ export function useAuth(): AuthState {
         const { profile, isAdmin } = await loadProfile(user);
         if (cancelled) return;
         setState({ loading: false, session, user, profile, isAdmin });
-      } catch {
-        // Don't freeze on auth-event errors
+      } catch (error) {
+        logAuthIssue(`${event} handling failed:`, error);
       }
     });
 
@@ -223,8 +189,8 @@ export function useAuth(): AuthState {
       const user = data.session?.user ?? null;
       const { profile, isAdmin } = await loadProfile(user);
       setState((s) => ({ ...s, user, session: data.session, profile, isAdmin }));
-    } catch {
-      // Silently ignore refresh errors
+    } catch (error) {
+      logAuthIssue("profile refresh failed:", error);
     }
   }
 
