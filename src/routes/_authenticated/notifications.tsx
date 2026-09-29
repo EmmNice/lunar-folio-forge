@@ -87,7 +87,8 @@ function verificationLabel(
   type: "verification_approved" | "verification_rejected",
   tier?: "silver" | "gold",
 ) {
-  const tierLabel = tier === "gold" ? "Gold Investor" : "Silver Builder";
+  // Gold covers founders as well as investors since 20260930000700.
+  const tierLabel = tier === "gold" ? "Gold" : "Silver";
   if (type === "verification_approved") {
     return `🎉 Congratulations! Your ${tierLabel} verification has been approved.`;
   }
