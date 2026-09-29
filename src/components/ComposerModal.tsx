@@ -142,6 +142,23 @@ export function ComposerModal({
       ? "border-foreground bg-foreground text-background"
       : "border-border text-muted-foreground hover:text-foreground");
 
+  /*
+    The publish handlers check `profile`, but the markup below dereferenced it
+    unconditionally — `profile.display_name.charAt(0)` for the avatar initial.
+    `profile` is null whenever there is a session but no profile row: a signup
+    whose profile insert failed, or a token still held for an account that has
+    since been deleted. Opening the composer in that state threw during render,
+    and React escalates a render throw to the route error boundary — so the whole
+    page became "Something went wrong".
+
+    Rendering nothing beats a nicer fallback avatar here: with no profile there is
+    no author to attribute a post to, and the insert would be refused anyway.
+
+    Placed after every hook, not at the top of the component, so the hook call
+    order stays identical on every render.
+  */
+  if (!user || !profile) return null;
+
   return (
     <>
       {/* Backdrop */}
