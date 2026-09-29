@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { describeWriteError } from "@/lib/db-errors";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { MAX_MESSAGE_LENGTH } from "@/lib/limits";
@@ -43,14 +44,27 @@ function ThreadPage() {
       if (!otherProfile) return;
       setOther(otherProfile as unknown as Profile);
 
-      const { data: msgs } = await supabase
+      const { data: msgs, error: msgErr } = await supabase
         .from("messages")
         .select("id, sender_id, body, created_at")
         .eq("conversation_id", id)
         .order("created_at", { ascending: true });
       if (cancelled) return;
+      if (msgErr) {
+        toast.error("Couldn't load this conversation.");
+        return;
+      }
       setMessages((msgs ?? []) as Message[]);
       queueMicrotask(() => scrollRef.current?.scrollTo({ top: 1e9 }));
+
+      // Opening the thread clears its unread badge. notify_on_message() keeps at
+      // most one unread row per conversation, so this is the read receipt.
+      await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("user_id", user.id)
+        .eq("conversation_id", id)
+        .eq("read", false);
     })();
 
     const channel = supabase
@@ -91,7 +105,7 @@ function ThreadPage() {
       .insert({ conversation_id: id, sender_id: user.id, body: trimmed });
     setSending(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(describeWriteError(error.message, "send messages"));
       return;
     }
     setBody("");

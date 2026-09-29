@@ -12,16 +12,28 @@ import {
   Building2,
   CheckCircle2,
   XCircle,
+  Flag,
+  ScrollText,
+  Ban,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { reviewApplication, listPendingApplications } from "@/lib/verification.functions";
-import { setVerificationTier } from "@/lib/admin.functions";
+import {
+  setVerificationTier,
+  listMembers,
+  setAccountStatus,
+  listReports,
+  resolveReport,
+  listAdminActions,
+} from "@/lib/admin.functions";
 import { timeAgo } from "@/lib/time";
-import type { VerificationTier } from "@/hooks/use-auth";
+import { MAX_REPORT_REASON_LENGTH } from "@/lib/limits";
+import type { AccountStatus, VerificationTier } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin Panel · The Ledger" }] }),
@@ -56,8 +68,43 @@ type ProfileRow = {
   company_name: string | null;
   role_type: string | null;
   onboarding_completed: boolean;
+  account_status: AccountStatus;
   created_at: string;
 };
+
+type ReportRow = {
+  id: string;
+  reason: string | null;
+  status: string;
+  created_at: string;
+  reporter: { id: string; handle: string; display_name: string } | null;
+  post: {
+    id: string;
+    content: string;
+    background: string | null;
+    visibility: string | null;
+    created_at: string;
+    author: {
+      id: string;
+      handle: string;
+      display_name: string;
+      avatar_url: string | null;
+      account_status: AccountStatus;
+    } | null;
+  } | null;
+};
+
+type AuditRow = {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  detail: unknown;
+  created_at: string;
+  actor: { id: string; handle: string; display_name: string } | null;
+};
+
+type AdminTab = "applications" | "reports" | "members" | "audit";
 
 type ApplicationRow = {
   id: string;
@@ -92,8 +139,13 @@ function AdminPage() {
   const doReview = useServerFn(reviewApplication);
   const doListApplications = useServerFn(listPendingApplications);
   const doSetTier = useServerFn(setVerificationTier);
+  const doListMembers = useServerFn(listMembers);
+  const doSetAccountStatus = useServerFn(setAccountStatus);
+  const doListReports = useServerFn(listReports);
+  const doResolveReport = useServerFn(resolveReport);
+  const doListAudit = useServerFn(listAdminActions);
 
-  const [adminTab, setAdminTab] = useState<"members" | "applications">("applications");
+  const [adminTab, setAdminTab] = useState<AdminTab>("applications");
   const [search, setSearch] = useState("");
 
   // Members
@@ -104,23 +156,44 @@ function AdminPage() {
   const [applications, setApplications] = useState<ApplicationRow[] | null>(null);
   const [reviewBusy, setReviewBusy] = useState<Record<string, boolean>>({});
 
+  // Moderation queue + audit trail
+  const [reports, setReports] = useState<ReportRow[] | null>(null);
+  const [reportBusy, setReportBusy] = useState<Record<string, boolean>>({});
+  const [audit, setAudit] = useState<AuditRow[] | null>(null);
+
   useEffect(() => {
     if (loading) return;
     if (!isAdmin) navigate({ to: "/feed", replace: true });
   }, [loading, isAdmin, navigate]);
 
+  // Served by a server function rather than a browser query: the directory needs
+  // account_status, which is no longer readable by `authenticated`, and this puts
+  // the whole listing behind a server-side admin check instead of a client flag.
   async function loadProfiles() {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(
-        "id, handle, display_name, avatar_url, verification_tier, company_name, role_type, onboarding_completed, created_at",
-      )
-      .order("created_at", { ascending: false });
-    if (error) {
-      toast.error("Failed to load profiles.");
-      return;
+    try {
+      const data = await doListMembers({});
+      setProfiles((data ?? []) as unknown as ProfileRow[]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load members.");
     }
-    setProfiles((data ?? []) as ProfileRow[]);
+  }
+
+  async function loadReports() {
+    try {
+      const data = await doListReports({});
+      setReports((data ?? []) as unknown as ReportRow[]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load reports.");
+    }
+  }
+
+  async function loadAudit() {
+    try {
+      const data = await doListAudit({});
+      setAudit((data ?? []) as unknown as AuditRow[]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load the audit trail.");
+    }
   }
 
   // Served by a server function because verification_requests is admin-gated.
@@ -138,10 +211,65 @@ function AdminPage() {
     if (!isAdmin) return;
     loadProfiles();
     loadApplications();
+    loadReports();
+    loadAudit();
     // Intentionally keyed on isAdmin alone — these loaders are stable for the
     // lifetime of the page and re-running them on every render would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
+
+  /** Restrict, ban or reinstate a member. Enforcement is in RLS, not the UI. */
+  async function changeAccountStatus(profileId: string, status: AccountStatus) {
+    setMemberBusy((b) => ({ ...b, [profileId]: true }));
+    try {
+      await doSetAccountStatus({ data: { profileId, status } });
+      setProfiles(
+        (prev) =>
+          prev?.map((p) => (p.id === profileId ? { ...p, account_status: status } : p)) ?? null,
+      );
+      toast.success(
+        status === "active"
+          ? "Member reinstated."
+          : status === "restricted"
+            ? "Member restricted — they can read but not post."
+            : "Member suspended — their posts are now hidden.",
+      );
+      loadAudit();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update account status.");
+    } finally {
+      setMemberBusy((b) => ({ ...b, [profileId]: false }));
+    }
+  }
+
+  async function decideReport(
+    reportId: string,
+    resolution: "actioned" | "dismissed",
+    removePost: boolean,
+    note: string,
+  ) {
+    setReportBusy((b) => ({ ...b, [reportId]: true }));
+    try {
+      const result = await doResolveReport({
+        data: { reportId, resolution, removePost, note: note.trim() || undefined },
+      });
+      setReports((prev) => prev?.filter((r) => r.id !== reportId) ?? null);
+      const extra =
+        result.alsoResolved > 0
+          ? ` ${result.alsoResolved} other report${result.alsoResolved === 1 ? "" : "s"} on the same post closed too.`
+          : "";
+      toast.success(
+        (resolution === "actioned" ? "Report actioned." : "Report dismissed.") +
+          (result.postRemoved ? " Post removed." : "") +
+          extra,
+      );
+      loadAudit();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to resolve the report.");
+    } finally {
+      setReportBusy((b) => ({ ...b, [reportId]: false }));
+    }
+  }
 
   async function setTier(profileId: string, tier: VerificationTier) {
     setMemberBusy((b) => ({ ...b, [profileId]: true }));
@@ -222,39 +350,131 @@ function AdminPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="mb-6 flex gap-1 rounded-xl border border-border/50 bg-secondary/10 p-1 max-w-xs">
-          <button
-            type="button"
-            onClick={() => setAdminTab("applications")}
-            className={
-              "flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
-              (adminTab === "applications"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground/80")
-            }
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Applications
-            {applications !== null && applications.length > 0 && (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/80 px-1 text-[10px] font-bold text-black">
-                {applications.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setAdminTab("members")}
-            className={
-              "flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
-              (adminTab === "members"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground/80")
-            }
-          >
-            <Users className="h-3.5 w-3.5" />
-            Members
-          </button>
+        <div className="mb-6 flex max-w-2xl gap-1 rounded-xl border border-border/50 bg-secondary/10 p-1">
+          {(
+            [
+              {
+                key: "applications",
+                label: "Applications",
+                icon: FileText,
+                count: applications?.length,
+              },
+              { key: "reports", label: "Reports", icon: Flag, count: reports?.length },
+              { key: "members", label: "Members", icon: Users, count: undefined },
+              { key: "audit", label: "Audit", icon: ScrollText, count: undefined },
+            ] as const
+          ).map(({ key, label, icon: Icon, count }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setAdminTab(key)}
+              className={
+                "flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
+                (adminTab === key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground/80")
+              }
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+              {typeof count === "number" && count > 0 && (
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/80 px-1 text-[10px] font-bold text-black">
+                  {count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
+
+        {/* ══════════════════════════════════════════════════════════════
+            REPORTS TAB
+            The report button has been writing rows since launch behind a
+            "the moderators will review" toast, with nothing on the other
+            end reading them. This is the other end.
+        ══════════════════════════════════════════════════════════════ */}
+        {adminTab === "reports" && (
+          <div className="space-y-4">
+            {reports === null ? (
+              <div className="text-sm text-muted-foreground">Loading reports…</div>
+            ) : reports.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/60 px-8 py-16 text-center">
+                <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-foreground">Queue is empty</p>
+                <p className="mt-1 text-xs text-muted-foreground">No open reports right now.</p>
+              </div>
+            ) : (
+              reports.map((r) => (
+                <ReportCard
+                  key={r.id}
+                  report={r}
+                  busy={!!reportBusy[r.id]}
+                  onDecide={(resolution, removePost, note) =>
+                    decideReport(r.id, resolution, removePost, note)
+                  }
+                  onRestrictAuthor={() =>
+                    r.post?.author ? changeAccountStatus(r.post.author.id, "restricted") : undefined
+                  }
+                  onSuspendAuthor={() =>
+                    r.post?.author ? changeAccountStatus(r.post.author.id, "banned") : undefined
+                  }
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            AUDIT TAB
+        ══════════════════════════════════════════════════════════════ */}
+        {adminTab === "audit" && (
+          <div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Every badge grant, suspension, removal and review decision, newest first. Written
+              server-side with no way to edit or delete an entry from the app.
+            </p>
+            {audit === null ? (
+              <div className="text-sm text-muted-foreground">Loading audit trail…</div>
+            ) : audit.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/60 px-8 py-16 text-center">
+                <p className="text-sm font-medium text-foreground">Nothing logged yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Admin actions will appear here as they happen.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-border/50">
+                {audit.map((entry, i) => (
+                  <div
+                    key={entry.id}
+                    className={
+                      "flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 text-xs " +
+                      (i % 2 === 0 ? "bg-card/30" : "")
+                    }
+                  >
+                    <code className="rounded bg-secondary/50 px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                      {entry.action}
+                    </code>
+                    <span className="text-muted-foreground">
+                      {entry.actor ? `@${entry.actor.handle}` : "unknown admin"}
+                    </span>
+                    <span className="text-muted-foreground/70">
+                      {entry.target_type}
+                      {entry.target_id ? ` ${entry.target_id.slice(0, 8)}` : ""}
+                    </span>
+                    <span className="ml-auto text-muted-foreground/60">
+                      {timeAgo(entry.created_at)}
+                    </span>
+                    {entry.detail != null && Object.keys(entry.detail as object).length > 0 && (
+                      <p className="w-full break-all font-mono text-[10px] text-muted-foreground/50">
+                        {JSON.stringify(entry.detail)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════
             APPLICATIONS TAB
@@ -431,9 +651,21 @@ function AdminPage() {
                           >
                             {p.verification_tier}
                           </span>
+                          {p.account_status !== "active" && (
+                            <span
+                              className={
+                                "ml-1.5 rounded-full border px-2 py-0.5 text-xs font-medium " +
+                                (p.account_status === "banned"
+                                  ? "border-red-500/40 text-red-400"
+                                  : "border-amber-500/40 text-amber-400")
+                              }
+                            >
+                              {p.account_status === "banned" ? "suspended" : "restricted"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1.5">
+                          <div className="flex flex-wrap justify-end gap-1.5">
                             {memberBusy[p.id] ? (
                               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             ) : (
@@ -466,6 +698,42 @@ function AdminPage() {
                                     <ShieldOff className="h-3.5 w-3.5" /> Revoke
                                   </button>
                                 )}
+
+                                {/*
+                                  Moderation. Until now the strongest sanction was
+                                  revoking a badge, which does nothing to stop an
+                                  abusive account posting. Enforcement is in RLS,
+                                  so these buttons change behaviour, not just a
+                                  label.
+                                */}
+                                {p.account_status === "active" ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => changeAccountStatus(p.id, "restricted")}
+                                      className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-xs text-amber-400 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10"
+                                      title="Read-only: cannot post, comment, like, re-ship or message"
+                                    >
+                                      <Ban className="h-3.5 w-3.5" /> Restrict
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => changeAccountStatus(p.id, "banned")}
+                                      className="inline-flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-xs text-red-400 transition-colors hover:border-red-500/60 hover:bg-red-500/10"
+                                      title="Read-only and their posts are hidden from everyone"
+                                    >
+                                      <Ban className="h-3.5 w-3.5" /> Suspend
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => changeAccountStatus(p.id, "active")}
+                                    className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs text-emerald-400 transition-colors hover:border-emerald-500/60 hover:bg-emerald-500/10"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5" /> Reinstate
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -494,6 +762,150 @@ function AdminPage() {
 }
 
 // Application review card
+/**
+ * One open report, with the reported content and the decisions available.
+ *
+ * Shows the post itself rather than just an id — a moderator deciding on content
+ * they cannot see is not moderating.
+ */
+function ReportCard({
+  report,
+  busy,
+  onDecide,
+  onRestrictAuthor,
+  onSuspendAuthor,
+}: {
+  report: ReportRow;
+  busy: boolean;
+  onDecide: (resolution: "actioned" | "dismissed", removePost: boolean, note: string) => void;
+  onRestrictAuthor: () => void;
+  onSuspendAuthor: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const author = report.post?.author;
+
+  return (
+    <div className="rounded-2xl border border-border/50 bg-card/30 p-4">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <Flag className="h-3.5 w-3.5 text-amber-400" />
+        <span>
+          Reported by{" "}
+          <span className="font-medium text-foreground">
+            @{report.reporter?.handle ?? "unknown"}
+          </span>
+        </span>
+        <span className="ml-auto">{timeAgo(report.created_at)}</span>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-border/50 bg-background/40 p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Reason
+        </p>
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground/90">
+          {report.reason?.trim() || (
+            <span className="italic text-muted-foreground">
+              No reason given (reported before the reason field existed)
+            </span>
+          )}
+        </p>
+      </div>
+
+      {report.post ? (
+        <div className="mt-3 rounded-xl border border-border/50 bg-background/40 p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Post by</span>
+            <span className="font-medium text-foreground">
+              {author?.display_name ?? "unknown"} @{author?.handle ?? "?"}
+            </span>
+            {author && author.account_status !== "active" && (
+              <span className="rounded-full border border-red-500/40 px-2 py-0.5 text-[10px] font-medium text-red-400">
+                {author.account_status === "banned" ? "suspended" : "restricted"}
+              </span>
+            )}
+            <span className="ml-auto text-muted-foreground/60">
+              {timeAgo(report.post.created_at)}
+            </span>
+          </div>
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground/90">
+            {report.post.content}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs italic text-muted-foreground">
+          The reported post has already been deleted.
+        </p>
+      )}
+
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        maxLength={MAX_REPORT_REASON_LENGTH}
+        placeholder="Resolution note (optional, kept in the audit trail)"
+        className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-foreground/40"
+      />
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onDecide("dismissed", false, note)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <XCircle className="h-3.5 w-3.5" />
+          )}
+          Dismiss
+        </button>
+        {report.post && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDecide("actioned", true, note)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove post
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onDecide("actioned", false, note)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/40 disabled:opacity-50"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Action without removing
+        </button>
+
+        {author && author.account_status === "active" && (
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onRestrictAuthor}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
+            >
+              <Ban className="h-3.5 w-3.5" />
+              Restrict author
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onSuspendAuthor}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            >
+              <Ban className="h-3.5 w-3.5" />
+              Suspend author
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ApplicationCard({
   app,
   busy,

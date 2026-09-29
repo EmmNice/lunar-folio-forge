@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bell, Heart, MessageCircle, Repeat2, ShieldCheck, ShieldOff } from "lucide-react";
+import {
+  Bell,
+  Heart,
+  MessageCircle,
+  Repeat2,
+  ShieldCheck,
+  ShieldOff,
+  Mail,
+  Briefcase,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,12 +23,22 @@ export const Route = createFileRoute("/_authenticated/notifications")({
   component: NotificationsPage,
 });
 
+type NotificationType =
+  | "like"
+  | "comment"
+  | "repost"
+  | "verification_approved"
+  | "verification_rejected"
+  | "message"
+  | "pitch";
+
 type NotificationRow = {
   id: string;
-  type: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected";
+  type: NotificationType;
   read: boolean;
   created_at: string;
-  metadata: { tier?: "silver" | "gold" } | null;
+  conversation_id: string | null;
+  metadata: { tier?: "silver" | "gold"; companyName?: string } | null;
   actor: { id: string; handle: string; display_name: string; avatar_url: string | null } | null;
   post: { id: string; content: string } | null;
 };
@@ -29,12 +49,16 @@ const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   repost: Repeat2,
   verification_approved: ShieldCheck,
   verification_rejected: ShieldOff,
+  message: Mail,
+  pitch: Briefcase,
 };
 
 const TYPE_LABEL: Record<string, string> = {
   like: "liked your post",
   comment: "commented on your post",
   repost: "re-shipped your post",
+  message: "sent you a message",
+  pitch: "pitched you",
 };
 
 const TYPE_ICON_COLOR: Record<string, string> = {
@@ -43,6 +67,8 @@ const TYPE_ICON_COLOR: Record<string, string> = {
   repost: "text-emerald-400",
   verification_approved: "text-amber-400",
   verification_rejected: "text-red-400",
+  message: "text-violet-400",
+  pitch: "text-amber-400",
 };
 
 function verificationLabel(
@@ -59,35 +85,76 @@ function verificationLabel(
 function NotificationsPage() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [markingRead, setMarkingRead] = useState(false);
+
+  async function load() {
+    if (!user) return;
+    // `error` used to be destructured away entirely, so a failed request rendered
+    // the "No notifications yet" empty state — indistinguishable from an account
+    // that genuinely has none.
+    const { data, error } = await supabase
+      .from("notifications")
+      .select(
+        "id, type, read, created_at, conversation_id, metadata, actor:profiles!notifications_actor_id_fkey(id, handle, display_name, avatar_url), post:posts!notifications_post_id_fkey(id, content)",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(NOTIFICATION_PAGE_SIZE);
+
+    if (error) {
+      setLoadError("Couldn't load your notifications. Check your connection and try again.");
+      setNotifications([]);
+      return;
+    }
+    setLoadError(null);
+    setNotifications((data ?? []) as unknown as NotificationRow[]);
+  }
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-
     (async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select(
-          "id, type, read, created_at, metadata, actor:profiles!notifications_actor_id_fkey(id, handle, display_name, avatar_url), post:posts!notifications_post_id_fkey(id, content)",
-        )
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(NOTIFICATION_PAGE_SIZE);
-
       if (cancelled) return;
-      setNotifications((data ?? []) as unknown as NotificationRow[]);
-
-      // Mark all unread as read
-      const unreadIds = (data ?? []).filter((n) => !n.read).map((n) => n.id);
-      if (unreadIds.length > 0) {
-        await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
-      }
+      await load();
     })();
-
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  /**
+   * Mark everything read, on request.
+   *
+   * This used to fire automatically on mount, which meant the unread highlight
+   * you were looking at was already stale and there was no way to leave something
+   * marked unread to come back to.
+   */
+  async function markAllRead() {
+    if (!user) return;
+    const unreadIds = (notifications ?? []).filter((n) => !n.read).map((n) => n.id);
+    if (unreadIds.length === 0) return;
+    setMarkingRead(true);
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .in("id", unreadIds);
+    setMarkingRead(false);
+    if (error) {
+      toast.error("Couldn't mark them read.");
+      return;
+    }
+    setNotifications((prev) => prev?.map((n) => ({ ...n, read: true })) ?? null);
+  }
+
+  /** Reading one notification marks just that one. */
+  async function markOneRead(id: string) {
+    setNotifications((prev) => prev?.map((n) => (n.id === id ? { ...n, read: true } : n)) ?? null);
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
+  }
+
+  const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
@@ -97,7 +164,32 @@ function NotificationsPage() {
           <Bell className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Notifications</h1>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">Activity on your posts and account.</p>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Activity on your posts and account.</p>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={markingRead}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              {markingRead ? "Marking…" : `Mark all ${unreadCount} as read`}
+            </button>
+          )}
+        </div>
+
+        {loadError && (
+          <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4">
+            <p className="text-xs text-red-300">{loadError}</p>
+            <button
+              type="button"
+              onClick={load}
+              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/60"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="mt-8">
           {notifications === null ? (
@@ -130,7 +222,8 @@ function NotificationsPage() {
               <Bell className="mx-auto h-8 w-8 text-border" />
               <p className="mt-3 text-sm text-muted-foreground">No notifications yet.</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Likes, comments, re-ships, and verification updates will appear here.
+                Likes, comments, re-ships, messages, pitches and verification updates will appear
+                here.
               </p>
             </div>
           ) : (
@@ -144,6 +237,7 @@ function NotificationsPage() {
                 return (
                   <li
                     key={n.id}
+                    onClick={() => !n.read && markOneRead(n.id)}
                     className={
                       "flex items-start gap-3 py-4 transition-colors " +
                       (!n.read ? "bg-secondary/20" : "")
@@ -228,6 +322,25 @@ function NotificationsPage() {
                         >
                           Open The Ledger →
                         </a>
+                      )}
+                      {n.type === "message" && n.conversation_id && (
+                        <Link
+                          to="/messages/$id"
+                          params={{ id: n.conversation_id }}
+                          className="mt-1 inline-block text-xs font-medium text-violet-400 hover:underline"
+                        >
+                          Open conversation →
+                        </Link>
+                      )}
+                      {n.type === "pitch" && (
+                        <Link
+                          to="/settings"
+                          className="mt-1 inline-block text-xs font-medium text-amber-400 hover:underline"
+                        >
+                          {n.metadata?.companyName
+                            ? `Review pitch from ${n.metadata.companyName} →`
+                            : "Review in Inbound Pitches →"}
+                        </Link>
                       )}
                       <p className="mt-1 text-[11px] text-muted-foreground/60">
                         {timeAgo(n.created_at)}

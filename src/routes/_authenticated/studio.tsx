@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { StatusCard, type Background, BACKGROUND_BASE_COLORS } from "@/components/StatusCard";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { describeWriteError } from "@/lib/db-errors";
 import { pulseAssistDraft } from "@/lib/pulse-assist.functions";
 import { MAX_POST_LENGTH } from "@/lib/limits";
 
@@ -132,7 +133,7 @@ function StudioPage() {
     });
     setBusy(null);
     if (error) {
-      toast.error(error.message);
+      toast.error(describeWriteError(error.message, "publish this"));
       return;
     }
     toast.success("Published to The Ledger.");

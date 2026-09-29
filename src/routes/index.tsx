@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
 import { LedgerMark } from "@/components/AppHeader";
+import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
 
 // Terms live outside the app. Set VITE_TERMS_URL to link them from the consent
 // line; when it's unset the sentence renders as plain text rather than pointing
@@ -132,7 +133,13 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-type AuthView = "social" | "email-signin" | "email-signup" | "check-email";
+type AuthView =
+  | "social"
+  | "email-signin"
+  | "email-signup"
+  | "check-email"
+  | "forgot-password"
+  | "reset-link-sent";
 
 function Landing() {
   const navigate = useNavigate();
@@ -222,8 +229,8 @@ function Landing() {
       toast.error("Enter your email and password.");
       return;
     }
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters.");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
     setSubmitting("email-signup");
@@ -253,6 +260,43 @@ function Landing() {
     }
   }
 
+  /**
+   * Send a password-reset link.
+   *
+   * There was no way to do this at all before: no resetPasswordForEmail call, no
+   * "Forgot password?" link and no route to land on, so anyone who forgot their
+   * password was permanently locked out of their account with no self-service
+   * path back in.
+   *
+   * The response is deliberately not conditional on whether the address exists.
+   * Saying "no account with that email" would turn this form into a way to test
+   * whether any given person is a member.
+   */
+  async function handleForgotPassword(e: FormEvent) {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Enter your email address.");
+      return;
+    }
+    setSubmitting("forgot-password");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setSubmitting(null);
+    if (error) {
+      // Rate limiting is the one failure worth showing, because waiting is the
+      // fix and silence would just make people hammer the button.
+      toast.error(
+        error.message.toLowerCase().includes("rate")
+          ? "Too many attempts. Wait a minute and try again."
+          : error.message,
+      );
+      return;
+    }
+    setConfirmEmail(email);
+    setView("reset-link-sent");
+  }
+
   /* Resend confirmation */
   async function resendConfirmation() {
     if (!confirmEmail) return;
@@ -276,6 +320,74 @@ function Landing() {
         causes React to unmount/remount the entire subtree on every state change,
         making buttons appear unresponsive)  */
   const authCardContent = (() => {
+    if (view === "forgot-password") {
+      return (
+        <div>
+          <h2 className="mb-1.5 text-center text-base font-semibold">Reset your password</h2>
+          <p className="mb-4 text-center text-sm text-muted-foreground">
+            We'll email you a link to set a new one.
+          </p>
+          <form onSubmit={handleForgotPassword} className="space-y-3">
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              className={inputCls}
+              required
+            />
+            <button
+              type="submit"
+              disabled={submitting !== null}
+              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+            >
+              {submitting === "forgot-password" ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending…
+                </span>
+              ) : (
+                "Send reset link"
+              )}
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={() => setView("email-signin")}
+            className="mt-4 w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors"
+          >
+            ← Back to sign in
+          </button>
+        </div>
+      );
+    }
+
+    if (view === "reset-link-sent") {
+      return (
+        <div className="text-center">
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full border border-border bg-secondary/60">
+            <Mail className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <h2 className="text-base font-semibold">Check your email</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            If <span className="font-medium text-foreground">{confirmEmail}</span> has an account, a
+            password reset link is on its way. The link expires in one hour.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setView("email-signin");
+              setConfirmEmail("");
+            }}
+            className="mt-5 w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors"
+          >
+            ← Back to sign in
+          </button>
+        </div>
+      );
+    }
+
     if (view === "check-email") {
       return (
         <div className="text-center">
@@ -355,6 +467,13 @@ function Landing() {
             </button>
           </form>
           <div className="mt-4 space-y-2 text-center text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setView("forgot-password")}
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              Forgot your password?
+            </button>
             <p>
               No account?{" "}
               <button
@@ -397,9 +516,9 @@ function Landing() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password (8+ characters)"
+                placeholder={`Password (${MIN_PASSWORD_LENGTH}+ characters)`}
                 className={inputCls}
-                minLength={8}
+                minLength={MIN_PASSWORD_LENGTH}
                 required
               />
               <p className="px-0.5 text-xs text-muted-foreground">

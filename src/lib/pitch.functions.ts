@@ -68,53 +68,92 @@ export const submitPitch = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: recipient } = await supabase
+    // The sender's own eligibility was never checked here. `pitches` has an RLS
+    // policy requiring the sender to be Silver or Gold, but the insert below uses
+    // the service role, which bypasses RLS entirely — so the only thing standing
+    // between an unverified account and every Gold member's inbox was a disabled
+    // button in the browser. Checking it explicitly is what makes the rule real.
+    //
+    // Read with the admin client because notification_prefs and account_status
+    // are no longer granted to `authenticated` (20260929000100).
+    const { data: sender } = await supabaseAdmin
+      .from("profiles")
+      .select("verification_tier, account_status")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!sender) throw new Error("Your profile could not be loaded.");
+    if (sender.account_status !== "active") {
+      throw new Error("Your account cannot send pitches right now.");
+    }
+    if (sender.verification_tier !== "silver" && sender.verification_tier !== "gold") {
+      throw new Error("Only verified members can send pitches. Apply for verification first.");
+    }
+
+    const { data: recipient } = await supabaseAdmin
       .from("profiles")
       .select("id, display_name, pitch_limit, verification_tier, notification_prefs")
       .eq("id", data.recipientId)
       .maybeSingle();
 
     if (!recipient) throw new Error("Recipient not found.");
+    if (recipient.id === userId) throw new Error("You cannot pitch yourself.");
     if (recipient.verification_tier !== "gold") {
       throw new Error("You can only pitch Gold members.");
     }
 
     // pitch_limit: null means unlimited, 0 means do-not-disturb, N is a weekly cap.
-    if (recipient.pitch_limit !== null) {
-      if (recipient.pitch_limit === 0) {
-        throw new Error("This member has paused inbound pitches. Please try again next week.");
-      }
-      const windowStart = new Date(
-        Date.now() - PITCH_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-      ).toISOString();
-      const { count } = await supabaseAdmin
-        .from("pitches")
-        .select("*", { count: "exact", head: true })
-        .eq("recipient_id", data.recipientId)
-        .gte("created_at", windowStart);
-      if ((count ?? 0) >= recipient.pitch_limit) {
-        throw new Error(
-          "This member is at their connection limit for the week. Please try again next week.",
-        );
-      }
+    if (recipient.pitch_limit === 0) {
+      throw new Error("This member has paused inbound pitches. Please try again next week.");
     }
 
-    const { data: pitch, error } = await supabaseAdmin
-      .from("pitches")
-      .insert({
-        sender_id: userId,
-        recipient_id: data.recipientId,
-        company_name: data.companyName,
-        pitch: data.pitch,
-        deck_url: data.deckUrl || null,
-      })
-      .select("id")
-      .single();
+    // claim_pitch_slot counts the window and inserts under one row lock, so two
+    // senders arriving together can no longer both pass a cap with one slot left.
+    // The generated RPC argument types are non-nullable because Supabase's type
+    // generator does not model nullable function parameters, but `_deck_url` and
+    // `_weekly_limit` are both genuinely nullable in SQL (no deck; unlimited
+    // inbox). Narrowing the cast to this one call keeps that fiction contained.
+    const { data: pitchId, error } = await supabaseAdmin.rpc("claim_pitch_slot", {
+      _sender_id: userId,
+      _recipient_id: data.recipientId,
+      _company_name: data.companyName,
+      _pitch: data.pitch,
+      _deck_url: data.deckUrl || null,
+      _weekly_limit: recipient.pitch_limit,
+      _window_days: PITCH_WINDOW_DAYS,
+    } as unknown as {
+      _sender_id: string;
+      _recipient_id: string;
+      _company_name: string;
+      _pitch: string;
+      _deck_url: string;
+      _weekly_limit: number;
+      _window_days: number;
+    });
 
     if (error) throw new Error(error.message);
+    if (!pitchId) {
+      throw new Error(
+        "This member is at their connection limit for the week. Please try again next week.",
+      );
+    }
+
+    // In-app notification, so a pitch shows in the bell even when email is off or
+    // unconfigured. Previously a pitch produced nothing but an email — if Resend
+    // was not set up, the recipient had no way to learn it had arrived short of
+    // opening the inbox on a hunch.
+    if (wantsNotification(recipient.notification_prefs, "pitches")) {
+      const { error: notifyErr } = await supabaseAdmin.from("notifications").insert({
+        user_id: data.recipientId,
+        actor_id: userId,
+        type: "pitch",
+        metadata: { pitchId, companyName: data.companyName },
+      });
+      if (notifyErr) console.warn("[pitch] Notification insert failed:", notifyErr.message);
+    }
 
     const emailed = await notifyRecipient({
       recipientId: data.recipientId,
@@ -125,7 +164,7 @@ export const submitPitch = createServerFn({ method: "POST" })
       deckUrl: data.deckUrl || null,
     });
 
-    return { pitchId: pitch.id, emailed };
+    return { pitchId, emailed };
   });
 
 /** Emails the recipient about a new pitch. Returns whether it actually went out. */
@@ -184,18 +223,28 @@ export const acceptPitch = createServerFn({ method: "POST" })
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Scoped to recipient_id so only the person pitched can accept it.
+    // Scoped to recipient_id so only the person pitched can accept it, and to
+    // pending/accepted so a pitch that was already declined cannot be quietly
+    // revived. Re-accepting an accepted pitch is a no-op that returns the
+    // existing thread, which keeps the button idempotent on a double click.
     const { data: accepted, error: updateErr } = await supabaseAdmin
       .from("pitches")
       .update({ status: "accepted" })
       .eq("id", data.pitchId)
       .eq("recipient_id", userId)
       .eq("sender_id", data.senderId)
+      .in("status", ["pending", "accepted"])
       .select("id")
       .maybeSingle();
 
     if (updateErr) throw new Error(updateErr.message);
     if (!accepted) throw new Error("Pitch not found, or it is not yours to accept.");
+
+    // No conversation slot is claimed and dm_cloaking is not consulted here, both
+    // deliberately: the daily cap and the cloak exist to stop *unsolicited* DMs,
+    // and this is the recipient opening a thread they were asked for. Spending
+    // one of their own three daily slots to reply to their own inbox would be
+    // backwards.
 
     const [userA, userB] = [userId, data.senderId].sort();
 

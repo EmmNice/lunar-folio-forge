@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { toPng } from "html-to-image";
 import { Loader2, Send, X, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { describeWriteError } from "@/lib/db-errors";
 import { StatusCard, BACKGROUND_BASE_COLORS } from "@/components/StatusCard";
 import { useAuth } from "@/hooks/use-auth";
 import type { Background } from "@/components/StatusCard";
@@ -82,7 +83,7 @@ export function ComposerModal({
       .single();
     setBusy(null);
     if (error) {
-      toast.error(error.message);
+      toast.error(describeWriteError(error.message, "publish this"));
       return;
     }
     toast.success("Published live to The Ledger.");

@@ -28,31 +28,11 @@ export type Profile = {
   dm_cloaking_enabled: boolean;
   hide_from_search: boolean;
   notification_prefs: NotificationPrefs;
+  /** 'active' | 'restricted' | 'banned' — moderation state, set by admins only. */
+  account_status: AccountStatus;
 };
 
-const PROFILE_COLUMNS = [
-  "id",
-  "handle",
-  "display_name",
-  "avatar_url",
-  "bio",
-  "date_of_birth",
-  "role_type",
-  "company_name",
-  "onboarding_completed",
-  "verification_tier",
-  "github_url",
-  "portfolio_url",
-  "startup_url",
-  "traction_url",
-  "subscription_status",
-  "ai_credits_used",
-  "ai_credits_reset_at",
-  "pitch_limit",
-  "dm_cloaking_enabled",
-  "hide_from_search",
-  "notification_prefs",
-].join(", ");
+export type AccountStatus = "active" | "restricted" | "banned";
 
 /**
  * A brand-new account can reach the app before the on_auth_user_created trigger
@@ -65,36 +45,50 @@ function logAuthIssue(message: string, detail?: unknown) {
   if (import.meta.env.DEV) console.error(`[auth] ${message}`, detail ?? "");
 }
 
-async function fetchProfile(userId: string): Promise<Profile | null> {
+/**
+ * Loads the signed-in member's own profile.
+ *
+ * Goes through the current_profile() RPC rather than selecting from `profiles`,
+ * because date_of_birth, subscription_status, the AI credit counters,
+ * notification_prefs and account_status are no longer granted to `authenticated`
+ * (20260929000100 — they used to be readable for *every* member by anyone with
+ * the publishable key). The RPC is SECURITY DEFINER and scoped to auth.uid(), so
+ * it returns exactly one row: yours.
+ */
+async function fetchProfile(_userId: string): Promise<Profile | null> {
   for (const delay of PROFILE_RETRY_DELAYS_MS) {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(PROFILE_COLUMNS)
-      .eq("id", userId)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("current_profile").maybeSingle();
 
     if (error) {
       logAuthIssue("profile fetch failed:", error.message);
       continue;
     }
     if (data) {
-      const row = data as unknown as Omit<Profile, "notification_prefs"> & {
+      const row = data as unknown as Omit<Profile, "notification_prefs" | "account_status"> & {
         notification_prefs: unknown;
+        account_status: string | null;
       };
-      return { ...row, notification_prefs: parseNotificationPrefs(row.notification_prefs) };
+      return {
+        ...row,
+        notification_prefs: parseNotificationPrefs(row.notification_prefs),
+        account_status: (row.account_status ?? "active") as AccountStatus,
+      };
     }
   }
   return null;
 }
 
 async function fetchIsAdmin(userId: string): Promise<boolean> {
+  // Matches the server-side is_admin(), which accepts super_admin as well.
+  // Checking only for 'admin' here meant a super_admin was bounced out of the
+  // panel by the route guard while every server function happily accepted them.
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", userId)
-    .eq("role", "admin")
+    .in("role", ["admin", "super_admin"])
     .limit(1);
 
   if (error) {

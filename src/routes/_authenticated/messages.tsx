@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,17 +23,37 @@ type ConversationRow = {
 function MessagesIndex() {
   const { user } = useAuth();
   const [rows, setRows] = useState<ConversationRow[] | null>(null);
+  const [unreadThreads, setUnreadThreads] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      // No .eq() filter here on purpose: the conversations SELECT policy already
+      // scopes rows to the two participants. `error` was previously discarded, so
+      // a failure looked like an empty inbox.
+      const { data, error } = await supabase
         .from("conversations")
         .select(
           "id, user_a, user_b, last_message_at, a:profiles!conversations_user_a_fkey(id, handle, display_name, avatar_url), b:profiles!conversations_user_b_fkey(id, handle, display_name, avatar_url)",
         )
         .order("last_message_at", { ascending: false });
+      if (error) {
+        toast.error("Couldn't load your conversations.");
+        setRows([]);
+        return;
+      }
       setRows((data ?? []) as unknown as ConversationRow[]);
+
+      // Which threads have an unread message notification waiting.
+      const { data: unread } = await supabase
+        .from("notifications")
+        .select("conversation_id")
+        .eq("user_id", user.id)
+        .eq("type", "message")
+        .eq("read", false);
+      setUnreadThreads(
+        new Set((unread ?? []).map((n) => n.conversation_id).filter((v): v is string => !!v)),
+      );
     })();
   }, [user]);
 
@@ -81,6 +102,7 @@ function MessagesIndex() {
               {rows.map((c) => {
                 const other = c.a && c.a.id === user?.id ? c.b : c.a;
                 if (!other) return null;
+                const unread = unreadThreads.has(c.id);
                 return (
                   <li key={c.id}>
                     <Link
@@ -107,10 +129,14 @@ function MessagesIndex() {
                           {other.display_name}{" "}
                           <span className="text-muted-foreground">@{other.handle}</span>
                         </p>
+                        {unread && (
+                          <p className="text-xs font-medium text-violet-400">New message</p>
+                        )}
                       </div>
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {timeAgo(c.last_message_at)}
                       </span>
+                      {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />}
                     </Link>
                   </li>
                 );

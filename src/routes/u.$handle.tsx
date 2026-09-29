@@ -105,15 +105,6 @@ function tierRingColor(tier?: string | null) {
   return "rgba(255,255,255,0.15)";
 }
 
-// Auto-redirect to the user's real handle
-function RedirectToOwnProfile({ handle }: { handle: string }) {
-  const navigate = useNavigate();
-  useEffect(() => {
-    navigate({ to: "/u/$handle", params: { handle }, search: { tab: undefined }, replace: true });
-  }, [handle, navigate]);
-  return null;
-}
-
 // Main page component
 function ProfilePage() {
   const { requestExport, exportSurface } = useCardExport();
@@ -295,21 +286,11 @@ function ProfilePage() {
     );
   }
   if (profile === null) {
-    // If the signed-in user lands here but their real handle is different,
-    // redirect them to their actual profile automatically.
-    if (me && me.handle && me.handle !== handle) {
-      return (
-        <div className="min-h-screen">
-          <AppHeader />
-          <div className="mx-auto max-w-5xl px-6 pt-16">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Redirecting…
-            </p>
-            <RedirectToOwnProfile handle={me.handle} />
-          </div>
-        </div>
-      );
-    }
+    // A signed-in visitor used to be bounced to their OWN profile whenever the
+    // requested handle didn't resolve, so a typo or a deleted account looked like
+    // the URL had been hijacked and "Profile not found" was unreachable for
+    // anyone logged in. Show the honest answer instead.
+    //
     // Logged-in user with no completed profile → send to onboarding
     if (user && !me) {
       return (
@@ -339,9 +320,21 @@ function ProfilePage() {
           <p className="mt-2 text-sm text-muted-foreground">
             No one on The Ledger uses the handle @{handle}.
           </p>
-          <Link to="/feed" className="mt-6 inline-block text-sm underline underline-offset-4">
-            Back to the feed
-          </Link>
+          <div className="mt-6 flex flex-wrap items-center gap-4 text-sm">
+            <Link to="/feed" className="underline underline-offset-4">
+              Back to the feed
+            </Link>
+            {me?.handle ? (
+              <Link
+                to="/u/$handle"
+                params={{ handle: me.handle }}
+                search={{ tab: undefined }}
+                className="underline underline-offset-4"
+              >
+                Go to your profile
+              </Link>
+            ) : null}
+          </div>
         </div>
       </div>
     );
@@ -895,107 +888,6 @@ type SelfProfile = {
   github_url: string | null;
   portfolio_url: string | null;
 };
-
-function SelfProfileCard({
-  profile,
-  onSaved,
-}: {
-  profile: SelfProfile;
-  onSaved: () => Promise<void>;
-}) {
-  const [editMode, setEditMode] = useState(false);
-
-  return (
-    <div
-      className="rounded-2xl p-5 sm:p-6"
-      style={{ background: "rgba(26,26,30,0.70)", border: "1px solid rgba(255,255,255,0.07)" }}
-    >
-      {/* Hero row — always visible */}
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
-        <div
-          className="grid h-14 w-14 shrink-0 overflow-hidden rounded-full text-xl font-semibold sm:h-16 sm:w-16"
-          style={{
-            border: "1px solid rgba(255,255,255,0.10)",
-            background: "rgba(255,255,255,0.05)",
-          }}
-        >
-          {profile.avatar_url ? (
-            <img
-              src={profile.avatar_url}
-              alt=""
-              className="h-full w-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <span className="grid h-full w-full place-items-center">
-              {profile.display_name.charAt(0).toUpperCase()}
-            </span>
-          )}
-        </div>
-
-        {/* Name / handle / meta — grows to fill available width */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h1 className="flex min-w-0 items-center gap-1.5 truncate text-lg font-semibold tracking-tight sm:text-xl">
-                <span className="truncate">{profile.display_name}</span>
-                <VerificationBadge tier={profile.verification_tier} size={16} />
-              </h1>
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                @{profile.handle}
-                {profile.role_type ? ` · ${ROLE_LABEL[profile.role_type]}` : ""}
-                {profile.company_name ? ` · ${profile.company_name}` : ""}
-              </p>
-            </div>
-
-            {/* Action buttons — pinned to right, never overflow */}
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setEditMode((v) => !v)}
-                className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                {editMode ? (
-                  <>
-                    <X className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Cancel</span>
-                  </>
-                ) : (
-                  <>
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Edit</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {!editMode && profile.bio && (
-            <p className="mt-1.5 text-sm text-foreground/80 break-words">{profile.bio}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Inline edit form */}
-      {editMode && (
-        <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
-          <EditProfileForm
-            profile={profile}
-            onSaved={async () => {
-              await onSaved();
-              setEditMode(false);
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Inline edit form
 function EditProfileForm({

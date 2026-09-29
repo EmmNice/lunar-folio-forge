@@ -12,11 +12,15 @@ import {
   Trash2,
   Lock,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { THEMES, type Background } from "@/components/StatusCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
+import { removePost } from "@/lib/admin.functions";
+import { MAX_POST_LENGTH, MAX_REPORT_REASON_LENGTH } from "@/lib/limits";
+import { describeWriteError } from "@/lib/db-errors";
 import type { VerificationTier } from "@/hooks/use-auth";
 
 export type FeedAuthor = {
@@ -44,34 +48,59 @@ type CommentRow = {
   author: FeedAuthor;
 };
 
+/**
+ * Like/repost/comment counts for one post, gathered in bulk by the parent.
+ *
+ * Each card used to issue five count queries of its own on mount. With the feed
+ * pulling 200 posts that was up to a thousand HTTP requests for a single screen —
+ * enough to get rate-limited and slow enough to look broken. The feed now fetches
+ * all five figures for the whole page in three queries and passes them down.
+ * `stats` is optional so a card rendered on its own still works.
+ */
+export type PostStats = {
+  likes: number;
+  reposts: number;
+  comments: number;
+  likedByMe: boolean;
+  repostedByMe: boolean;
+};
+
 export function PostCard({
   post,
   onDownload,
   currentUserId,
   onDeleted,
+  stats,
 }: {
   post: FeedPost;
   onDownload: (post: FeedPost) => void;
   currentUserId?: string;
   onDeleted?: (id: string) => void;
+  stats?: PostStats;
 }) {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
 
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
-  const [reposted, setReposted] = useState(false);
-  const [repostCount, setRepostCount] = useState(0);
-  const [commentCount, setCommentCount] = useState(0);
+  const [liked, setLiked] = useState(stats?.likedByMe ?? false);
+  const [likeCount, setLikeCount] = useState(stats?.likes ?? 0);
+  const [reposted, setReposted] = useState(stats?.repostedByMe ?? false);
+  const [repostCount, setRepostCount] = useState(stats?.reposts ?? 0);
+  const [commentCount, setCommentCount] = useState(stats?.comments ?? 0);
   const [busyLike, setBusyLike] = useState(false);
   const [busyRepost, setBusyRepost] = useState(false);
   const [busyDelete, setBusyDelete] = useState(false);
   const [reported, setReported] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [busyReport, setBusyReport] = useState(false);
+  const [deletingComment, setDeletingComment] = useState<string | null>(null);
 
   const [threadOpen, setThreadOpen] = useState(false);
   const [comments, setComments] = useState<CommentRow[] | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [postingComment, setPostingComment] = useState(false);
+
+  const removePostFn = useServerFn(removePost);
 
   const isSelf = (user?.id ?? currentUserId) === post.author.id;
   const commentsEnabled = post.comments_enabled !== false; // treat undefined as true
@@ -86,7 +115,19 @@ export function PostCard({
         ? "border-slate-400/25 glow-silver"
         : "border-border/50";
 
+  // When the parent supplied stats, adopt them and issue no queries at all.
   useEffect(() => {
+    if (!stats) return;
+    setLikeCount(stats.likes);
+    setRepostCount(stats.reposts);
+    setCommentCount(stats.comments);
+    setLiked(stats.likedByMe);
+    setReposted(stats.repostedByMe);
+  }, [stats]);
+
+  // Standalone fallback for cards rendered outside a list that batches counts.
+  useEffect(() => {
+    if (stats) return;
     let cancelled = false;
     (async () => {
       const uid = user?.id;
@@ -124,7 +165,7 @@ export function PostCard({
     return () => {
       cancelled = true;
     };
-  }, [post.id, user]);
+  }, [post.id, user, stats]);
 
   async function toggleLike() {
     if (!user) {
@@ -132,19 +173,26 @@ export function PostCard({
       return;
     }
     setBusyLike(true);
+    // Both branches used to discard `error` entirely, so an RLS denial or a
+    // dropped connection left the heart exactly as it was with no explanation —
+    // the button simply looked broken.
     if (liked) {
       const { error } = await supabase
         .from("likes")
         .delete()
         .eq("post_id", post.id)
         .eq("user_id", user.id);
-      if (!error) {
+      if (error) {
+        toast.error(describeWriteError(error.message, "unlike this post"));
+      } else {
         setLiked(false);
         setLikeCount((c) => Math.max(0, c - 1));
       }
     } else {
       const { error } = await supabase.from("likes").insert({ post_id: post.id, user_id: user.id });
-      if (!error) {
+      if (error) {
+        toast.error(describeWriteError(error.message, "like posts"));
+      } else {
         setLiked(true);
         setLikeCount((c) => c + 1);
       }
@@ -164,7 +212,9 @@ export function PostCard({
         .delete()
         .eq("post_id", post.id)
         .eq("user_id", user.id);
-      if (!error) {
+      if (error) {
+        toast.error(describeWriteError(error.message, "undo this re-ship"));
+      } else {
         setReposted(false);
         setRepostCount((c) => Math.max(0, c - 1));
       }
@@ -172,7 +222,9 @@ export function PostCard({
       const { error } = await supabase
         .from("reposts")
         .insert({ post_id: post.id, user_id: user.id });
-      if (!error) {
+      if (error) {
+        toast.error(describeWriteError(error.message, "re-ship posts"));
+      } else {
         setReposted(true);
         setRepostCount((c) => c + 1);
         toast.success("Re-shipped.");
@@ -213,7 +265,7 @@ export function PostCard({
     });
     setPostingComment(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(describeWriteError(error.message, "reply to this post"));
       return;
     }
     setCommentDraft("");
@@ -221,24 +273,59 @@ export function PostCard({
     await loadComments();
   }
 
-  async function report() {
+  /**
+   * File a report.
+   *
+   * The reason is now captured. The column existed from the start but no UI ever
+   * filled it, so every report reaching a moderator said only "someone objected
+   * to this" — which is close to unactionable. Reports are also now visible to
+   * admins in the panel, so the "moderators will review" toast is true.
+   */
+  async function submitReport() {
     if (!user) {
       toast.error("Sign in to report posts.");
       return;
     }
+    const reason = reportReason.trim();
+    if (!reason) {
+      toast.error("Add a short reason so a moderator knows what to look at.");
+      return;
+    }
+    setBusyReport(true);
     const { error } = await supabase
       .from("reports")
-      .insert({ post_id: post.id, reporter_id: user.id });
-    if (error && !error.message.includes("duplicate")) {
+      .insert({ post_id: post.id, reporter_id: user.id, reason: reason.slice(0, 500) });
+    setBusyReport(false);
+    if (error && !error.message.toLowerCase().includes("duplicate")) {
       toast.error("Couldn't submit report.");
       return;
     }
     setReported(true);
-    toast.success("Thanks — the moderators will review.");
+    setReportOpen(false);
+    setReportReason("");
+    toast.success("Reported. A moderator will review it.");
   }
 
   async function deletePost() {
-    if (!user || !isSelf) return;
+    if (!user) return;
+
+    // Admins delete through a server function so the removal is authorised
+    // server-side and lands in the audit log; authors delete their own directly.
+    if (!isSelf) {
+      if (!isAdmin) return;
+      setBusyDelete(true);
+      try {
+        await removePostFn({ data: { postId: post.id, reason: "Removed from feed by moderator" } });
+        toast.success("Post removed.");
+        onDeleted?.(post.id);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Couldn't remove the post.");
+      } finally {
+        setBusyDelete(false);
+      }
+      return;
+    }
+
     setBusyDelete(true);
     const { error } = await supabase
       .from("posts")
@@ -247,11 +334,29 @@ export function PostCard({
       .eq("author_id", user.id);
     setBusyDelete(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(describeWriteError(error.message, "do that"));
       return;
     }
     toast.success("Post deleted.");
     onDeleted?.(post.id);
+  }
+
+  /** Remove one of your own comments. The RLS policy always allowed it; no UI did. */
+  async function deleteComment(commentId: string) {
+    if (!user) return;
+    setDeletingComment(commentId);
+    const { error } = await supabase
+      .from("comments")
+      .delete()
+      .eq("id", commentId)
+      .eq("author_id", user.id);
+    setDeletingComment(null);
+    if (error) {
+      toast.error(describeWriteError(error.message, "do that"));
+      return;
+    }
+    setComments((prev) => prev?.filter((c) => c.id !== commentId) ?? null);
+    setCommentCount((c) => Math.max(0, c - 1));
   }
 
   const actionBtn =
@@ -260,41 +365,43 @@ export function PostCard({
   // Studio card posts (non-noir theme) get an entirely different visual treatment
   const isCardPost = post.background !== "noir";
 
-  /* Shared delete toggle */
-  const deleteControl =
-    isSelf && onDeleted ? (
-      <div className="shrink-0">
-        {confirmDelete ? (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Delete?</span>
-            <button
-              type="button"
-              onClick={deletePost}
-              disabled={busyDelete}
-              className="text-xs text-red-400 transition-colors hover:text-red-300"
-            >
-              {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              No
-            </button>
-          </div>
-        ) : (
+  /* Shared delete toggle — the author's own post, or an admin removing any post */
+  const canDelete = (isSelf || isAdmin) && !!onDeleted;
+  const deleteControl = canDelete ? (
+    <div className="shrink-0">
+      {confirmDelete ? (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">
+            {isSelf ? "Delete?" : "Remove as moderator?"}
+          </span>
           <button
             type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-            aria-label="Delete post"
+            onClick={deletePost}
+            disabled={busyDelete}
+            className="text-xs text-red-400 transition-colors hover:text-red-300"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
           </button>
-        )}
-      </div>
-    ) : null;
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            No
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+          aria-label={isSelf ? "Delete post" : "Remove post as moderator"}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  ) : null;
 
   /* Shared actions row */
   const actionsRow = (
@@ -342,17 +449,60 @@ export function PostCard({
         <Download className="h-4 w-4" />
       </button>
 
-      <button
-        type="button"
-        onClick={report}
-        disabled={reported}
-        className={actionBtn + " ml-auto hover:text-foreground"}
-        aria-label="Report post"
-      >
-        <Flag className="h-3.5 w-3.5" />
-      </button>
+      {!isSelf && (
+        <button
+          type="button"
+          onClick={() => setReportOpen((v) => !v)}
+          disabled={reported}
+          className={actionBtn + (reported ? " ml-auto" : " ml-auto hover:text-foreground")}
+          aria-label={reported ? "Already reported" : "Report post"}
+          title={reported ? "You've reported this post" : "Report post"}
+        >
+          <Flag className="h-3.5 w-3.5" fill={reported ? "currentColor" : "none"} />
+        </button>
+      )}
     </div>
   );
+
+  /* Report form — opens under the actions row so a reason can be captured */
+  const reportForm =
+    reportOpen && !reported ? (
+      <div className="mt-3 rounded-xl border border-border/60 bg-secondary/20 p-3">
+        <label className="text-xs font-medium text-foreground" htmlFor={`report-${post.id}`}>
+          Why are you reporting this?
+        </label>
+        <textarea
+          id={`report-${post.id}`}
+          value={reportReason}
+          onChange={(e) => setReportReason(e.target.value)}
+          maxLength={MAX_REPORT_REASON_LENGTH}
+          rows={2}
+          placeholder="Spam, harassment, impersonation, off-platform scam…"
+          className="mt-2 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/40"
+        />
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setReportOpen(false);
+              setReportReason("");
+            }}
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submitReport}
+            disabled={busyReport || !reportReason.trim()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {busyReport && <Loader2 className="h-3 w-3 animate-spin" />}
+            Submit report
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   /* Shared comments thread */
   const commentsThread = (
@@ -407,6 +557,21 @@ export function PostCard({
                     {c.content}
                   </p>
                 </div>
+                {c.author.id === user?.id && (
+                  <button
+                    type="button"
+                    onClick={() => deleteComment(c.id)}
+                    disabled={deletingComment === c.id}
+                    className="shrink-0 rounded p-1 text-muted-foreground/40 transition-colors hover:text-red-400 disabled:opacity-40"
+                    aria-label="Delete your reply"
+                  >
+                    {deletingComment === c.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </button>
+                )}
               </div>
             ))
           )}
@@ -417,9 +582,14 @@ export function PostCard({
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") submitComment();
+                  // Shift+Enter has to stay free for a line break, which the old
+                  // unconditional handler made impossible.
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submitComment();
+                  }
                 }}
-                maxLength={280}
+                maxLength={MAX_POST_LENGTH}
                 placeholder="Reply…"
                 className="min-w-0 flex-1 rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm outline-none focus:border-foreground/40"
               />
@@ -544,6 +714,7 @@ export function PostCard({
         {/* Actions + comments */}
         <div className="px-4 pb-3 sm:px-5">
           {actionsRow}
+          {reportForm}
           {commentsThread}
         </div>
       </article>
@@ -645,6 +816,7 @@ export function PostCard({
             </p>
 
             {actionsRow}
+            {reportForm}
             {commentsThread}
           </div>
         </div>

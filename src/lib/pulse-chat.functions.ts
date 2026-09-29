@@ -29,10 +29,10 @@ export const pulseAssistChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input) => z.object({ messages: z.array(MessageSchema).min(1).max(40) }).parse(input))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { userId } = context;
 
     const { consumeAiCredit, refundAiCredit } = await import("./ai-credits.server");
-    const { creditsRemaining, isUnlimited } = await consumeAiCredit(supabase, userId);
+    const { creditsRemaining, isUnlimited } = await consumeAiCredit(userId);
 
     try {
       const { chatCompletion } = await import("./openai.server");
