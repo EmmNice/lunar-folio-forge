@@ -17,6 +17,26 @@ permissions:
   contents: read
 
 jobs:
+  # This repo carries two lockfiles, and only one of them is used to deploy.
+  # Dockerfile runs `bun install --frozen-lockfile` against bun.lock, so adding a
+  # dependency with npm updates package.json and package-lock.json while leaving
+  # bun.lock behind — and nothing notices until the deploy fails on a frozen
+  # lockfile, after the merge. That is exactly how this job came to exist.
+  lockfiles:
+    name: Lockfiles agree with package.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2"
+
+      # Fails if bun.lock does not already satisfy package.json.
+      - name: bun.lock is current (this is what the Dockerfile uses)
+        run: bun install --frozen-lockfile
+
   checks:
     name: Types, lint, build
     runs-on: ubuntu-latest
