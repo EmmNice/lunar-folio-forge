@@ -70,6 +70,8 @@ type ProfileRow = {
   onboarding_completed: boolean;
   account_status: AccountStatus;
   created_at: string;
+  /** Holds a row in user_roles. Such members cannot be moderated from here. */
+  is_admin: boolean;
 };
 
 type ReportRow = {
@@ -134,7 +136,7 @@ function AdminPage() {
   // Admin status comes from the user_roles table only. There used to be a
   // VITE_ADMIN_IDS fallback, but VITE_* values are inlined into the public
   // bundle at build time, so it published the admin UUID to every visitor.
-  const { isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const doReview = useServerFn(reviewApplication);
   const doListApplications = useServerFn(listPendingApplications);
@@ -326,6 +328,17 @@ function AdminPage() {
       (p.company_name ?? "").toLowerCase().includes(search.toLowerCase()),
   );
 
+  /**
+   * Whether the moderation controls should appear for this member.
+   *
+   * Mirrors setAccountStatus, which refuses to act on the caller or on another
+   * admin — losing the last working admin account to a mis-click is not something
+   * you can recover from inside the app.
+   */
+  function canModerate(p: ProfileRow): boolean {
+    return p.id !== user?.id && !p.is_admin;
+  }
+
   const silverApps = (applications ?? []).filter((a) => a.tier === "silver");
   const goldApps = (applications ?? []).filter((a) => a.tier === "gold");
 
@@ -342,10 +355,11 @@ function AdminPage() {
             </p>
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Verification Management
+            Moderation & Members
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review applications, grant or revoke badges, and manage the member directory.
+            Review verification applications and reports, grant or revoke badges, restrict or
+            suspend accounts, and read the audit trail.
           </p>
         </div>
 
@@ -410,6 +424,13 @@ function AdminPage() {
                   busy={!!reportBusy[r.id]}
                   onDecide={(resolution, removePost, note) =>
                     decideReport(r.id, resolution, removePost, note)
+                  }
+                  // Same rule as the Members tab: no moderating yourself or a
+                  // fellow admin. The member list carries the role flags.
+                  canModerateAuthor={
+                    !!r.post?.author &&
+                    r.post.author.id !== user?.id &&
+                    !(profiles ?? []).some((p) => p.id === r.post?.author?.id && p.is_admin)
                   }
                   onRestrictAuthor={() =>
                     r.post?.author ? changeAccountStatus(r.post.author.id, "restricted") : undefined
@@ -706,7 +727,13 @@ function AdminPage() {
                                   so these buttons change behaviour, not just a
                                   label.
                                 */}
-                                {p.account_status === "active" ? (
+                                {/*
+                                  No moderation controls on your own row or on a
+                                  fellow admin. setAccountStatus refuses both, so
+                                  rendering the buttons only offers an action that
+                                  is guaranteed to fail.
+                                */}
+                                {!canModerate(p) ? null : p.account_status === "active" ? (
                                   <>
                                     <button
                                       type="button"
@@ -771,12 +798,14 @@ function AdminPage() {
 function ReportCard({
   report,
   busy,
+  canModerateAuthor,
   onDecide,
   onRestrictAuthor,
   onSuspendAuthor,
 }: {
   report: ReportRow;
   busy: boolean;
+  canModerateAuthor: boolean;
   onDecide: (resolution: "actioned" | "dismissed", removePost: boolean, note: string) => void;
   onRestrictAuthor: () => void;
   onSuspendAuthor: () => void;
@@ -879,7 +908,7 @@ function ReportCard({
           Action without removing
         </button>
 
-        {author && author.account_status === "active" && (
+        {author && author.account_status === "active" && canModerateAuthor && (
           <div className="ml-auto flex gap-2">
             <button
               type="button"
