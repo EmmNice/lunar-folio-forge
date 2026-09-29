@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
 import { NOTIFICATION_PAGE_SIZE } from "@/lib/limits";
 import { EmptyState, ErrorState, ListSkeleton, PageHeader } from "@/components/states";
+import { setUnreadCount } from "@/lib/unread-count";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
   head: () => ({ meta: [{ title: "Notifications · The Ledger" }] }),
@@ -147,11 +148,13 @@ function NotificationsPage() {
       return;
     }
     setNotifications((prev) => prev?.map((n) => ({ ...n, read: true })) ?? null);
+    setUnreadCount(0);
   }
 
   /** Reading one notification marks just that one. */
   async function markOneRead(id: string) {
     setNotifications((prev) => prev?.map((n) => (n.id === id ? { ...n, read: true } : n)) ?? null);
+    setUnreadCount(Math.max(0, unreadCount - 1));
     await supabase.from("notifications").update({ read: true }).eq("id", id);
   }
 
