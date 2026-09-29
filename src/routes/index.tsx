@@ -164,6 +164,19 @@ function Landing() {
   const [username, setUsername] = useState("");
   const [usernameState, setUsernameState] = useState<UsernameState>({ status: "empty" });
 
+  /*
+    Where profiles actually live, read from the browser rather than hardcoded.
+
+    Set in an effect rather than during render because this component is
+    server-rendered: reading window during SSR would throw, and reading it in the
+    initial client render would produce markup that disagrees with the server's.
+    Empty on the first pass, filled immediately after mount.
+  */
+  const [profileUrlPrefix, setProfileUrlPrefix] = useState("");
+  useEffect(() => {
+    setProfileUrlPrefix(`${window.location.host}/u/`);
+  }, []);
+
   useEffect(() => {
     // A recovery link normally lands on /reset-password, because that is the
     // redirectTo we ask for. But if the URL ever falls back to the project's Site
@@ -573,9 +586,20 @@ function Landing() {
       return (
         <div>
           <h2 className="mb-1 text-center text-base font-semibold">Create your account</h2>
+          {/* The host is read from the browser, not written into the bundle. This
+              line used to promise "theledger.app/u/yourname" — a domain the app is
+              not actually served from, so the first thing a new account was told
+              about its own address was wrong. Falls back to a plain phrasing during
+              SSR, where there is no location to read. */}
           <p className="mb-4 text-center text-xs leading-relaxed text-tertiary">
-            Your username is how people find you: theledger.app/u/
-            <span className="text-secondary">{slugifyUsername(username) || "yourname"}</span>
+            {profileUrlPrefix ? (
+              <>
+                Your username is how people find you: {profileUrlPrefix}
+                <span className="text-secondary">{slugifyUsername(username) || "yourname"}</span>
+              </>
+            ) : (
+              <>Your username is how people find you — it becomes your profile address.</>
+            )}
           </p>
           <form onSubmit={handleEmailSignUp} className="space-y-3">
             {/* First field, because it is the identity decision — the rest is just

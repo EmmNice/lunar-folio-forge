@@ -29,5 +29,22 @@ export function describeWriteError(message: string, action: string): string {
   if (lower.includes("_scheme")) {
     return "Links must start with http:// or https://";
   }
+  // Verification application rules (20260930000300). A member who trips one of
+  // these was previously shown the constraint name.
+  if (lower.includes("vr_silver_needs_github")) {
+    return "Silver verification needs a link to your GitHub profile.";
+  }
+  if (lower.includes("vr_gold_needs_a_link")) {
+    return "Gold verification needs a link we can check — a company site, portfolio, or your LinkedIn/X.";
+  }
+  if (lower.includes("link_primary_len") || lower.includes("link_secondary_len")) {
+    return "One of those links is too long.";
+  }
+  if (lower.includes("recent_ship_desc_len")) {
+    return "The description of what you shipped is too long.";
+  }
+  if (lower.includes("reapply") || lower.includes("7 days after a rejection")) {
+    return message; // already a sentence written for the applicant
+  }
   return message;
 }

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { describeWriteError } from "./db-errors";
 import { MAX_SHIP_DESC_LENGTH } from "./limits";
 import { wantsNotification } from "./notification-prefs";
 
@@ -12,14 +13,38 @@ import { wantsNotification } from "./notification-prefs";
  * Postgres constraint name.
  */
 function httpUrl(max: number) {
+  return (
+    z
+      .string()
+      .max(max)
+      .refine((value) => value === "" || /^https?:\/\//i.test(value), {
+        message: "Links must start with http:// or https://",
+      })
+      .optional()
+      .or(z.literal(""))
+      /*
+      Empty means absent, and it is normalised here so that nothing downstream has
+      to remember the difference.
+
+      The forms send "" for every field left blank. `?? null` does not catch that —
+      "" is neither null nor undefined — so an empty string reached the insert and
+      hit the URL-shape CHECK constraints, which permit NULL but not "". The
+      practical effect was that a Silver application failed unless the applicant
+      filled in the *optional* live-project URL, and the person saw
+      `vr_link_secondary_scheme` as the explanation.
+    */
+      .transform((value) => (value === "" ? undefined : value))
+  );
+}
+
+/** Same normalisation for the free-text optional fields. */
+function optionalText(max: number) {
   return z
     .string()
     .max(max)
-    .refine((value) => value === "" || /^https?:\/\//i.test(value), {
-      message: "Links must start with http:// or https://",
-    })
     .optional()
-    .or(z.literal(""));
+    .or(z.literal(""))
+    .transform((value) => (value === "" ? undefined : value));
 }
 
 function approvalEmailHtml(tierLabel: string, ctaUrl: string) {
@@ -315,13 +340,13 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
         // (20260929000400); validating here is what produces a readable error
         // instead of a raw constraint violation.
         github_url: httpUrl(500),
-        deployed_contract_address: z.string().max(200).optional().or(z.literal("")),
+        deployed_contract_address: optionalText(200),
         live_project_url: httpUrl(500),
-        recent_ship_desc: z.string().max(MAX_SHIP_DESC_LENGTH).optional().or(z.literal("")),
-        fund_or_company_name: z.string().max(120).optional().or(z.literal("")),
+        recent_ship_desc: optionalText(MAX_SHIP_DESC_LENGTH),
+        fund_or_company_name: optionalText(120),
         portfolio_url: httpUrl(500),
         linkedin_or_x_url: httpUrl(500),
-        invite_code: z.string().max(60).optional().or(z.literal("")),
+        invite_code: optionalText(60),
       })
       .parse(input),
   )
@@ -333,6 +358,19 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
     }
     if (data.tier === "gold" && !data.fund_or_company_name) {
       throw new Error("Fund or company name is required for Gold Investor verification.");
+    }
+    /*
+      Gold needs somewhere checkable, not just a name — the rule the database
+      enforces as vr_gold_needs_a_link (20260930000300). Stated here as well
+      because link_primary is NOT NULL and is built from these two: without a URL
+      there is nothing valid to put in it, and the applicant deserves to be told
+      which field to fill rather than shown a constraint.
+    */
+    const goldLink = data.portfolio_url ?? data.linkedin_or_x_url ?? null;
+    if (data.tier === "gold" && !goldLink) {
+      throw new Error(
+        "Gold verification needs a link we can check — your company site, portfolio, or LinkedIn/X profile.",
+      );
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -377,16 +415,29 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       .insert({
         user_id: userId,
         tier: data.tier,
-        // link_primary/link_secondary predate the per-track columns below and are
-        // still populated so older admin views keep working.
-        link_primary:
-          data.tier === "silver"
-            ? (data.github_url ?? "")
-            : (data.portfolio_url ?? data.fund_or_company_name ?? ""),
+        /*
+          link_primary/link_secondary predate the per-track columns below and are
+          still populated so the older admin views keep working. Both carry
+          `^https?://` CHECK constraints, so only URLs may go in them.
+
+          Gold used to fall back to `fund_or_company_name` — a company name, in a
+          column constrained to look like a URL. Combined with the empty-string
+          problem above, that made every Gold application fail whose portfolio URL
+          was blank, which is a case the schema explicitly allows:
+          vr_gold_needs_a_link is satisfied by a LinkedIn/X URL instead. Falling
+          back to that link is both valid and what the column actually means.
+        */
+        // Non-null by the two guards above: silver requires github_url, gold
+        // requires one of the two links.
+        link_primary: data.tier === "silver" ? data.github_url! : goldLink!,
         link_secondary:
           data.tier === "silver"
             ? (data.live_project_url ?? null)
-            : (data.linkedin_or_x_url ?? null),
+            : // Only a *second* link belongs here; if portfolio_url was absent then
+              // linkedin_or_x_url has already been used as the primary.
+              data.portfolio_url
+              ? (data.linkedin_or_x_url ?? null)
+              : null,
         github_url: data.github_url || null,
         deployed_contract_address: data.deployed_contract_address || null,
         live_project_url: data.live_project_url || null,
@@ -398,7 +449,9 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       })
       .select("id")
       .maybeSingle();
-    if (error) throw new Error(error.message);
+    // Routed through describeWriteError so a CHECK constraint cannot reach the
+    // applicant as its own name. `vr_link_secondary_scheme` did exactly that.
+    if (error) throw new Error(describeWriteError(error.message, "apply for verification"));
 
     /*
       Check the proof straight away, so an applicant who followed the instructions
