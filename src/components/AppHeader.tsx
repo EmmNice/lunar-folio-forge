@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { MessageSquare, Bell, Rss, PenSquare, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { subscribeToUnreadCount } from "@/lib/unread-count";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
 
@@ -41,10 +41,11 @@ const BOTTOM_TABS = [
 /**
  * Unread notification count, live.
  *
- * Was duplicated inside MobileNav only, which meant desktop had no unread
- * indicator at all — a member on a laptop had no way to know a message or a
- * verification decision had arrived without opening the page. Now one hook feeds
- * both the header and the tab bar.
+ * Was fetched inside MobileNav only, which meant desktop had no unread indicator
+ * at all — a member on a laptop had no way to know a message or a verification
+ * decision had arrived without opening the page. The subscription itself lives in
+ * lib/unread-count.ts because the header and the tab bar are both mounted at
+ * once, and two channels with the same name is an error rather than a duplicate.
  */
 function useUnreadCount(): number {
   const { user } = useAuth();
@@ -55,46 +56,7 @@ function useUnreadCount(): number {
       setCount(0);
       return;
     }
-    let cancelled = false;
-
-    async function fetchUnread() {
-      const { count: n } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user!.id)
-        .eq("read", false);
-      if (!cancelled) setCount(n ?? 0);
-    }
-    fetchUnread();
-
-    const channel = supabase
-      .channel(`notif-count:${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => setCount((n) => n + 1),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => fetchUnread(),
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
+    return subscribeToUnreadCount(user.id, setCount);
   }, [user]);
 
   return count;

@@ -290,9 +290,9 @@ function FeedPage() {
         <AppHeader controlled />
 
         {/* Signal / Beat tab switcher */}
-        <div className="px-4 pb-3 pt-1 sm:px-6">
-          <div className="mx-auto max-w-2xl">
-            <div className="segmented">
+        <div className="mx-auto max-w-2xl px-4 pb-3 pt-1 sm:px-6">
+          <div>
+            <div className="segmented sm:max-w-[18rem]">
               {(["signal", "beat"] as FeedTab[]).map((t) => (
                 <button
                   key={t}
@@ -382,6 +382,34 @@ function FeedPage() {
           />
         ) : (
           <>
+            {user && profile ? (
+              <button
+                type="button"
+                onClick={() => setShowModal(true)}
+                className="card card-interactive mb-3 hidden w-full items-center gap-3 p-4 text-left sm:flex"
+              >
+                <span
+                  className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full text-[13px] font-bold"
+                  style={{ background: "rgba(251,191,36,0.16)", color: "var(--gold)" }}
+                >
+                  {profile.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    profile.display_name.charAt(0).toUpperCase()
+                  )}
+                </span>
+                <span className="flex-1 text-[15px] text-tertiary">
+                  What are you shipping today?
+                </span>
+                <span className="btn btn-primary btn-sm shrink-0">Post</span>
+              </button>
+            ) : null}
+
             <div className="space-y-3">
               {displayedPosts.map((p) => (
                 <PostCard
