@@ -26,10 +26,10 @@ export const pulseAssistDraft = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { userId } = context;
 
     const { consumeAiCredit, refundAiCredit } = await import("./ai-credits.server");
-    const { creditsRemaining, isUnlimited } = await consumeAiCredit(supabase, userId);
+    const { creditsRemaining, isUnlimited } = await consumeAiCredit(userId);
 
     try {
       const { chatCompletion } = await import("./openai.server");

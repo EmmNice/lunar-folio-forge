@@ -66,6 +66,29 @@ export function AvatarPicker({
       data: { publicUrl },
     } = supabase.storage.from("avatars").getPublicUrl(path);
 
+    // Sweep up the member's older avatars.
+    //
+    // Filenames are Date.now()-based, so every upload created a brand-new object
+    // and nothing ever called remove(). Orphans accumulated forever in a *public*
+    // bucket, which means a photo someone replaced stayed at a permanent,
+    // unauthenticated URL indefinitely. Keeping only the newest object is the
+    // behaviour a member replacing their picture would expect.
+    //
+    // Best-effort: the new avatar is already uploaded, and failing to tidy up must
+    // not turn a successful upload into an error.
+    try {
+      const { data: existing } = await supabase.storage.from("avatars").list(user.id);
+      const stale = (existing ?? [])
+        .map((obj) => `${user.id}/${obj.name}`)
+        .filter((objectPath) => objectPath !== path);
+      if (stale.length > 0) {
+        const { error: removeErr } = await supabase.storage.from("avatars").remove(stale);
+        if (removeErr) console.warn("[avatar] could not remove old files:", removeErr.message);
+      }
+    } catch (error) {
+      console.warn("[avatar] cleanup threw:", error);
+    }
+
     onChange(publicUrl);
     setUploading(false);
     toast.success("Photo uploaded — save to apply.");

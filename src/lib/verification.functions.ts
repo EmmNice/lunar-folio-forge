@@ -1,10 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { Database } from "@/integrations/supabase/types";
 import { MAX_SHIP_DESC_LENGTH } from "./limits";
 import { wantsNotification } from "./notification-prefs";
+
+/**
+ * An optional http(s) link, or the empty string the forms send for "not filled in".
+ *
+ * Mirrors the `~* '^https?://'` CHECK constraints added in 20260929000400 so a
+ * bad scheme is rejected with a sentence a person can act on rather than a
+ * Postgres constraint name.
+ */
+function httpUrl(max: number) {
+  return z
+    .string()
+    .max(max)
+    .refine((value) => value === "" || /^https?:\/\//i.test(value), {
+      message: "Links must start with http:// or https://",
+    })
+    .optional()
+    .or(z.literal(""));
+}
 
 function approvalEmailHtml(tierLabel: string, ctaUrl: string) {
   const isSilver = tierLabel === "Silver Builder";
@@ -136,14 +152,20 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
     z
       .object({
         tier: z.enum(["silver", "gold"]),
-        // Links are accepted as free text and checked by a human reviewer.
-        github_url: z.string().max(500).optional().or(z.literal("")),
+        // The content of each link is judged by a human reviewer, but the *shape*
+        // is not a matter of opinion. These were plain `z.string().max(500)`,
+        // so "javascript:..." reached the database and then an <a href> in the
+        // admin's own review panel — the one session on the platform where a
+        // payload would do the most damage. The DB now has a matching CHECK
+        // (20260929000400); validating here is what produces a readable error
+        // instead of a raw constraint violation.
+        github_url: httpUrl(500),
         deployed_contract_address: z.string().max(200).optional().or(z.literal("")),
-        live_project_url: z.string().max(500).optional().or(z.literal("")),
+        live_project_url: httpUrl(500),
         recent_ship_desc: z.string().max(MAX_SHIP_DESC_LENGTH).optional().or(z.literal("")),
         fund_or_company_name: z.string().max(120).optional().or(z.literal("")),
-        portfolio_url: z.string().max(500).optional().or(z.literal("")),
-        linkedin_or_x_url: z.string().max(500).optional().or(z.literal("")),
+        portfolio_url: httpUrl(500),
+        linkedin_or_x_url: httpUrl(500),
         invite_code: z.string().max(60).optional().or(z.literal("")),
       })
       .parse(input),
@@ -156,6 +178,30 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
     }
     if (data.tier === "gold" && !data.fund_or_company_name) {
       throw new Error("Fund or company name is required for Gold Investor verification.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // account_status and the current tier are read with the service role because
+    // account_status is no longer granted to `authenticated` (20260929000100).
+    const { data: applicant } = await supabaseAdmin
+      .from("profiles")
+      .select("verification_tier, account_status")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!applicant) throw new Error("Your profile could not be loaded.");
+    if (applicant.account_status !== "active") {
+      throw new Error("Your account cannot submit an application right now.");
+    }
+
+    // Nothing stopped an already-verified member re-applying for the badge they
+    // hold, which put a pointless row in front of a human reviewer every time.
+    if (applicant.verification_tier === data.tier) {
+      throw new Error(`You are already verified at the ${data.tier} tier.`);
+    }
+    if (applicant.verification_tier === "gold" && data.tier === "silver") {
+      throw new Error("You already hold Gold verification, which supersedes Silver.");
     }
 
     const { data: existing } = await supabase
@@ -196,26 +242,12 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/**
- * Assert the caller holds the admin role.
- *
- * Uses the caller's own token, so this is a real server-side check and not
- * something the browser can talk its way past.
- */
-async function requireAdmin(supabase: SupabaseClient<Database>) {
-  // is_admin() is scoped to the caller and granted to `authenticated`.
-  // has_role() is service_role-only, so calling it with the user's token
-  // returned a permission error that read as "not an admin".
-  const { data: isAdmin, error } = await supabase.rpc("is_admin");
-  if (error) throw new Error(`Admin check failed: ${error.message}`);
-  if (!isAdmin) throw new Error("Forbidden: Admin only.");
-}
-
 /** Admin: list applications awaiting review. */
 export const listPendingApplications = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase } = context;
+    const { requireAdmin } = await import("./admin-guard.server");
     await requireAdmin(supabase);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -258,6 +290,7 @@ export const reviewApplication = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { requireAdmin, recordAdminAction } = await import("./admin-guard.server");
     await requireAdmin(supabase);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -274,9 +307,16 @@ export const reviewApplication = createServerFn({ method: "POST" })
     const approved = data.action === "approve";
     const newStatus = approved ? "approved" : "rejected";
 
+    // reviewed_by was the missing half of the audit story: this handler has always
+    // had the reviewer's id in hand and threw it away, so an approval was
+    // recorded as having happened but not by whom.
     const { error: updateErr } = await supabaseAdmin
       .from("verification_requests")
-      .update({ status: newStatus, reviewed_at: new Date().toISOString() })
+      .update({
+        status: newStatus,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: userId,
+      })
       .eq("id", data.applicationId);
     if (updateErr) throw new Error(updateErr.message);
 
@@ -297,6 +337,14 @@ export const reviewApplication = createServerFn({ method: "POST" })
       metadata: { tier: application.tier },
     });
     if (notifyErr) console.warn("[verification] Notification insert failed:", notifyErr.message);
+
+    await recordAdminAction({
+      actorId: userId,
+      action: `verification.${newStatus}`,
+      targetType: "verification_request",
+      targetId: application.id,
+      detail: { applicantId: application.user_id, tier: application.tier },
+    });
 
     const emailed = await emailDecision(application.user_id, application.tier, approved);
 

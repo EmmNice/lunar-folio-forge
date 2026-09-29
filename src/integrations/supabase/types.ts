@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_actions: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          detail: Json
+          id: string
+          target_id: string | null
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json
+          id?: string
+          target_id?: string | null
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json
+          id?: string
+          target_id?: string | null
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string
+          id: string
+          post_id: string
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string
+          id?: string
+          post_id: string
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
@@ -63,61 +140,6 @@ export type Database = {
           },
         ]
       }
-      notifications: {
-        Row: {
-          id: string
-          user_id: string
-          actor_id: string | null
-          type: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected"
-          post_id: string | null
-          read: boolean
-          created_at: string
-          metadata: Json | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          actor_id?: string | null
-          type: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected"
-          post_id?: string | null
-          read?: boolean
-          created_at?: string
-          metadata?: Json | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          actor_id?: string | null
-          type?: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected"
-          post_id?: string | null
-          read?: boolean
-          created_at?: string
-          metadata?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       daily_request_counts: {
         Row: {
           count: number
@@ -140,45 +162,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      comments: {
-        Row: {
-          author_id: string
-          content: string
-          created_at: string
-          id: string
-          post_id: string
-        }
-        Insert: {
-          author_id: string
-          content: string
-          created_at?: string
-          id?: string
-          post_id: string
-        }
-        Update: {
-          author_id?: string
-          content?: string
-          created_at?: string
-          id?: string
-          post_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "comments_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comments_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
             referencedColumns: ["id"]
           },
         ]
@@ -209,104 +192,6 @@ export type Database = {
           },
           {
             foreignKeyName: "likes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reposts: {
-        Row: {
-          created_at: string
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reposts_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reposts_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      verification_requests: {
-        Row: {
-          created_at: string
-          github_url: string | null
-          deployed_contract_address: string | null
-          live_project_url: string | null
-          recent_ship_desc: string | null
-          fund_or_company_name: string | null
-          portfolio_url: string | null
-          linkedin_or_x_url: string | null
-          invite_code: string | null
-          id: string
-          link_primary: string
-          link_secondary: string | null
-          reviewed_at: string | null
-          status: string
-          tier: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          github_url?: string | null
-          deployed_contract_address?: string | null
-          live_project_url?: string | null
-          recent_ship_desc?: string | null
-          fund_or_company_name?: string | null
-          portfolio_url?: string | null
-          linkedin_or_x_url?: string | null
-          invite_code?: string | null
-          id?: string
-          link_primary: string
-          link_secondary?: string | null
-          reviewed_at?: string | null
-          status?: string
-          tier: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          github_url?: string | null
-          deployed_contract_address?: string | null
-          live_project_url?: string | null
-          recent_ship_desc?: string | null
-          fund_or_company_name?: string | null
-          portfolio_url?: string | null
-          linkedin_or_x_url?: string | null
-          invite_code?: string | null
-          id?: string
-          link_primary?: string
-          link_secondary?: string | null
-          reviewed_at?: string | null
-          status?: string
-          tier?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "verification_requests_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -353,48 +238,113 @@ export type Database = {
           },
         ]
       }
-      pitches: {
+      notifications: {
         Row: {
-          id: string
-          sender_id: string
-          recipient_id: string
-          company_name: string
-          pitch: string
-          deck_url: string | null
-          status: string
+          actor_id: string | null
+          conversation_id: string | null
           created_at: string
+          id: string
+          metadata: Json | null
+          post_id: string | null
+          read: boolean
+          type: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          sender_id: string
-          recipient_id: string
-          company_name: string
-          pitch: string
-          deck_url?: string | null
-          status?: string
+          actor_id?: string | null
+          conversation_id?: string | null
           created_at?: string
+          id?: string
+          metadata?: Json | null
+          post_id?: string | null
+          read?: boolean
+          type: string
+          user_id: string
         }
         Update: {
-          id?: string
-          sender_id?: string
-          recipient_id?: string
-          company_name?: string
-          pitch?: string
-          deck_url?: string | null
-          status?: string
+          actor_id?: string | null
+          conversation_id?: string | null
           created_at?: string
+          id?: string
+          metadata?: Json | null
+          post_id?: string | null
+          read?: boolean
+          type?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "pitches_sender_id_fkey"
-            columns: ["sender_id"]
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "notifications_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pitches: {
+        Row: {
+          company_name: string
+          created_at: string
+          deck_url: string | null
+          id: string
+          pitch: string
+          recipient_id: string
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          company_name: string
+          created_at?: string
+          deck_url?: string | null
+          id?: string
+          pitch: string
+          recipient_id: string
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          company_name?: string
+          created_at?: string
+          deck_url?: string | null
+          id?: string
+          pitch?: string
+          recipient_id?: string
+          sender_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
             foreignKeyName: "pitches_recipient_id_fkey"
             columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pitches_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -444,20 +394,23 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: string
           ai_credits_reset_at: string
           ai_credits_used: number
+          availability_status: string | null
           avatar_url: string | null
           bio: string | null
           company_name: string | null
+          contract_url: string | null
           created_at: string
           date_of_birth: string | null
           display_name: string
           dm_cloaking_enabled: boolean
-          hide_from_search: boolean
-          notification_prefs: Json
           github_url: string | null
           handle: string
+          hide_from_search: boolean
           id: string
+          notification_prefs: Json
           onboarding_completed: boolean
           pitch_limit: number | null
           portfolio_url: string | null
@@ -469,20 +422,23 @@ export type Database = {
           verification_tier: string
         }
         Insert: {
+          account_status?: string
           ai_credits_reset_at?: string
           ai_credits_used?: number
+          availability_status?: string | null
           avatar_url?: string | null
           bio?: string | null
           company_name?: string | null
+          contract_url?: string | null
           created_at?: string
           date_of_birth?: string | null
           display_name: string
           dm_cloaking_enabled?: boolean
-          hide_from_search?: boolean
-          notification_prefs?: Json
           github_url?: string | null
           handle: string
+          hide_from_search?: boolean
           id: string
+          notification_prefs?: Json
           onboarding_completed?: boolean
           pitch_limit?: number | null
           portfolio_url?: string | null
@@ -494,20 +450,23 @@ export type Database = {
           verification_tier?: string
         }
         Update: {
+          account_status?: string
           ai_credits_reset_at?: string
           ai_credits_used?: number
+          availability_status?: string | null
           avatar_url?: string | null
           bio?: string | null
           company_name?: string | null
+          contract_url?: string | null
           created_at?: string
           date_of_birth?: string | null
           display_name?: string
           dm_cloaking_enabled?: boolean
-          hide_from_search?: boolean
-          notification_prefs?: Json
           github_url?: string | null
           handle?: string
+          hide_from_search?: boolean
           id?: string
+          notification_prefs?: Json
           onboarding_completed?: boolean
           pitch_limit?: number | null
           portfolio_url?: string | null
@@ -527,6 +486,10 @@ export type Database = {
           post_id: string
           reason: string | null
           reporter_id: string
+          resolution_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
         }
         Insert: {
           created_at?: string
@@ -534,6 +497,10 @@ export type Database = {
           post_id: string
           reason?: string | null
           reporter_id: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
         }
         Update: {
           created_at?: string
@@ -541,6 +508,10 @@ export type Database = {
           post_id?: string
           reason?: string | null
           reporter_id?: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
         }
         Relationships: [
           {
@@ -553,6 +524,46 @@ export type Database = {
           {
             foreignKeyName: "reports_reporter_id_fkey"
             columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reposts: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reposts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reposts_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -580,17 +591,107 @@ export type Database = {
         }
         Relationships: []
       }
+      verification_requests: {
+        Row: {
+          created_at: string
+          deployed_contract_address: string | null
+          fund_or_company_name: string | null
+          github_url: string | null
+          id: string
+          invite_code: string | null
+          link_primary: string
+          link_secondary: string | null
+          linkedin_or_x_url: string | null
+          live_project_url: string | null
+          portfolio_url: string | null
+          recent_ship_desc: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deployed_contract_address?: string | null
+          fund_or_company_name?: string | null
+          github_url?: string | null
+          id?: string
+          invite_code?: string | null
+          link_primary: string
+          link_secondary?: string | null
+          linkedin_or_x_url?: string | null
+          live_project_url?: string | null
+          portfolio_url?: string | null
+          recent_ship_desc?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tier: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deployed_contract_address?: string | null
+          fund_or_company_name?: string | null
+          github_url?: string | null
+          id?: string
+          invite_code?: string | null
+          link_primary?: string
+          link_secondary?: string | null
+          linkedin_or_x_url?: string | null
+          live_project_url?: string | null
+          portfolio_url?: string | null
+          recent_ship_desc?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tier?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      claim_conversation_slot: {
-        Args: {
-          _daily_limit: number
-          _user_id: string
-        }
+      actor_is_active: { Args: never; Returns: boolean }
+      can_publish_to: { Args: { _visibility: string }; Returns: boolean }
+      can_view_post: {
+        Args: { _author_id: string; _visibility: string }
         Returns: boolean
+      }
+      claim_conversation_slot: {
+        Args: { _daily_limit: number; _user_id: string }
+        Returns: boolean
+      }
+      claim_pitch_slot: {
+        Args: {
+          _company_name: string
+          _deck_url: string
+          _pitch: string
+          _recipient_id: string
+          _sender_id: string
+          _weekly_limit: number
+          _window_days: number
+        }
+        Returns: string
       }
       consume_ai_credit: {
         Args: {
@@ -600,6 +701,43 @@ export type Database = {
         }
         Returns: number
       }
+      current_profile: {
+        Args: never
+        Returns: {
+          account_status: string
+          ai_credits_reset_at: string
+          ai_credits_used: number
+          availability_status: string | null
+          avatar_url: string | null
+          bio: string | null
+          company_name: string | null
+          contract_url: string | null
+          created_at: string
+          date_of_birth: string | null
+          display_name: string
+          dm_cloaking_enabled: boolean
+          github_url: string | null
+          handle: string
+          hide_from_search: boolean
+          id: string
+          notification_prefs: Json
+          onboarding_completed: boolean
+          pitch_limit: number | null
+          portfolio_url: string | null
+          role_type: string | null
+          startup_url: string | null
+          subscription_status: string
+          traction_url: string | null
+          updated_at: string
+          verification_tier: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -607,19 +745,12 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      refund_ai_credit: {
-        Args: {
-          _user_id: string
-        }
-        Returns: undefined
-      }
+      is_admin: { Args: never; Returns: boolean }
+      post_accepts_comments: { Args: { _post_id: string }; Returns: boolean }
+      refund_ai_credit: { Args: { _user_id: string }; Returns: undefined }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "user" | "super_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -635,12 +766,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -664,11 +795,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -689,11 +820,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -714,11 +845,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -731,11 +862,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -747,7 +878,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "user", "super_admin"],
     },
   },
 } as const

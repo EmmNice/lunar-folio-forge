@@ -38,6 +38,34 @@ export const startConversation = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // DM cloaking was a display-only setting: the profile page hid the Message
+    // button, but this function never looked at the column, so anyone could open
+    // a thread with a cloaked member by calling it directly. A privacy toggle
+    // that only removes a button is not a privacy toggle.
+    //
+    // Read with the admin client — account_status is no longer granted to
+    // `authenticated`, and dm_cloaking_enabled is fetched alongside it.
+    const { data: parties, error: partiesErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id, dm_cloaking_enabled, account_status, verification_tier")
+      .in("id", [userId, recipientId]);
+    if (partiesErr) throw new Error(partiesErr.message);
+
+    const me = parties?.find((p) => p.id === userId);
+    const them = parties?.find((p) => p.id === recipientId);
+    if (!them) throw new Error("That member no longer exists.");
+
+    if (me?.account_status !== "active") {
+      throw new Error("Your account cannot start new conversations right now.");
+    }
+
+    if (them.dm_cloaking_enabled) {
+      const viewerTier = me?.verification_tier ?? "none";
+      if (viewerTier !== "silver" && viewerTier !== "gold") {
+        throw new Error("This member only accepts messages from verified builders.");
+      }
+    }
+
     // Checks the cap and increments in one statement, so firing requests in
     // parallel can't overshoot the daily limit.
     const slot = await supabaseAdmin.rpc("claim_conversation_slot", {

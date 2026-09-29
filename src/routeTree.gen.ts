@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -25,6 +26,11 @@ import { Route as AuthenticatedAccountPrivacyRouteImport } from './routes/_authe
 import { Route as AuthenticatedAccountNotificationsRouteImport } from './routes/_authenticated/account-notifications'
 import { Route as AuthenticatedMessagesIdRouteImport } from './routes/_authenticated/messages.$id'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FeedRoute = FeedRouteImport.update({
   id: '/feed',
   path: '/feed',
@@ -107,6 +113,7 @@ const AuthenticatedMessagesIdRoute = AuthenticatedMessagesIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/account-security': typeof AuthenticatedAccountSecurityRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/feed': typeof FeedRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/account-security': typeof AuthenticatedAccountSecurityRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/feed': typeof FeedRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/_authenticated/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/_authenticated/account-security': typeof AuthenticatedAccountSecurityRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/feed'
+    | '/reset-password'
     | '/account-notifications'
     | '/account-privacy'
     | '/account-security'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/feed'
+    | '/reset-password'
     | '/account-notifications'
     | '/account-privacy'
     | '/account-security'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/feed'
+    | '/reset-password'
     | '/_authenticated/account-notifications'
     | '/_authenticated/account-privacy'
     | '/_authenticated/account-security'
@@ -210,11 +222,19 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   FeedRoute: typeof FeedRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   UHandleRoute: typeof UHandleRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/feed': {
       id: '/feed'
       path: '/feed'
@@ -370,6 +390,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   FeedRoute: FeedRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   UHandleRoute: UHandleRoute,
 }
 export const routeTree = rootRouteImport

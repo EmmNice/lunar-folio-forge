@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Lock, Github, Loader2, CheckCircle2, Circle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
 
 export const Route = createFileRoute("/_authenticated/account-security")({
   head: () => ({ meta: [{ title: "Security & Auth · The Ledger" }] }),
@@ -15,6 +16,7 @@ function SecuritySettingsPage() {
   const navigate = useNavigate();
 
   const [showPwForm, setShowPwForm] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,6 +26,20 @@ function SecuritySettingsPage() {
   const hasGoogle = identities.some((i) => i.provider === "google");
   const hasEmail = identities.some((i) => i.provider === "email");
 
+  /**
+   * Change the account password.
+   *
+   * The current password is re-checked first. The project has
+   * `security_update_password_require_reauthentication` off, so
+   * `auth.updateUser({ password })` on its own will happily rewrite the password
+   * using nothing but the session token — meaning anyone who got hold of an
+   * unattended browser, or the token out of localStorage, could lock the real
+   * owner out permanently. Re-authenticating turns "has a session" into "knows
+   * the password", which is the bar this action should clear.
+   *
+   * Members who signed in through GitHub or Google have no password to confirm,
+   * so for them the form is a *set*-password flow and the check is skipped.
+   */
   async function changePassword() {
     if (!newPw.trim()) {
       toast.error("Enter a new password.");
@@ -33,18 +49,61 @@ function SecuritySettingsPage() {
       toast.error("Passwords don't match.");
       return;
     }
-    if (newPw.length < 8) {
-      toast.error("Minimum 8 characters.");
+    if (newPw.length < MIN_PASSWORD_LENGTH) {
+      toast.error(`Minimum ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
+    if (hasEmail && newPw === currentPw) {
+      toast.error("That's your current password. Choose a different one.");
+      return;
+    }
+
     setBusy(true);
+
+    if (hasEmail) {
+      if (!currentPw) {
+        setBusy(false);
+        toast.error("Enter your current password.");
+        return;
+      }
+      const email = user?.email;
+      if (!email) {
+        setBusy(false);
+        toast.error("Your account has no email address on file.");
+        return;
+      }
+      // signInWithPassword on the same account refreshes the existing session
+      // rather than creating a second one, so a correct password is a no-op here
+      // and a wrong one costs nothing.
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPw,
+      });
+      if (reauthErr) {
+        setBusy(false);
+        toast.error(
+          reauthErr.message.toLowerCase().includes("invalid")
+            ? "That current password isn't right."
+            : reauthErr.message,
+        );
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPw });
-    setBusy(false);
     if (error) {
+      setBusy(false);
       toast.error(error.message);
       return;
     }
-    toast.success("Password updated.");
+
+    // Anyone else holding a session on this account loses it.
+    const { error: signOutErr } = await supabase.auth.signOut({ scope: "others" });
+    if (signOutErr) console.warn("[security] could not revoke other sessions:", signOutErr.message);
+
+    setBusy(false);
+    toast.success("Password updated. Other devices have been signed out.");
+    setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
     setShowPwForm(false);
@@ -111,20 +170,38 @@ function SecuritySettingsPage() {
 
             {showPwForm && (
               <div className="mt-4 space-y-2">
+                {hasEmail && (
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    className="lux-field"
+                    placeholder="Current password"
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                  />
+                )}
                 <input
                   type="password"
+                  autoComplete="new-password"
                   className="lux-field"
-                  placeholder="New password (min 8 chars)"
+                  placeholder={`New password (min ${MIN_PASSWORD_LENGTH} chars)`}
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
                 />
                 <input
                   type="password"
+                  autoComplete="new-password"
                   className="lux-field"
                   placeholder="Confirm new password"
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
                 />
+                {!hasEmail && (
+                  <p className="px-0.5 text-xs text-muted-foreground">
+                    You signed in with a provider, so there's no existing password to confirm.
+                    Setting one lets you sign in with your email as well.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={changePassword}

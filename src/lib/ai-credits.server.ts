@@ -1,7 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { DAILY_AI_CREDITS } from "./limits";
 import { hasUnlimitedAi } from "./entitlements";
-import type { Database } from "@/integrations/supabase/types";
 
 /**
  * Shared PulseAssist credit gate for the draft and chat endpoints.
@@ -25,11 +23,15 @@ export type CreditGrant = {
  * because the RPC is not granted to `authenticated` — the caller's identity has
  * already been established by requireSupabaseAuth.
  */
-export async function consumeAiCredit(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-): Promise<CreditGrant> {
-  const { data: profile } = await supabase
+export async function consumeAiCredit(userId: string): Promise<CreditGrant> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  // Read the entitlement with the service role, not the caller's token:
+  // subscription_status is no longer granted to `authenticated` (20260929000100),
+  // so a user-token read returns a permission error instead of a row — which
+  // hasUnlimitedAi() would then read as "not entitled", silently charging paying
+  // and verified members for calls that should be uncapped.
+  const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("verification_tier, subscription_status")
     .eq("id", userId)
@@ -38,8 +40,6 @@ export async function consumeAiCredit(
   if (hasUnlimitedAi(profile)) {
     return { creditsRemaining: null, isUnlimited: true };
   }
-
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: remaining, error } = await supabaseAdmin.rpc("consume_ai_credit", {
     _user_id: userId,
     _daily_credits: DAILY_AI_CREDITS,
