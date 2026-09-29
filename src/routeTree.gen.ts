@@ -23,6 +23,7 @@ import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authen
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedAccountUsernameRouteImport } from './routes/_authenticated/account-username'
 import { Route as AuthenticatedAccountSecurityRouteImport } from './routes/_authenticated/account-security'
 import { Route as AuthenticatedAccountPrivacyRouteImport } from './routes/_authenticated/account-privacy'
 import { Route as AuthenticatedAccountNotificationsRouteImport } from './routes/_authenticated/account-notifications'
@@ -98,6 +99,12 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAccountUsernameRoute =
+  AuthenticatedAccountUsernameRouteImport.update({
+    id: '/account-username',
+    path: '/account-username',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAccountSecurityRoute =
   AuthenticatedAccountSecurityRouteImport.update({
     id: '/account-security',
@@ -130,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/account-security': typeof AuthenticatedAccountSecurityRoute
+  '/account-username': typeof AuthenticatedAccountUsernameRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/messages': typeof AuthenticatedMessagesRouteWithChildren
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/account-security': typeof AuthenticatedAccountSecurityRoute
+  '/account-username': typeof AuthenticatedAccountUsernameRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/messages': typeof AuthenticatedMessagesRouteWithChildren
@@ -170,6 +179,7 @@ export interface FileRoutesById {
   '/_authenticated/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/_authenticated/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/_authenticated/account-security': typeof AuthenticatedAccountSecurityRoute
+  '/_authenticated/account-username': typeof AuthenticatedAccountUsernameRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRouteWithChildren
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/account-notifications'
     | '/account-privacy'
     | '/account-security'
+    | '/account-username'
     | '/admin'
     | '/billing'
     | '/messages'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/account-notifications'
     | '/account-privacy'
     | '/account-security'
+    | '/account-username'
     | '/admin'
     | '/billing'
     | '/messages'
@@ -230,6 +242,7 @@ export interface FileRouteTypes {
     | '/_authenticated/account-notifications'
     | '/_authenticated/account-privacy'
     | '/_authenticated/account-security'
+    | '/_authenticated/account-username'
     | '/_authenticated/admin'
     | '/_authenticated/billing'
     | '/_authenticated/messages'
@@ -351,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/account-username': {
+      id: '/_authenticated/account-username'
+      path: '/account-username'
+      fullPath: '/account-username'
+      preLoaderRoute: typeof AuthenticatedAccountUsernameRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/account-security': {
       id: '/_authenticated/account-security'
       path: '/account-security'
@@ -399,6 +419,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountNotificationsRoute: typeof AuthenticatedAccountNotificationsRoute
   AuthenticatedAccountPrivacyRoute: typeof AuthenticatedAccountPrivacyRoute
   AuthenticatedAccountSecurityRoute: typeof AuthenticatedAccountSecurityRoute
+  AuthenticatedAccountUsernameRoute: typeof AuthenticatedAccountUsernameRoute
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRouteWithChildren
@@ -414,6 +435,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedAccountNotificationsRoute,
   AuthenticatedAccountPrivacyRoute: AuthenticatedAccountPrivacyRoute,
   AuthenticatedAccountSecurityRoute: AuthenticatedAccountSecurityRoute,
+  AuthenticatedAccountUsernameRoute: AuthenticatedAccountUsernameRoute,
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedBillingRoute: AuthenticatedBillingRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRouteWithChildren,

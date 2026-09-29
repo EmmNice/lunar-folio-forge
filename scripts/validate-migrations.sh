@@ -128,6 +128,17 @@ chk() { # name | expected | sql
   if [ "$got" = "$2" ]; then ok "$1"; else bad "$1" "expected '$2' got '$got'"; fi
 }
 
+# Passes only if the statement RAISES. qt swallows stderr and returns empty on
+# error, which is indistinguishable from a statement that legitimately returned
+# nothing -- so this checks psql's exit status instead.
+chk_err() { # name | sql
+  if PSQL -tA -v ON_ERROR_STOP=1 -c "$2" >/dev/null 2>&1; then
+    bad "$1" "expected the statement to be rejected, but it succeeded"
+  else
+    ok "$1"
+  fi
+}
+
 chk "profiles.account_status exists" "t" \
   "select exists(select 1 from information_schema.columns where table_name='profiles' and column_name='account_status')"
 chk "only one privileged-column trigger on profiles" "1" \
@@ -293,8 +304,107 @@ asb "banned member cannot post" "ERROR" "33333333-3333-3333-3333-333333333333" \
   "insert into public.posts (author_id, content) values ('33333333-3333-3333-3333-333333333333','still here');"
 asb "member cannot unban themselves" "ERROR" "33333333-3333-3333-3333-333333333333" \
   "update public.profiles set account_status='active' where id='33333333-3333-3333-3333-333333333333';"
-asb "member cannot rename their handle" "ERROR" "11111111-1111-1111-1111-111111111111" \
-  "update public.profiles set handle='stolen' where id='11111111-1111-1111-1111-111111111111';"
+# The handle used to be frozen forever after onboarding. 20260930000100 made it
+# changeable on a 30-day cooldown, because most handles had been generated from an
+# email address nobody was asked about — the old rule made a bad identity permanent.
+asb "member CAN rename their handle once" "1" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='renamed_once' where id='11111111-1111-1111-1111-111111111111';
+   select count(*) from public.profiles where handle='renamed_once';"
+# The rename above is rolled back by asb, so stamp the cooldown as postgres to test
+# the second-change path.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set handle_changed_at = now() - interval '3 days'
+ where id='11111111-1111-1111-1111-111111111111';
+SQL
+asb "a second rename inside 30 days is refused" "ERROR" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='too_soon' where id='11111111-1111-1111-1111-111111111111';"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set handle_changed_at = now() - interval '45 days'
+ where id='11111111-1111-1111-1111-111111111111';
+SQL
+asb "a rename after the cooldown is allowed" "1" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='after_cooldown' where id='11111111-1111-1111-1111-111111111111';
+   select count(*) from public.profiles where handle='after_cooldown';"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set handle_changed_at = null
+ where id='11111111-1111-1111-1111-111111111111';
+SQL
+asb "a reserved username is refused" "ERROR" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='admin' where id='11111111-1111-1111-1111-111111111111';"
+asb "another reserved username is refused" "ERROR" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='support' where id='11111111-1111-1111-1111-111111111111';"
+# Case folding is what makes uniqueness case-insensitive: an uppercase handle is
+# normalised rather than stored as a second distinct identity.
+asb "an uppercase username is folded to lowercase" "godson" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='GODSON' where id='11111111-1111-1111-1111-111111111111';
+   select handle from public.profiles where id='11111111-1111-1111-1111-111111111111';"
+asb "a username colliding case-insensitively is refused" "ERROR" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='GOLDIE' where id='11111111-1111-1111-1111-111111111111';"
+asb "a malformed username is refused" "ERROR" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set handle='no.dots' where id='11111111-1111-1111-1111-111111111111';"
+asb "member still cannot reopen onboarding for a free rename" "ERROR" "11111111-1111-1111-1111-111111111111" \
+  "update public.profiles set onboarding_completed=false where id='11111111-1111-1111-1111-111111111111';"
+
+# ── username_available(), the signup-time check ─────────────────────────────
+chk "username_available says taken for an existing handle" "false" \
+  "select (public.username_available('goldie')->>'available')"
+chk "username_available says taken is the reason" "taken" \
+  "select (public.username_available('goldie')->>'reason')"
+chk "username_available is case-insensitive about taken names" "false" \
+  "select (public.username_available('GOLDIE')->>'available')"
+chk "username_available allows a free name" "true" \
+  "select (public.username_available('brand_new_dev')->>'available')"
+chk "username_available rejects reserved names" "reserved" \
+  "select (public.username_available('admin')->>'reason')"
+chk "username_available rejects malformed names" "invalid" \
+  "select (public.username_available('a')->>'reason')"
+chk "username_available is callable by anon" "t" \
+  "select has_function_privilege('anon', 'public.username_available(text)', 'execute')"
+
+# ── new signups must not inherit their identity from their email ────────────
+# Signup identity. The inserts are done with `q` and the assertions with `chk`,
+# separately and deliberately: qt() does not strip psql's "INSERT 0 1" status line,
+# so a multi-statement chk compares against "INSERT01<newline>value" and fails for
+# reasons that have nothing to do with the schema.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<'SQL'
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'someone@example.com',        '{"username":"chosen_name"}'::jsonb),
+  ('aaaaaaaa-0000-4000-8000-000000000002', 'firstname.lastname@corp.com','{"username":"dev_identity"}'::jsonb),
+  ('aaaaaaaa-0000-4000-8000-000000000003', 'oauthperson@example.com',    '{}'::jsonb);
+SQL
+
+# A signup that supplies a username gets exactly that username -- not a suffixed
+# variant, which is how most implementations quietly hand over a different identity.
+chk "signup with a username uses it verbatim" "chosen_name" \
+  "select handle from public.profiles where id='aaaaaaaa-0000-4000-8000-000000000001'"
+
+# display_name must not fall back to the email local part. This is the disclosure
+# that motivated the migration: 'firstname.lastname' would have become a public name.
+chk "signup display_name is not the email local part" "t" \
+  "select display_name <> 'firstname.lastname' from public.profiles where id='aaaaaaaa-0000-4000-8000-000000000002'"
+chk "signup display_name falls back to the username" "dev_identity" \
+  "select display_name from public.profiles where id='aaaaaaaa-0000-4000-8000-000000000002'"
+
+# OAuth cannot supply a username at account-creation time. The placeholder must be
+# neutral rather than email-derived, so abandoning onboarding discloses nothing.
+chk "oauth signup gets a neutral placeholder handle" "t" \
+  "select handle like 'dev\\_%' from public.profiles where id='aaaaaaaa-0000-4000-8000-000000000003'"
+chk "oauth placeholder is not derived from the email" "f" \
+  "select handle like '%oauthperson%' from public.profiles where id='aaaaaaaa-0000-4000-8000-000000000003'"
+chk "oauth display_name is not the email local part either" "f" \
+  "select display_name = 'oauthperson' from public.profiles where id='aaaaaaaa-0000-4000-8000-000000000003'"
+
+# A taken username must abort the signup rather than silently suffix a digit.
+# The trigger runs inside the auth.users insert, so raising rolls that insert back
+# too -- which is why the second assertion can prove no half-named account survives.
+chk_err "signup with a taken username is rejected" \
+  "insert into auth.users (id, email, raw_user_meta_data) values (gen_random_uuid(), 'dupe@example.com', '{\"username\":\"goldie\"}'::jsonb)"
+chk "the rejected signup left no auth row behind" "0" \
+  "select count(*) from auth.users where email='dupe@example.com'"
+chk_err "signup with a reserved username is rejected" \
+  "insert into auth.users (id, email, raw_user_meta_data) values (gen_random_uuid(), 'res@example.com', '{\"username\":\"admin\"}'::jsonb)"
+chk_err "signup with a malformed username is rejected" \
+  "insert into auth.users (id, email, raw_user_meta_data) values (gen_random_uuid(), 'bad@example.com', '{\"username\":\"x\"}'::jsonb)"
 asb "member cannot store a javascript: url" "ERROR" "11111111-1111-1111-1111-111111111111" \
   "update public.profiles set github_url='javascript:alert(1)' where id='11111111-1111-1111-1111-111111111111';"
 asb "member cannot self-repost" "ERROR" "22222222-2222-2222-2222-222222222222" \
@@ -477,6 +587,147 @@ q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
 delete from public.billing_subscriptions where user_id='$MEMBER';
 update public.profiles set subscription_status='free' where id='$MEMBER';
 SQL
+
+echo
+echo "Developer profiles, bookmarks, mentions"
+
+# ── skills ──────────────────────────────────────────────────────────────────
+asb "member can set their own skills" "2" "$MEMBER" \
+  "update public.profiles set skills = array['Rust','  rust  ','Postgres'] where id='$MEMBER';
+   select array_length(skills,1) from public.profiles where id='$MEMBER';"
+asb "skills are lowercased and de-duplicated" "postgres,rust" "$MEMBER" \
+  "update public.profiles set skills = array['Rust','rust','Postgres'] where id='$MEMBER';
+   select array_to_string(skills, ',') from public.profiles where id='$MEMBER';"
+asb "more than 20 skills is refused" "ERROR" "$MEMBER" \
+  "update public.profiles set skills = (select array_agg('skill'||g) from generate_series(1,21) g) where id='$MEMBER';"
+asb "an overlong skill is refused" "ERROR" "$MEMBER" \
+  "update public.profiles set skills = array[repeat('x',31)] where id='$MEMBER';"
+asb "a member cannot set someone else's skills" "0" "$MEMBER" \
+  "update public.profiles set skills = array['pwned'] where id='$GOLD';
+   select count(*) from public.profiles where id='$GOLD' and 'pwned' = any(skills);"
+
+# Skills feed the search vector, which is the point of storing them as an array.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set skills = array['rust','postgres'] where id='$GOLD';
+SQL
+asb "people search finds a member by skill" "1" "$MEMBER" \
+  "select count(*) from public.search_profiles('rust', 10);"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set skills = '{}' where id='$GOLD';
+SQL
+
+# ── location ────────────────────────────────────────────────────────────────
+asb "member can set their own location" "Lagos" "$MEMBER" \
+  "update public.profiles set location='Lagos' where id='$MEMBER';
+   select location from public.profiles where id='$MEMBER';"
+asb "an overlong location is refused" "ERROR" "$MEMBER" \
+  "update public.profiles set location=repeat('x',81) where id='$MEMBER';"
+
+# ── pinned projects ─────────────────────────────────────────────────────────
+asb "member can pin a project" "1" "$MEMBER" \
+  "insert into public.profile_projects (user_id, name, url) values ('$MEMBER','Ledger CLI','https://example.com');
+   select count(*) from public.profile_projects where user_id='$MEMBER';"
+asb "a project cannot be created for someone else" "ERROR" "$MEMBER" \
+  "insert into public.profile_projects (user_id, name) values ('$GOLD','not mine');"
+asb "a javascript: project url is refused" "ERROR" "$MEMBER" \
+  "insert into public.profile_projects (user_id, name, url) values ('$MEMBER','x','javascript:alert(1)');"
+asb "pinned projects are capped at 6" "ERROR" "$MEMBER" \
+  "insert into public.profile_projects (user_id, name)
+     select '$MEMBER', 'p'||g from generate_series(1,7) g;"
+# Projects must disappear with the profile they belong to, in both directions.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+insert into public.profile_projects (user_id, name) values ('$GOLD','Gold project');
+insert into public.blocks (blocker_id, blocked_id) values ('$MEMBER','$GOLD');
+SQL
+asb "a blocked member's projects are hidden" "0" "$MEMBER" \
+  "select count(*) from public.profile_projects where user_id='$GOLD';"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.blocks where blocker_id='$MEMBER' and blocked_id='$GOLD';
+SQL
+asb "an unblocked member's projects are visible" "1" "$MEMBER" \
+  "select count(*) from public.profile_projects where user_id='$GOLD';"
+
+# ── bookmarks: private, and that is the whole point ─────────────────────────
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.bookmarks;
+insert into public.bookmarks (user_id, post_id) values ('$GOLD', 'bbbb0000-0000-4000-8000-000000000001');
+SQL
+asb "a member cannot read another member's bookmarks" "0" "$MEMBER" \
+  "select count(*) from public.bookmarks;"
+asb "a member CAN read their own bookmarks" "1" "$GOLD" \
+  "select count(*) from public.bookmarks;"
+asb "a member cannot bookmark on someone else's behalf" "ERROR" "$MEMBER" \
+  "insert into public.bookmarks (user_id, post_id) values ('$GOLD','bbbb0000-0000-4000-8000-000000000001');"
+# Checked as the owner, not as the attacker. Counting from inside the attacker's
+# transaction proves nothing: the SELECT policy hides the row from them either way,
+# so a successful deletion and a blocked one both read as 0.
+asb "a member's delete of someone else's bookmark affects nothing" "DELETE0" "$MEMBER" \
+  "delete from public.bookmarks where user_id='$GOLD';"
+asb "the owner's bookmark survived" "1" "$GOLD" \
+  "select count(*) from public.bookmarks;"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.bookmarks;
+SQL
+
+# ── mentions ────────────────────────────────────────────────────────────────
+# These use `q` + `chk` rather than `asb` for two reasons: asb rolls its
+# transaction back, so a notification written by a trigger would vanish before it
+# could be asserted; and notifications RLS means the author cannot read the
+# recipient's row anyway. The trigger fires whatever role performs the insert, so
+# running the insert as the owner tests the same code path.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.notifications where type='mention';
+insert into public.posts (id, author_id, content)
+  values ('eeee1111-0000-4000-8000-000000000001','$MEMBER','hey @goldie take a look');
+SQL
+chk "mentioning a member notifies them" "1" \
+  "select count(*) from public.notifications where type='mention' and user_id='$GOLD'"
+chk "the mention notification credits the right actor" "t" \
+  "select actor_id = '$MEMBER' from public.notifications where type='mention' and user_id='$GOLD'"
+chk "the mention notification points at the post" "t" \
+  "select post_id = 'eeee1111-0000-4000-8000-000000000001' from public.notifications where type='mention' and user_id='$GOLD'"
+
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.notifications where type='mention';
+insert into public.posts (id, author_id, content)
+  values ('eeee1111-0000-4000-8000-000000000002','$MEMBER','@goldie @goldie ping');
+SQL
+chk "mentioning the same person twice notifies once" "1" \
+  "select count(*) from public.notifications where type='mention' and user_id='$GOLD'"
+
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.notifications where type='mention';
+insert into public.posts (id, author_id, content)
+  values ('eeee1111-0000-4000-8000-000000000003','$MEMBER','note to self @member');
+insert into public.posts (id, author_id, content)
+  values ('eeee1111-0000-4000-8000-000000000004','$MEMBER','@nobody_here hello');
+SQL
+chk "mentioning yourself notifies nobody" "0" \
+  "select count(*) from public.notifications where type='mention' and user_id='$MEMBER'"
+chk "an unknown handle notifies nobody" "0" \
+  "select count(*) from public.notifications where type='mention'"
+
+# A block must stop someone reaching into your notifications by typing your name.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.notifications where type='mention';
+insert into public.blocks (blocker_id, blocked_id) values ('$GOLD','$MEMBER');
+insert into public.posts (id, author_id, content)
+  values ('eeee1111-0000-4000-8000-000000000005','$MEMBER','@goldie you cannot ignore me');
+SQL
+chk "a mention across a block notifies nobody" "0" \
+  "select count(*) from public.notifications where type='mention' and user_id='$GOLD'"
+
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.blocks where blocker_id='$GOLD' and blocked_id='$MEMBER';
+delete from public.notifications where type='mention';
+insert into public.comments (id, post_id, author_id, content)
+  values ('eeee2222-0000-4000-8000-000000000001','bbbb0000-0000-4000-8000-000000000001','$MEMBER','cc @goldie');
+SQL
+chk "a mention in a comment also notifies" "1" \
+  "select count(*) from public.notifications where type='mention' and user_id='$GOLD'"
+
+chk "notifications accept type=mention" "t" \
+  "select pg_get_constraintdef(oid) like '%mention%' from pg_constraint where conname='notifications_type_check'"
 
 
 echo

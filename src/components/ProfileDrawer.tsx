@@ -10,10 +10,12 @@ import {
   Loader2,
   Inbox,
   CreditCard,
+  AtSign,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { resetPerUserState } from "@/lib/session-reset";
 import { useQueryClient } from "@tanstack/react-query";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { LedgerMark } from "@/components/AppHeader";
@@ -25,6 +27,12 @@ function tierRingColor(tier?: string | null) {
 }
 
 const SETTINGS_NAV = [
+  {
+    label: "Username",
+    desc: "Your @handle and profile address",
+    icon: AtSign,
+    to: "/account-username",
+  },
   {
     label: "Security & Auth",
     desc: "Password & linked accounts",
@@ -84,7 +92,12 @@ export function ProfileDrawer({
     close();
     await qc.cancelQueries();
     qc.clear();
-    await supabase.auth.signOut();
+    // Clears the onboarding cache and the shared unread-count channel, neither of
+    // which Supabase's signOut() or the query cache knows about.
+    resetPerUserState();
+    // scope: "local" — signing out here should end THIS session, not silently log
+    // the member out of their phone as well. The default is "global".
+    await supabase.auth.signOut({ scope: "local" });
     navigate({ to: "/", replace: true });
   }
 

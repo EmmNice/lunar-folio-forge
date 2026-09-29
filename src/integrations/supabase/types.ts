@@ -185,6 +185,39 @@ export type Database = {
           },
         ]
       }
+      bookmarks: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookmarks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookmarks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           author_id: string
@@ -607,6 +640,47 @@ export type Database = {
           },
         ]
       }
+      profile_projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          position: number
+          repo_url: string | null
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          position?: number
+          repo_url?: string | null
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          position?: number
+          repo_url?: string | null
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_projects_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           account_status: string
@@ -623,14 +697,17 @@ export type Database = {
           dm_cloaking_enabled: boolean
           github_url: string | null
           handle: string
+          handle_changed_at: string | null
           hide_from_search: boolean
           id: string
+          location: string | null
           notification_prefs: Json
           onboarding_completed: boolean
           pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
           search_vector: unknown
+          skills: string[]
           startup_url: string | null
           subscription_status: string
           traction_url: string | null
@@ -652,14 +729,17 @@ export type Database = {
           dm_cloaking_enabled?: boolean
           github_url?: string | null
           handle: string
+          handle_changed_at?: string | null
           hide_from_search?: boolean
           id: string
+          location?: string | null
           notification_prefs?: Json
           onboarding_completed?: boolean
           pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
           search_vector?: unknown
+          skills?: string[]
           startup_url?: string | null
           subscription_status?: string
           traction_url?: string | null
@@ -681,14 +761,17 @@ export type Database = {
           dm_cloaking_enabled?: boolean
           github_url?: string | null
           handle?: string
+          handle_changed_at?: string | null
           hide_from_search?: boolean
           id?: string
+          location?: string | null
           notification_prefs?: Json
           onboarding_completed?: boolean
           pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
           search_vector?: unknown
+          skills?: string[]
           startup_url?: string | null
           subscription_status?: string
           traction_url?: string | null
@@ -937,14 +1020,17 @@ export type Database = {
           dm_cloaking_enabled: boolean
           github_url: string | null
           handle: string
+          handle_changed_at: string | null
           hide_from_search: boolean
           id: string
+          location: string | null
           notification_prefs: Json
           onboarding_completed: boolean
           pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
           search_vector: unknown
+          skills: string[]
           startup_url: string | null
           subscription_status: string
           traction_url: string | null
@@ -984,7 +1070,11 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      skills_are_sane: { Args: { _skills: string[] }; Returns: boolean }
       sync_subscription_status: { Args: { _user_id: string }; Returns: string }
+      username_available: { Args: { _username: string }; Returns: Json }
+      username_is_reserved: { Args: { _username: string }; Returns: boolean }
+      username_is_valid: { Args: { _username: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "super_admin"

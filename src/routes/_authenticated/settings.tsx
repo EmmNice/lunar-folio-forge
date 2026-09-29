@@ -16,6 +16,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 import type { VerificationTier } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { resetPerUserState } from "@/lib/session-reset";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { acceptPitch } from "@/lib/pitch.functions";
@@ -596,7 +597,8 @@ function DangerSection() {
     setBusy(true);
     await qc.cancelQueries();
     qc.clear();
-    await supabase.auth.signOut();
+    resetPerUserState();
+    await supabase.auth.signOut({ scope: "local" });
     navigate({ to: "/", replace: true });
   }
 
