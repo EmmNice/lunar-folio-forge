@@ -354,11 +354,20 @@ function isWalledGarden(raw: string): boolean {
  */
 export async function runProofCheck(input: {
   tier: "silver" | "gold";
+  /*
+    Which Gold track, because the two prove ownership in different places and
+    against different URLs. Without this the check looked only at portfolio and
+    LinkedIn — fields the founder track does not collect — so a founder who
+    supplied a product and evidence URL was told "no verifiable link was supplied"
+    and could never be proven. Observed on the deployed site.
+  */
+  goldTrack?: "founder" | "backer" | null;
   code: string;
   githubUrl: string | null;
   portfolioUrl: string | null;
   linkedinOrXUrl: string | null;
   liveProjectUrl: string | null;
+  tractionEvidenceUrl?: string | null;
 }): Promise<ProofOutcome> {
   /*
     Refused before anything is fetched. A malformed code means this account's
@@ -388,8 +397,16 @@ export async function runProofCheck(input: {
     return viaGithub;
   }
 
-  return checkSite(
-    [input.portfolioUrl, input.linkedinOrXUrl].filter(Boolean) as string[],
-    input.code,
-  );
+  /*
+    A founder proves they control the product they claim to have launched, so the
+    code goes on the product itself. The evidence page is tried as a fallback —
+    somebody who put the code on their public dashboard instead has still
+    demonstrated control of something they claimed.
+  */
+  const goldUrls =
+    input.goldTrack === "founder"
+      ? [input.liveProjectUrl, input.tractionEvidenceUrl ?? null]
+      : [input.portfolioUrl, input.linkedinOrXUrl];
+
+  return checkSite(goldUrls.filter(Boolean) as string[], input.code);
 }
