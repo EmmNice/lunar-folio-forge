@@ -144,6 +144,10 @@ type ApplicationRow = {
     urls?: { label: string; url: string; reachable: boolean; detail: string }[];
     measuredAt?: string;
   } | null;
+  /* 'paid' | 'waived'. Unpaid applications are filtered out of the queue server-side. */
+  payment_status: string | null;
+  payment_waived_reason: string | null;
+  amount_cents: number | null;
   proof_verified_at: string | null;
   proof_method: string | null;
   proof_detail: string | null;
@@ -1288,6 +1292,21 @@ function ApplicationCard({
           {app.gold_track === "founder" ? "Founder / operator track" : "Backer track"}
         </p>
       )}
+
+      {/*
+        Whether the fee was actually collected. A waived application is legitimate
+        but it is not a paid one, and the reason is shown rather than left for
+        somebody to assume.
+      */}
+      {app.payment_status === "waived" ? (
+        <p className="text-[11px] text-amber-400/90">
+          Fee waived — {app.payment_waived_reason ?? "no reason recorded"}
+        </p>
+      ) : app.payment_status === "paid" ? (
+        <p className="text-[11px] text-emerald-400/80">
+          Fee paid{app.amount_cents ? ` · $${(app.amount_cents / 100).toFixed(2)}` : ""}
+        </p>
+      ) : null}
 
       {/* Proof of ownership — the first thing the reviewer should read. */}
       <ProofVerdict app={app} />

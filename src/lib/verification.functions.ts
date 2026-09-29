@@ -336,6 +336,108 @@ async function checkAndRecordProof(
   return { verified: outcome.verified, detail: outcome.detail };
 }
 
+/**
+ * The application fee, in cents. Both tiers, same price.
+ *
+ * Read from here and never from the client. Letting a browser name the amount is
+ * the classic way somebody sells themselves a one-cent badge, and the same
+ * reasoning already applies to the subscription price in billing.functions.ts.
+ */
+const VERIFICATION_FEE_CENTS = 100;
+
+/**
+ * Opens Stripe Checkout for an application that has been created but not paid for.
+ *
+ * A one-time payment rather than a subscription: the fee is charged per
+ * application, and an approved badge does not lapse when a card expires.
+ *
+ * Returns `{ url: null }` when the deployment has no Stripe credentials, which is
+ * how the caller knows to treat the application as fee-waived rather than showing
+ * a pay button that cannot work.
+ */
+async function startFeeCheckout(
+  applicationId: string,
+  userId: string,
+  tier: "silver" | "gold",
+  email: string | null,
+): Promise<{ url: string | null }> {
+  const { billingConfigured, getStripe, ensureStripeCustomer } = await import("./billing.server");
+  if (!billingConfigured()) return { url: null };
+
+  const stripe = await getStripe();
+  const { appLink } = await import("./app-config.server");
+  const customerId = await ensureStripeCustomer(userId, email);
+
+  const session = await stripe.checkout.sessions.create({
+    // Not "subscription": this is a one-off fee for reviewing one application.
+    mode: "payment",
+    customer: customerId,
+    line_items: [
+      {
+        quantity: 1,
+        // Priced inline rather than from a configured price id, so a deployment
+        // does not need a second Stripe product set up before verification works.
+        price_data: {
+          currency: "usd",
+          unit_amount: VERIFICATION_FEE_CENTS,
+          product_data: {
+            name: `The Ledger — ${tier === "silver" ? "Silver" : "Gold"} verification review`,
+            description:
+              "One-time fee to have your verification application reviewed. Not a subscription, and not a guarantee of approval.",
+          },
+        },
+      },
+    ],
+    client_reference_id: userId,
+    // The webhook needs to know which application this paid for, and that it is a
+    // verification fee rather than the subscription checkout in billing.functions.
+    metadata: { kind: "verification_fee", application_id: applicationId, supabase_user_id: userId },
+    payment_intent_data: {
+      metadata: { kind: "verification_fee", application_id: applicationId },
+    },
+    success_url: appLink("/verification?fee=paid"),
+    cancel_url: appLink("/verification?fee=cancelled"),
+  });
+
+  if (!session.url) throw new Error("Stripe didn't return a checkout URL.");
+  return { url: session.url };
+}
+
+/**
+ * Re-opens checkout for an application the member started and did not pay for.
+ *
+ * Without this, abandoning the Stripe page leaves an unpaid application that keeps
+ * the member from submitting a new one — and which they cannot see a way to
+ * finish, because it is not in the review queue either.
+ */
+export const resumeVerificationPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ tier: z.enum(["silver", "gold"]) }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { userId, claims } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: application } = await supabaseAdmin
+      .from("verification_requests")
+      .select("id, payment_status")
+      .eq("user_id", userId)
+      .eq("tier", data.tier)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!application) throw new Error("You have no pending application for this tier.");
+    if (application.payment_status !== "unpaid") {
+      throw new Error("This application is already paid for.");
+    }
+
+    const email = typeof claims?.email === "string" ? claims.email : null;
+    const { url } = await startFeeCheckout(application.id, userId, data.tier, email);
+    if (!url) throw new Error("Payment isn't set up on this deployment.");
+    return { url };
+  });
+
 /** Apply for Silver (builder) or Gold (investor) verification. */
 export const submitVerificationApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -371,7 +473,13 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabase, userId, claims } = context;
+
+    // Whether there is a payment provider to charge through at all. An
+    // unconfigured deployment waives the fee explicitly rather than blocking every
+    // application or pretending one was collected.
+    const { billingConfigured } = await import("./billing.server");
+    const feeApplies = billingConfigured();
 
     /*
       Requirements, per tier and track. Each of these is also a CHECK constraint
@@ -452,15 +560,29 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
 
     const { data: existing } = await supabase
       .from("verification_requests")
-      .select("id, status")
+      .select("id, status, payment_status")
       .eq("user_id", userId)
       .eq("tier", data.tier)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    /*
+      A pending application blocks a new one — unless it was never paid for, in
+      which case it is not really submitted. Abandoning the Stripe page would
+      otherwise leave a row that blocks every future attempt while sitting outside
+      the review queue where nobody, including the applicant, can act on it.
+
+      Replaced rather than resumed because the form may have changed since: the old
+      row has no review history worth keeping.
+    */
     if (existing?.status === "pending") {
-      throw new Error("You already have a pending application for this tier.");
+      if (existing.payment_status === "unpaid") {
+        const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+        await admin.from("verification_requests").delete().eq("id", existing.id);
+      } else {
+        throw new Error("You already have a pending application for this tier.");
+      }
     }
 
     const { data: inserted, error } = await supabase
@@ -502,6 +624,19 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
         gold_track: data.tier === "gold" ? (data.gold_track ?? null) : null,
         traction_summary: data.traction_summary || null,
         traction_evidence_url: data.traction_evidence_url || null,
+        /*
+          Starts unpaid when there is a payment provider to pay, and waived — with
+          the reason on the row — when there is not. Never "paid" without Stripe
+          having said so: an unconfigured deployment writing `paid` would put a
+          falsehood in the database that nothing could later distinguish from a
+          real payment.
+        */
+        ...(feeApplies
+          ? { payment_status: "unpaid" as const, amount_cents: VERIFICATION_FEE_CENTS }
+          : {
+              payment_status: "waived" as const,
+              payment_waived_reason: "no payment provider configured on this deployment",
+            }),
       })
       .select("id")
       .maybeSingle();
@@ -516,6 +651,18 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       being down is not a reason to lose the application. It is re-runnable from
       the form via recheckVerificationProof.
     */
+    /*
+      Checkout only runs when the application is unpaid, which is only when Stripe
+      is configured. The proof check and signal collection still run either way —
+      an applicant should learn their code is missing before paying, not after.
+    */
+    let checkoutUrl: string | null = null;
+    if (feeApplies && inserted?.id) {
+      const email = typeof claims?.email === "string" ? claims.email : null;
+      const started = await startFeeCheckout(inserted.id, userId, data.tier, email);
+      checkoutUrl = started.url;
+    }
+
     let proof: { verified: boolean; detail: string } = {
       verified: false,
       detail: "Not checked yet.",
@@ -560,7 +707,13 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, proof };
+    return {
+      ok: true,
+      proof,
+      // Non-null when the member still has to pay. The client redirects to it.
+      checkoutUrl,
+      feeCents: feeApplies ? VERIFICATION_FEE_CENTS : 0,
+    };
   });
 
 /** Admin: list applications awaiting review. */
@@ -582,6 +735,7 @@ export const listPendingApplications = createServerFn({ method: "GET" })
         fund_or_company_name, portfolio_url, linkedin_or_x_url, invite_code,
         link_primary, link_secondary,
         gold_track, traction_summary, traction_evidence_url, applicant_signals,
+        payment_status, payment_waived_reason, amount_cents,
         proof_verified_at, proof_method, proof_detail, proof_checked_at, proof_attempts,
         profiles!verification_requests_user_id_fkey(
           id, handle, display_name, avatar_url, company_name,
@@ -590,6 +744,13 @@ export const listPendingApplications = createServerFn({ method: "GET" })
       `,
       )
       .eq("status", "pending")
+      /*
+        Unpaid applications are not in the queue. Somebody who opened the form and
+        abandoned Stripe has not submitted anything, and putting those in front of a
+        reviewer would fill the queue with rows there is nothing to decide about.
+        They remain visible to the applicant, who is offered the payment again.
+      */
+      .neq("payment_status", "unpaid")
       .order("created_at", { ascending: true });
 
     if (error) throw new Error(error.message);
@@ -628,12 +789,23 @@ export const reviewApplication = createServerFn({ method: "POST" })
 
     const { data: application, error: fetchErr } = await supabaseAdmin
       .from("verification_requests")
-      .select("id, tier, user_id, status, proof_verified_at")
+      .select("id, tier, user_id, status, proof_verified_at, payment_status")
       .eq("id", data.applicationId)
       .single();
 
     if (fetchErr || !application) throw new Error("Application not found.");
     if (application.status !== "pending") throw new Error("Application is no longer pending.");
+
+    /*
+      Approving an unpaid application is refused here as well as by the trigger in
+      20260930000800. The queue does not surface them, so reaching this is either a
+      stale admin tab or a direct call — both of which should fail loudly rather
+      than granting a badge that was never paid for. Rejecting one is allowed: a
+      reviewer clearing out an abandoned attempt is reasonable.
+    */
+    if (data.action === "approve" && application.payment_status === "unpaid") {
+      throw new Error("This application has not been paid for yet.");
+    }
 
     const approved = data.action === "approve";
     const newStatus = approved ? "approved" : "rejected";
