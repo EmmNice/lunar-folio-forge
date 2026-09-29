@@ -65,6 +65,21 @@ sync — whichever builder is active needs every one declared.
 - **Build**: `bun install --frozen-lockfile && bun run build`
   - Vite + TanStack Start + Nitro → outputs to `.output/`
   - Nitro preset: `node-server`
+
+> **Why `nitro` is pinned to `3.0.260903-beta`.**
+> On `3.0.260603-beta`, requests for files under `public/` could hang until the
+> client timed out, with srvx logging
+> `TypeError: Spread syntax requires ...iterable not be null or undefined` from
+> `sendNodeResponse`. Static requests never reach `src/server.ts`, so this was not
+> application code.
+>
+> This reproduced locally (Bun 1.2.14) but **not** on Railway — the deployment
+> built from the same commit served `/robots.txt`, `/favicon.svg` and `/og.svg`
+> normally. So it appears to be environment-dependent rather than a guaranteed
+> production failure. The upgrade is a later patch of the same beta line and
+> removes the failure mode; if you ever pin back, re-test static assets directly
+> rather than relying on a healthcheck against `/`, which is SSR and stays green
+> either way.
 - **Start**: `bun .output/server/index.mjs`
   - Listens on `PORT` (Railway injects this)
   - Serves static assets from `.output/public/`
