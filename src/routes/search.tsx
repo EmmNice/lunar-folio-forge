@@ -215,25 +215,31 @@ function SearchPage() {
 
         <div className="mt-4">
           <div className="segmented sm:max-w-[16rem]">
-            {SEARCH_TABS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                data-active={activeTab === t}
-                className="segmented-item"
-              >
-                {t === "people" ? (
-                  <Users className="h-3.5 w-3.5" />
-                ) : (
-                  <FileText className="h-3.5 w-3.5" />
-                )}
-                {t === "people" ? "People" : "Posts"}
-                {showResults && results !== null ? (
-                  <span className="ml-1 tabular-nums opacity-60">{results.length}</span>
-                ) : null}
-              </button>
-            ))}
+            {SEARCH_TABS.map((t) => {
+              // Each tab shows its OWN count. This read `results.length` — the
+              // active tab's array — for both, so sitting on People made Posts
+              // report the number of people found.
+              const count = t === "people" ? people?.length : posts?.length;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  data-active={activeTab === t}
+                  className="segmented-item"
+                >
+                  {t === "people" ? (
+                    <Users className="h-3.5 w-3.5" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  {t === "people" ? "People" : "Posts"}
+                  {showResults && count !== undefined ? (
+                    <span className="ml-1 tabular-nums opacity-60">{count}</span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
 
