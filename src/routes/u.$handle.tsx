@@ -27,6 +27,9 @@ import {
   Code2,
   FolderGit2,
   Bookmark,
+  Copy,
+  Check,
+  RefreshCw,
 } from "lucide-react";
 import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,7 +44,11 @@ import { useCardExport } from "@/hooks/use-card-export";
 import { ROLE_LABEL, ROLE_OPTIONS } from "@/lib/roles";
 import { useServerFn } from "@tanstack/react-start";
 import { startConversation } from "@/lib/messaging.functions";
-import { submitVerificationApplication } from "@/lib/verification.functions";
+import {
+  submitVerificationApplication,
+  recheckVerificationProof,
+  getVerificationProof,
+} from "@/lib/verification.functions";
 import { blockMember, unblockMember } from "@/lib/social.functions";
 import {
   fetchFollowCounts,
@@ -1697,6 +1704,11 @@ type VerificationRequestRow = {
   tier: "silver" | "gold";
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  /* Proof state, so the applicant can see whether the automated check found the
+     code they published rather than waiting on a human to tell them. */
+  proof_verified_at: string | null;
+  proof_checked_at: string | null;
+  proof_detail: string | null;
 };
 
 // URL validation helper
@@ -1717,8 +1729,13 @@ function VerificationSection({
 }) {
   const { user } = useAuth();
   const doSubmit = useServerFn(submitVerificationApplication);
+  const doRecheck = useServerFn(recheckVerificationProof);
+  const loadProofCode = useServerFn(getVerificationProof);
   const [activeTab, setActiveTab] = useState<"silver" | "gold">("silver");
   const [requests, setRequests] = useState<VerificationRequestRow[] | null>(null);
+  const [proofCode, setProofCode] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // Track optimistic pending state so form hides immediately after submit
   const [localPending, setLocalPending] = useState<{ silver?: boolean; gold?: boolean }>({});
@@ -1749,10 +1766,64 @@ function VerificationSection({
     if (!user) return;
     const { data } = await supabase
       .from("verification_requests")
-      .select("id, tier, status, created_at")
+      .select("id, tier, status, created_at, proof_verified_at, proof_checked_at, proof_detail")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     setRequests((data ?? []) as VerificationRequestRow[]);
+  }
+
+  /*
+    The proof code is fetched on demand rather than with the profile, because it is
+    not a column `authenticated` can read — it comes back through a server function
+    that reads it with the service role for its owner only (20260930000300). Loaded
+    once when the panel opens, since it is stable for the life of the account.
+  */
+  useEffect(() => {
+    if (!user || proofCode) return;
+    let cancelled = false;
+    loadProofCode({})
+      .then((result) => {
+        if (!cancelled) setProofCode(result.code);
+      })
+      .catch(() => {
+        // Non-fatal: the form still works, the applicant just does not see the
+        // code panel. Surfacing a toast here would fire on every profile open.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  async function copyCode() {
+    if (!proofCode) return;
+    try {
+      await navigator.clipboard.writeText(proofCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      // Clipboard access is denied in some embedded browsers; the code is
+      // selectable on screen, so this is a convenience failing, not a blocker.
+      toast.error("Couldn't copy — select the code and copy it manually.");
+    }
+  }
+
+  async function runCheck() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const result = await doRecheck({ data: { tier: activeTab } });
+      if (result.verified) {
+        toast.success("Ownership confirmed — a reviewer will see this as proven.");
+      } else {
+        toast.error(result.detail || "The code was not found yet.");
+      }
+      await loadRequests();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The check could not run.");
+    } finally {
+      setChecking(false);
+    }
   }
 
   useEffect(() => {
@@ -1965,11 +2036,10 @@ function VerificationSection({
                 color: "#fbbf24",
               }}
             >
-              <p className="font-medium">⏳ Application under review</p>
+              <p className="font-medium">Application under review</p>
               <p className="mt-1 text-xs opacity-80">
                 Your {activeTab === "silver" ? "Silver Builder" : "Gold Investor"} application has
-                been received and is being reviewed by our team. You'll receive a notification here
-                and by email once a decision is made.
+                been received. You'll get a notification here once a reviewer has looked at it.
               </p>
             </div>
             {activeLatest && (
@@ -1977,6 +2047,16 @@ function VerificationSection({
                 Submitted {timeAgo(activeLatest.created_at)}
               </p>
             )}
+            <ProofPanel
+              code={proofCode}
+              tier={activeTab}
+              request={activeLatest}
+              checking={checking}
+              onCheck={runCheck}
+              copied={codeCopied}
+              onCopy={copyCode}
+              style={ts}
+            />
           </div>
         )}
 
@@ -1985,9 +2065,22 @@ function VerificationSection({
           <>
             <p className="text-xs" style={{ color: ts.desc }}>
               {activeTab === "silver"
-                ? "Provide your GitHub profile and at least one live project so we can verify you're an active builder."
-                : "Provide your fund or company name and portfolio. An invite code from an existing Gold member accelerates review."}
+                ? "Provide your GitHub profile and at least one live project so we can confirm you're an active builder."
+                : "Provide your fund or company name and a link we can check. An invite code from an existing Gold member accelerates review."}
             </p>
+
+            {/* Publish-the-code step, shown before the form rather than after, because
+                doing it first means the application arrives already proven. */}
+            <ProofPanel
+              code={proofCode}
+              tier={activeTab}
+              request={null}
+              checking={false}
+              onCheck={null}
+              copied={codeCopied}
+              onCopy={copyCode}
+              style={ts}
+            />
 
             {/* Status pill for rejected state */}
             {isRejected && activeLatest && (
@@ -2204,6 +2297,131 @@ function VerificationSection({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The applicant-facing proof-of-ownership step.
+ *
+ * Before this existed, verification asked for a GitHub URL and nothing tied the
+ * URL to the applicant — `github.com/torvalds` was a complete, valid Silver
+ * application, and a reviewer looking at it had no way to tell. The fix is not a
+ * better-looking form: it is asking the applicant to publish a value we generated
+ * somewhere only the real owner can write, then going to read it.
+ *
+ * Shown in two places, doing two jobs with the same panel: before applying it is
+ * the instruction, and while pending it is the result plus a way to re-run the
+ * check after fixing a typo. `onCheck` being null is what distinguishes them.
+ */
+function ProofPanel({
+  code,
+  tier,
+  request,
+  checking,
+  onCheck,
+  copied,
+  onCopy,
+  style,
+}: {
+  code: string | null;
+  tier: "silver" | "gold";
+  request: VerificationRequestRow | null;
+  checking: boolean;
+  onCheck: (() => void) | null;
+  copied: boolean;
+  onCopy: () => void;
+  style: { accent: string; subtitle: string; desc: string; btnBorder: string; btnBg: string };
+}) {
+  // The code is loaded separately from the profile, so it can briefly be absent.
+  // Rendering an empty box with a copy button that copies nothing is worse than
+  // rendering nothing.
+  if (!code) return null;
+
+  const proven = Boolean(request?.proof_verified_at);
+  const checked = Boolean(request?.proof_checked_at);
+
+  const where =
+    tier === "silver"
+      ? "the Bio field of your GitHub profile"
+      : "your company or portfolio homepage — anywhere in the page, including a meta tag";
+
+  return (
+    <div
+      className="space-y-3 rounded-xl p-4"
+      style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${style.btnBorder}` }}
+    >
+      <div className="flex items-start gap-2">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" style={{ color: style.accent }} />
+        <div className="space-y-1">
+          <p className="text-[13px] font-semibold" style={{ color: style.accent }}>
+            Prove the account is yours
+          </p>
+          <p className="text-[11px] leading-relaxed" style={{ color: style.desc }}>
+            Add this code to {where}. We check for it automatically — it's what separates your
+            application from someone pasting your link.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <code
+          className="flex-1 overflow-x-auto rounded-lg px-3 py-2 font-mono text-[12px] select-all"
+          style={{
+            background: "rgba(0,0,0,0.30)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            color: "#F5F5F6",
+          }}
+        >
+          {code}
+        </code>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="shrink-0 rounded-lg px-2.5 py-2 transition-colors"
+          style={{ background: style.btnBg, color: style.accent }}
+          aria-label="Copy proof code"
+        >
+          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {/* Result, once there is one to show. */}
+      {request && (
+        <div className="space-y-2">
+          {proven ? (
+            <p className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              Ownership confirmed. A reviewer sees this application as proven.
+            </p>
+          ) : (
+            <p className="text-[11px]" style={{ color: style.desc }}>
+              {/* "Not checked yet" and "checked, and the code wasn't there" are
+                  different situations and the applicant can act on the second. */}
+              {checked
+                ? (request.proof_detail ?? "The code wasn't found yet.")
+                : "Not checked yet."}
+            </p>
+          )}
+
+          {onCheck && !proven && (
+            <button
+              type="button"
+              onClick={onCheck}
+              disabled={checking}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50"
+              style={{ border: `1px solid ${style.btnBorder}`, color: style.accent }}
+            >
+              {checking ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {checking ? "Checking…" : "Check again"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

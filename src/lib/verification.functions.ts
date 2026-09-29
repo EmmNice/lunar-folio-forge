@@ -145,6 +145,161 @@ function footer() {
   return `<p style="margin:40px 0 0;font-size:12px;color:#3A3A44;">The Ledger · For founders who ship.</p>`;
 }
 
+/**
+ * The caller's own proof code, plus what to do with it.
+ *
+ * verification_proof_code is not granted to `authenticated` at the column level
+ * (20260930000300) — publishing everyone's code would let one member post
+ * another member's and claim their identity — so it is read with the service role
+ * for the one person entitled to it.
+ */
+export const getVerificationProof = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .select("verification_proof_code")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data?.verification_proof_code) throw new Error("Your proof code could not be loaded.");
+
+    return { code: data.verification_proof_code };
+  });
+
+/**
+ * How long a member must wait between automated checks.
+ *
+ * The check makes this server fetch a URL, so an unlimited button is an unlimited
+ * outbound request generator with our IP attached. The bigger limit is structural
+ * — the check only ever reads URLs already stored on the caller's own application,
+ * which they cannot change without submitting a new one — but a cooldown also
+ * stops someone hammering a third party's site through us while they edit it.
+ */
+const PROOF_RECHECK_COOLDOWN_MS = 60_000;
+
+/**
+ * Runs the proof check against the caller's own pending application.
+ *
+ * Separate from submitting, because the order people actually work in is: apply,
+ * read the instructions properly, edit their GitHub bio, then want to know if it
+ * worked. Without this they would have to wait for a human, or withdraw and
+ * reapply into a 7-day cooldown.
+ */
+export const recheckVerificationProof = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input) => z.object({ tier: z.enum(["silver", "gold"]) }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: application } = await supabaseAdmin
+      .from("verification_requests")
+      .select(
+        "id, tier, status, github_url, portfolio_url, linkedin_or_x_url, live_project_url, proof_checked_at, proof_verified_at",
+      )
+      .eq("user_id", userId)
+      .eq("tier", data.tier)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!application) {
+      throw new Error("You have no pending application for this tier.");
+    }
+    if (application.proof_verified_at) {
+      // Already proved. Re-fetching a third party's site to learn what we know is
+      // pointless, and re-running it could only turn a pass into a failure if they
+      // have since removed the code.
+      return { verified: true, detail: "Already verified.", alreadyVerified: true };
+    }
+
+    const lastCheck = application.proof_checked_at
+      ? new Date(application.proof_checked_at).getTime()
+      : 0;
+    const waitMs = PROOF_RECHECK_COOLDOWN_MS - (Date.now() - lastCheck);
+    if (waitMs > 0) {
+      throw new Error(`Give it ${Math.ceil(waitMs / 1000)}s before checking again.`);
+    }
+
+    const outcome = await checkAndRecordProof(application.id, userId, data.tier, {
+      githubUrl: application.github_url,
+      portfolioUrl: application.portfolio_url,
+      linkedinOrXUrl: application.linkedin_or_x_url,
+      liveProjectUrl: application.live_project_url,
+    });
+
+    return { ...outcome, alreadyVerified: false };
+  });
+
+/**
+ * Runs the check and writes the result onto the application.
+ *
+ * Every proof column is written with the service role. A member who could set
+ * their own proof_verified_at would have defeated the whole mechanism, which is
+ * why `authenticated` has no UPDATE path to this table at all — the only UPDATE
+ * policy on it requires is_admin().
+ */
+async function checkAndRecordProof(
+  applicationId: string,
+  userId: string,
+  tier: "silver" | "gold",
+  links: {
+    githubUrl: string | null;
+    portfolioUrl: string | null;
+    linkedinOrXUrl: string | null;
+    liveProjectUrl: string | null;
+  },
+): Promise<{ verified: boolean; detail: string }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { runProofCheck } = await import("./verification-proof.server");
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("verification_proof_code")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const code = profile?.verification_proof_code;
+  if (!code) return { verified: false, detail: "No proof code is set on this account." };
+
+  const outcome = await runProofCheck({ tier, code, ...links });
+
+  // proof_attempts is incremented by reading and writing rather than with a SQL
+  // expression because PostgREST cannot express `col = col + 1`. The cooldown above
+  // makes the race for this counter both unlikely and harmless.
+  const { data: current } = await supabaseAdmin
+    .from("verification_requests")
+    .select("proof_attempts")
+    .eq("id", applicationId)
+    .maybeSingle();
+
+  const { error } = await supabaseAdmin
+    .from("verification_requests")
+    .update({
+      proof_checked_at: new Date().toISOString(),
+      proof_attempts: (current?.proof_attempts ?? 0) + 1,
+      proof_detail: outcome.detail,
+      ...(outcome.verified
+        ? { proof_verified_at: new Date().toISOString(), proof_method: outcome.method }
+        : {}),
+    })
+    .eq("id", applicationId);
+
+  if (error) {
+    // The check itself succeeded; failing to record it must not look to the
+    // applicant like their proof was rejected.
+    console.error("[verification] Could not record proof result:", error.message);
+  }
+
+  return { verified: outcome.verified, detail: outcome.detail };
+}
+
 /** Apply for Silver (builder) or Gold (investor) verification. */
 export const submitVerificationApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -217,29 +372,59 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       throw new Error("You already have a pending application for this tier.");
     }
 
-    const { error } = await supabase.from("verification_requests").insert({
-      user_id: userId,
-      tier: data.tier,
-      // link_primary/link_secondary predate the per-track columns below and are
-      // still populated so older admin views keep working.
-      link_primary:
-        data.tier === "silver"
-          ? (data.github_url ?? "")
-          : (data.portfolio_url ?? data.fund_or_company_name ?? ""),
-      link_secondary:
-        data.tier === "silver" ? (data.live_project_url ?? null) : (data.linkedin_or_x_url ?? null),
-      github_url: data.github_url || null,
-      deployed_contract_address: data.deployed_contract_address || null,
-      live_project_url: data.live_project_url || null,
-      recent_ship_desc: data.recent_ship_desc || null,
-      fund_or_company_name: data.fund_or_company_name || null,
-      portfolio_url: data.portfolio_url || null,
-      linkedin_or_x_url: data.linkedin_or_x_url || null,
-      invite_code: data.invite_code || null,
-    });
+    const { data: inserted, error } = await supabase
+      .from("verification_requests")
+      .insert({
+        user_id: userId,
+        tier: data.tier,
+        // link_primary/link_secondary predate the per-track columns below and are
+        // still populated so older admin views keep working.
+        link_primary:
+          data.tier === "silver"
+            ? (data.github_url ?? "")
+            : (data.portfolio_url ?? data.fund_or_company_name ?? ""),
+        link_secondary:
+          data.tier === "silver"
+            ? (data.live_project_url ?? null)
+            : (data.linkedin_or_x_url ?? null),
+        github_url: data.github_url || null,
+        deployed_contract_address: data.deployed_contract_address || null,
+        live_project_url: data.live_project_url || null,
+        recent_ship_desc: data.recent_ship_desc || null,
+        fund_or_company_name: data.fund_or_company_name || null,
+        portfolio_url: data.portfolio_url || null,
+        linkedin_or_x_url: data.linkedin_or_x_url || null,
+        invite_code: data.invite_code || null,
+      })
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
 
-    return { ok: true };
+    /*
+      Check the proof straight away, so an applicant who followed the instructions
+      lands in the queue already proven and a reviewer sees evidence rather than a
+      claim. Best-effort on purpose: GitHub being rate-limited or a company site
+      being down is not a reason to lose the application. It is re-runnable from
+      the form via recheckVerificationProof.
+    */
+    let proof: { verified: boolean; detail: string } = {
+      verified: false,
+      detail: "Not checked yet.",
+    };
+    if (inserted?.id) {
+      try {
+        proof = await checkAndRecordProof(inserted.id, userId, data.tier, {
+          githubUrl: data.github_url || null,
+          portfolioUrl: data.portfolio_url || null,
+          linkedinOrXUrl: data.linkedin_or_x_url || null,
+          liveProjectUrl: data.live_project_url || null,
+        });
+      } catch (checkError) {
+        console.error("[verification] Proof check failed after submit:", checkError);
+      }
+    }
+
+    return { ok: true, proof };
   });
 
 /** Admin: list applications awaiting review. */
@@ -260,8 +445,10 @@ export const listPendingApplications = createServerFn({ method: "GET" })
         github_url, deployed_contract_address, live_project_url, recent_ship_desc,
         fund_or_company_name, portfolio_url, linkedin_or_x_url, invite_code,
         link_primary, link_secondary,
+        proof_verified_at, proof_method, proof_detail, proof_checked_at, proof_attempts,
         profiles!verification_requests_user_id_fkey(
-          id, handle, display_name, avatar_url, company_name
+          id, handle, display_name, avatar_url, company_name,
+          created_at, skills, role_type, bio, location
         )
       `,
       )
@@ -285,6 +472,13 @@ export const reviewApplication = createServerFn({ method: "POST" })
       .object({
         applicationId: z.string().uuid(),
         action: z.enum(["approve", "reject"]),
+        /*
+          Set when the reviewer approves an application the automated check could
+          not prove. Recorded rather than inferred, so "we established this out of
+          band" and "the machine confirmed it" stay distinguishable afterwards —
+          an audit trail where both look the same is not much of one.
+        */
+        manualProof: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -297,7 +491,7 @@ export const reviewApplication = createServerFn({ method: "POST" })
 
     const { data: application, error: fetchErr } = await supabaseAdmin
       .from("verification_requests")
-      .select("id, tier, user_id, status")
+      .select("id, tier, user_id, status, proof_verified_at")
       .eq("id", data.applicationId)
       .single();
 
@@ -306,6 +500,20 @@ export const reviewApplication = createServerFn({ method: "POST" })
 
     const approved = data.action === "approve";
     const newStatus = approved ? "approved" : "rejected";
+
+    /*
+      The admin UI disables Approve until either the proof passed or the reviewer
+      ticks the manual-vouch box. Re-checked here because a disabled button is a
+      hint, not a rule: this function is reachable over HTTP by anyone holding an
+      admin session, and granting a badge is exactly the action that should not
+      depend on the client having rendered correctly.
+    */
+    const vouchedManually = approved && !application.proof_verified_at;
+    if (vouchedManually && !data.manualProof) {
+      throw new Error(
+        "Ownership is unproven for this application. Confirm you have verified it another way before approving.",
+      );
+    }
 
     // reviewed_by was the missing half of the audit story: this handler has always
     // had the reviewer's id in hand and threw it away, so an approval was
@@ -328,6 +536,19 @@ export const reviewApplication = createServerFn({ method: "POST" })
       if (tierErr) throw new Error(tierErr.message);
     }
 
+    // A manual vouch is written onto the application as proof_method 'manual', so
+    // the row says who decided the account was genuine and on what basis.
+    if (vouchedManually) {
+      await supabaseAdmin
+        .from("verification_requests")
+        .update({
+          proof_verified_at: new Date().toISOString(),
+          proof_method: "manual",
+          proof_detail: `Ownership vouched for manually by admin ${userId} — the automated check did not confirm it.`,
+        })
+        .eq("id", application.id);
+    }
+
     // In-app notification, so the decision shows in the bell straight away.
     const { error: notifyErr } = await supabaseAdmin.from("notifications").insert({
       user_id: application.user_id,
@@ -343,7 +564,12 @@ export const reviewApplication = createServerFn({ method: "POST" })
       action: `verification.${newStatus}`,
       targetType: "verification_request",
       targetId: application.id,
-      detail: { applicantId: application.user_id, tier: application.tier },
+      detail: {
+        applicantId: application.user_id,
+        tier: application.tier,
+        // Whether the badge rested on an automated proof or a person's word.
+        proof: vouchedManually ? "manual_vouch" : "automated",
+      },
     });
 
     const emailed = await emailDecision(application.user_id, application.tier, approved);
