@@ -1,0 +1,46 @@
+-- Remove two tables that existed only in the live database.
+--
+-- `connection_requests` and `shipping_log_entries` were created directly against
+-- the project and appear in no migration, nowhere in src/, and in no commit in
+-- the repository's history. Both were empty, and nothing in the application reads
+-- or writes them. Leaving unexplained tables in a production schema means the
+-- database cannot be reproduced from migrations and nobody can tell whether they
+-- are load-bearing, so they are dropped here rather than left behind.
+--
+-- Their shape is recorded below so the decision is reversible.
+--
+--   connection_requests
+--     id           uuid primary key default gen_random_uuid()
+--     from_user_id uuid not null
+--     to_user_id   uuid not null
+--     project_name text not null
+--     value_prop   text not null
+--     demo_link    text
+--     status       text not null default 'pending'
+--     created_at   timestamptz not null default now()
+--   policies: users can send connection requests (INSERT),
+--             participants can view connection requests (SELECT),
+--             recipients can update request status (UPDATE)
+--
+--   shipping_log_entries
+--     id         uuid primary key default gen_random_uuid()
+--     user_id    uuid not null
+--     content    text not null
+--     url        text
+--     created_at timestamptz not null default now()
+--   policies: users can log own shipments (INSERT),
+--             users can delete own shipping log entries (DELETE),
+--             shipping log is viewable by everyone (SELECT)
+--
+-- The inbound-pitch flow (`pitches`) already covers what connection_requests
+-- looked like it was for, and posts cover the shipping log. If either is wanted
+-- later, reintroduce it as a real migration with the application code that uses
+-- it.
+
+drop table if exists public.connection_requests;
+drop table if exists public.shipping_log_entries;
+
+-- Note on app_role: the live enum carries a fourth label, `super_admin`, which is
+-- likewise absent from the repo's history. Postgres cannot remove a value from an
+-- enum, so it is codified in 20260928000500 instead and folded into is_admin()
+-- so it behaves as a superset of `admin`. Nobody currently holds it.
