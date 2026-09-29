@@ -116,15 +116,11 @@ function SecuritySettingsPage() {
         className="flex items-center gap-3 px-4 py-4"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
-        <button
-          type="button"
-          onClick={() => navigate({ to: "/feed" })}
-          className="flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-white/[0.06]"
-        >
+        <button type="button" onClick={() => navigate({ to: "/feed" })} className="btn-icon">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">
             Account
           </p>
           <h1 className="text-[17px] font-semibold tracking-tight">Security & Auth</h1>
@@ -206,7 +202,7 @@ function SecuritySettingsPage() {
                   type="button"
                   onClick={changePassword}
                   disabled={busy}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="btn btn-primary btn-block"
                   style={{ background: "#F5F5F6" }}
                 >
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -218,7 +214,7 @@ function SecuritySettingsPage() {
 
           {/* Linked accounts */}
           <div className="px-5 py-4">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-tertiary">
               Linked Accounts
             </p>
             <div className="space-y-3">

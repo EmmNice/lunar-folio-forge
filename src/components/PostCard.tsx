@@ -360,7 +360,8 @@ export function PostCard({
   }
 
   const actionBtn =
-    "inline-flex items-center gap-1.5 text-xs transition-colors disabled:opacity-40 select-none";
+    "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 -mx-0.5 text-[13px] font-medium tabular-nums " +
+    "transition-colors disabled:opacity-40 select-none";
 
   // Studio card posts (non-noir theme) get an entirely different visual treatment
   const isCardPost = post.background !== "noir";
@@ -405,7 +406,10 @@ export function PostCard({
 
   /* Shared actions row */
   const actionsRow = (
-    <div className="mt-3 flex items-center gap-5 text-muted-foreground">
+    <div
+      className="mt-3 flex items-center gap-1 border-t pt-2 text-secondary"
+      style={{ borderColor: "var(--border)" }}
+    >
       <button
         type="button"
         onClick={toggleLike}
@@ -414,7 +418,8 @@ export function PostCard({
         aria-label="Like"
       >
         <Heart className="h-4 w-4" fill={liked ? "currentColor" : "none"} />
-        {likeCount > 0 ? likeCount : ""}
+        <span className="sr-only">{liked ? "Unlike" : "Like"}</span>
+        {likeCount > 0 ? <span aria-label={`${likeCount} likes`}>{likeCount}</span> : null}
       </button>
 
       {commentsEnabled && (
@@ -425,7 +430,10 @@ export function PostCard({
           aria-label="Comment"
         >
           <MessageCircle className="h-4 w-4" />
-          {commentCount > 0 ? commentCount : ""}
+          <span className="sr-only">Replies</span>
+          {commentCount > 0 ? (
+            <span aria-label={`${commentCount} replies`}>{commentCount}</span>
+          ) : null}
         </button>
       )}
 
@@ -437,7 +445,8 @@ export function PostCard({
         aria-label="Re-Ship"
       >
         <Repeat2 className="h-4 w-4" />
-        {repostCount > 0 ? repostCount : ""}
+        <span className="sr-only">Re-ship</span>
+        {repostCount > 0 ? <span aria-label={`${repostCount} re-ships`}>{repostCount}</span> : null}
       </button>
 
       <button
@@ -458,7 +467,7 @@ export function PostCard({
           aria-label={reported ? "Already reported" : "Report post"}
           title={reported ? "You've reported this post" : "Report post"}
         >
-          <Flag className="h-3.5 w-3.5" fill={reported ? "currentColor" : "none"} />
+          <Flag className="h-4 w-4" fill={reported ? "currentColor" : "none"} />
         </button>
       )}
     </div>
@@ -467,7 +476,10 @@ export function PostCard({
   /* Report form — opens under the actions row so a reason can be captured */
   const reportForm =
     reportOpen && !reported ? (
-      <div className="mt-3 rounded-xl border border-border/60 bg-secondary/20 p-3">
+      <div
+        className="mt-3 rounded-xl border p-3"
+        style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+      >
         <label className="text-xs font-medium text-foreground" htmlFor={`report-${post.id}`}>
           Why are you reporting this?
         </label>
@@ -478,7 +490,7 @@ export function PostCard({
           maxLength={MAX_REPORT_REASON_LENGTH}
           rows={2}
           placeholder="Spam, harassment, impersonation, off-platform scam…"
-          className="mt-2 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/40"
+          className="field mt-2 resize-none"
         />
         <div className="mt-2 flex items-center justify-end gap-2">
           <button
@@ -495,7 +507,7 @@ export function PostCard({
             type="button"
             onClick={submitReport}
             disabled={busyReport || !reportReason.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="btn btn-primary btn-sm"
           >
             {busyReport && <Loader2 className="h-3 w-3 animate-spin" />}
             Submit report
@@ -591,13 +603,13 @@ export function PostCard({
                 }}
                 maxLength={MAX_POST_LENGTH}
                 placeholder="Reply…"
-                className="min-w-0 flex-1 rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm outline-none focus:border-foreground/40"
+                className="field min-w-0 flex-1 !rounded-full"
               />
               <button
                 type="button"
                 onClick={submitComment}
                 disabled={postingComment || !commentDraft.trim()}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-50"
+                className="btn-icon shrink-0 !rounded-full"
                 aria-label="Send reply"
               >
                 {postingComment ? (
@@ -680,7 +692,7 @@ export function PostCard({
                   {post.author.display_name}
                   <VerificationBadge tier={post.author.verification_tier} size={15} />
                 </Link>
-                <p className="mt-0.5 text-[12px] text-muted-foreground/70">
+                <p className="mt-0.5 text-[12px] text-tertiary">
                   @{post.author.handle}
                   <span className="mx-1.5 opacity-50">·</span>
                   {timeAgo(post.created_at)}
@@ -730,9 +742,7 @@ export function PostCard({
         : "ring-1 ring-border/60";
 
   return (
-    <article
-      className={`group relative rounded-2xl border bg-card/50 transition-colors hover:bg-card/70 ${tierBorder}`}
-    >
+    <article className={`group relative card card-interactive ${tierBorder}`}>
       {/* Gold accent top bar */}
       {post.author.verification_tier === "gold" && (
         <div
@@ -801,7 +811,7 @@ export function PostCard({
                   {post.author.display_name}
                   <VerificationBadge tier={post.author.verification_tier} size={15} />
                 </Link>
-                <p className="mt-0.5 text-[12px] text-muted-foreground/70">
+                <p className="mt-0.5 text-[12px] text-tertiary">
                   @{post.author.handle}
                   <span className="mx-1.5 opacity-50">·</span>
                   {timeAgo(post.created_at)}

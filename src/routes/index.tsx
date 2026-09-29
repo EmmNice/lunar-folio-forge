@@ -12,11 +12,15 @@ import {
   Loader2,
   Mail,
   RefreshCw,
+  ArrowRight,
+  Check,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { StatusCard } from "@/components/StatusCard";
 import { LedgerMark } from "@/components/AppHeader";
 import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
+import { passwordProblem } from "@/lib/password";
+import { PasswordRequirements } from "@/components/PasswordRequirements";
 
 // Terms live outside the app. Set VITE_TERMS_URL to link them from the consent
 // line; when it's unset the sentence renders as plain text rather than pointing
@@ -249,8 +253,9 @@ function Landing() {
       toast.error("Enter your email and password.");
       return;
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    const problem = passwordProblem(password);
+    if (problem) {
+      toast.error(`Password needs: ${problem.toLowerCase()}.`);
       return;
     }
     setSubmitting("email-signup");
@@ -330,11 +335,10 @@ function Landing() {
     toast.success("Confirmation email resent — check your inbox.");
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none ring-offset-background focus-visible:ring-1 focus-visible:ring-ring transition-colors";
+  const inputCls = "field";
 
   const providerBtnCls =
-    "relative flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card/60 px-4 py-3.5 text-sm font-medium text-foreground transition-all hover:border-border hover:bg-card active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed";
+    "btn btn-outline btn-block justify-start gap-3 !px-4 text-[15px] font-medium";
 
   /*  Render auth card content inline (NOT as a nested component — doing so
         causes React to unmount/remount the entire subtree on every state change,
@@ -360,7 +364,7 @@ function Landing() {
             <button
               type="submit"
               disabled={submitting !== null}
-              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              className="btn btn-primary btn-block"
             >
               {submitting === "forgot-password" ? (
                 <span className="flex items-center justify-center gap-2">
@@ -424,7 +428,7 @@ function Landing() {
               type="button"
               onClick={resendConfirmation}
               disabled={submitting === "resend"}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm font-medium text-foreground transition-all hover:bg-card active:scale-[0.98] disabled:opacity-50"
+              className="btn btn-outline btn-block"
             >
               {submitting === "resend" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -474,7 +478,7 @@ function Landing() {
             <button
               type="submit"
               disabled={submitting !== null}
-              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              className="btn btn-primary btn-block"
             >
               {submitting === "email-signin" ? (
                 <span className="flex items-center justify-center gap-2">
@@ -541,14 +545,12 @@ function Landing() {
                 minLength={MIN_PASSWORD_LENGTH}
                 required
               />
-              <p className="px-0.5 text-xs text-muted-foreground">
-                Use a unique password — avoid simple or common ones.
-              </p>
+              <PasswordRequirements value={password} />
             </div>
             <button
               type="submit"
               disabled={submitting !== null}
-              className="w-full rounded-xl bg-foreground py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              className="btn btn-primary btn-block"
             >
               {submitting === "email-signup" ? (
                 <span className="flex items-center justify-center gap-2">
@@ -657,20 +659,20 @@ function Landing() {
           <button
             type="button"
             onClick={() => setView("email-signin")}
-            className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:text-foreground active:scale-[0.98]"
+            className="btn btn-outline btn-sm"
           >
             Sign in with email
           </button>
           <button
             type="button"
             onClick={() => setView("email-signup")}
-            className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:border-border hover:text-foreground active:scale-[0.98]"
+            className="btn btn-outline btn-sm"
           >
             Create account
           </button>
         </div>
 
-        <p className="pt-1 text-center text-[11px] leading-relaxed text-muted-foreground/70">
+        <p className="pt-1 text-center text-[11px] leading-relaxed text-tertiary">
           By signing in you agree to The Ledger's{" "}
           {TERMS_URL ? (
             <a
@@ -692,65 +694,75 @@ function Landing() {
 
   return (
     <div className="min-h-screen">
-      {/* Nav */}
-      <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur">
+      {/*
+        The old hero put the auth card in a narrow top-right column and pushed the
+        product preview into its own full-width section far below, which left a
+        large empty band down the middle of the page at desktop widths. The card
+        now sits opposite the copy as a real second column, and the preview gets a
+        framed section of its own with a heading, instead of floating unlabelled.
+      */}
+      <header className="sticky top-0 z-40 border-b glass" style={{ borderColor: "var(--border)" }}>
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             <LedgerMark className="h-5 w-auto" />
-            <span className="text-sm font-semibold tracking-tight">The Ledger</span>
+            <span className="text-[15px] font-semibold tracking-tight">The Ledger</span>
           </div>
-          <Link
-            to="/feed"
-            className="rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Explore Feed →
+          <Link to="/feed" className="btn btn-ghost btn-sm">
+            Explore the feed
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
       </header>
 
       <main>
-        {/* Hero + auth card */}
-        <section className="mx-auto max-w-5xl px-4 pb-16 pt-16 sm:px-6 sm:pt-24">
-          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-            {/* Left: copy */}
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                A high-signal network for builders
-              </p>
-              <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl xl:text-6xl">
+        {/* ── Hero ── */}
+        <section className="mx-auto max-w-6xl px-4 pb-20 pt-14 sm:px-6 sm:pb-24 sm:pt-20">
+          <div className="grid items-start gap-12 lg:grid-cols-[1.05fr_minmax(0,25rem)] lg:gap-16">
+            <div className="lg:pt-6">
+              <p className="eyebrow">A high-signal network for builders</p>
+              <h1 className="mt-4 text-[2.5rem] font-semibold leading-[1.05] sm:text-5xl xl:text-[3.5rem]">
                 Ship your thoughts
-                <br /> like you ship code.
+                <br />
+                like you ship code.
               </h1>
-              <p className="mt-5 max-w-md text-base text-muted-foreground">
-                A premium, tech-noir platform for Web3 builders, founders, and investors. One global
-                timeline — no follower games, just signal.
+              <p className="mt-5 max-w-md text-[17px] leading-relaxed text-secondary">
+                A network for Web3 builders, founders and investors. One global timeline — no
+                follower games, no algorithm, just signal.
               </p>
 
               <div className="mt-7 flex flex-wrap gap-2">
                 {[
-                  "GitHub verified identity",
+                  "Verified identity",
                   "Signal & Beat feeds",
                   "Silver & Gold badges",
                   "PulseAssist AI",
-                  "WhatsApp status cards",
+                  "Shareable status cards",
                 ].map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-full border border-border/60 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground"
-                  >
+                  <span key={label} className="chip">
                     {label}
                   </span>
                 ))}
               </div>
+
+              <div
+                className="mt-8 flex items-center gap-2.5 border-t pt-6 text-sm text-tertiary"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                Real names, real projects. Every badge is reviewed by a human.
+              </div>
             </div>
 
-            {/* Right: auth card */}
-            <div className="mx-auto w-full max-w-sm">
-              <div className="rounded-2xl border border-slate-800/70 bg-card/50 p-6 shadow-xl shadow-black/30 backdrop-blur">
+            {/* Auth card — the primary action, so it keeps its own column. */}
+            <div className="w-full">
+              <div className="card p-6" style={{ boxShadow: "var(--shadow-lg)" }}>
                 {view === "social" && (
-                  <p className="mb-5 text-center text-sm font-medium text-foreground">
-                    Join The Ledger
-                  </p>
+                  <div className="mb-5">
+                    <h2 className="text-base font-semibold">Join The Ledger</h2>
+                    <p className="mt-1 text-[13px] leading-relaxed text-secondary">
+                      Claim your handle and start shipping.
+                    </p>
+                  </div>
                 )}
                 {authCardContent}
               </div>
@@ -758,37 +770,144 @@ function Landing() {
           </div>
         </section>
 
-        {/* Demo card */}
-        <section className="mx-auto max-w-xs px-4 pb-12 sm:max-w-sm">
-          <StatusCard
-            name="Aria Stone"
-            handle="ariastone"
-            content={`Building quiet infra with loud ambition.\n\nNotes from the workshop, shipped daily.`}
-            verificationTier="gold"
-          />
+        {/* ── Product preview ── */}
+        <section
+          className="border-y"
+          style={{ borderColor: "var(--border)", background: "rgba(255,255,255,0.012)" }}
+        >
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+              <div>
+                <p className="eyebrow">Studio</p>
+                <h2 className="mt-3 text-[1.75rem] font-semibold leading-tight sm:text-[2rem]">
+                  Every post is a card worth sharing.
+                </h2>
+                <p className="mt-4 max-w-md text-[15px] leading-relaxed text-secondary">
+                  Write it once, then export a 1080×1920 card straight to your photos — ready for
+                  WhatsApp Status, Stories or anywhere else you post.
+                </p>
+                <ul className="mt-6 space-y-3">
+                  {[
+                    "Seven card themes, no design work",
+                    "Your badge and handle baked in",
+                    "Saves to your gallery in one tap",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-2.5 text-sm text-secondary">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--gold)" }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Framed, so the preview reads as a product shot rather than a stray element. */}
+              <div className="mx-auto w-full max-w-[19rem]">
+                <div
+                  className="rounded-[1.75rem] border p-3"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "var(--surface-1)",
+                    boxShadow: "var(--shadow-lg)",
+                  }}
+                >
+                  <StatusCard
+                    name="Aria Stone"
+                    handle="ariastone"
+                    content={`Building quiet infra with loud ambition.\n\nNotes from the workshop, shipped daily.`}
+                    verificationTier="gold"
+                  />
+                </div>
+                <p className="mt-3 text-center text-xs text-tertiary">
+                  Exported at 1080×1920, ready to post
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
-        {/* Bento grid */}
-        <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
-          <p className="mb-6 text-center text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            Everything on the platform
-          </p>
+        {/* ── Features ── */}
+        <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+          <div className="mx-auto mb-10 max-w-lg text-center">
+            <p className="eyebrow">Everything on the platform</p>
+            <h2 className="mt-3 text-[1.75rem] font-semibold leading-tight sm:text-[2rem]">
+              Built for people who ship
+            </h2>
+          </div>
+
+          {/*
+            An even three-column grid. The first card used to span two columns,
+            which left the six cards in a 2 / 3 / 1 arrangement with an orphan on
+            its own row.
+          */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {BENTO_CARDS.map((card, i) => (
-              <div
-                key={card.headline}
-                className={`rounded-2xl border border-slate-800/60 bg-card/40 p-5 transition-colors hover:border-slate-700/70 hover:bg-card/60 ${
-                  i === 0 ? "sm:col-span-2 lg:col-span-2" : ""
-                }`}
-              >
-                <card.icon className="mb-3 h-5 w-5 text-muted-foreground" />
-                <h3 className="text-sm font-semibold text-foreground">{card.headline}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{card.desc}</p>
+            {BENTO_CARDS.map((card) => (
+              <div key={card.headline} className="card card-interactive flex flex-col p-5">
+                <div
+                  className="mb-4 grid h-9 w-9 place-items-center rounded-xl border"
+                  style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+                >
+                  <card.icon className="h-4 w-4 text-secondary" />
+                </div>
+                <h3 className="text-[15px] font-semibold">{card.headline}</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-secondary">{card.desc}</p>
               </div>
             ))}
           </div>
         </section>
+
+        {/* ── Closing call to action ── */}
+        <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6 sm:pb-28">
+          <div className="card px-6 py-12 text-center sm:px-12 sm:py-16">
+            <h2 className="text-[1.75rem] font-semibold leading-tight sm:text-[2rem]">
+              Start shipping in public.
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-secondary">
+              Claim your handle, publish your first update, and let your work speak.
+            </p>
+            <div className="mt-7 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => {
+                  setView("email-signup");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="btn btn-primary btn-lg w-full sm:w-auto"
+              >
+                Create your account
+              </button>
+              <Link to="/feed" className="btn btn-outline btn-lg w-full sm:w-auto">
+                Browse the feed first
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
+
+      {/* ── Footer — the page previously just ended ── */}
+      <footer className="border-t" style={{ borderColor: "var(--border)" }}>
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <LedgerMark className="h-4 w-auto" />
+            <span className="text-[13px] font-semibold tracking-tight">The Ledger</span>
+            <span className="text-[13px] text-tertiary">· For founders who ship.</span>
+          </div>
+          <div className="flex items-center gap-5 text-[13px] text-tertiary">
+            <Link to="/feed" className="transition-colors hover:text-foreground">
+              Feed
+            </Link>
+            {TERMS_URL ? (
+              <a
+                href={TERMS_URL}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="transition-colors hover:text-foreground"
+              >
+                Terms
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

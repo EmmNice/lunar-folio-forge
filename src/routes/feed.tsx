@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Loader2, ShieldAlert } from "lucide-react";
+import { Plus, Loader2, ShieldAlert, Rss, Sparkles } from "lucide-react";
+import { EmptyState, ErrorState, PostSkeleton } from "@/components/states";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader, MobileNav } from "@/components/AppHeader";
 import { toBackground } from "@/components/StatusCard";
@@ -265,7 +266,7 @@ function FeedPage() {
   const feedLoading = tab === "signal" ? signalPosts === null : beatPosts === null;
 
   return (
-    <div className="min-h-screen pb-16 sm:pb-0">
+    <div className="min-h-screen">
       {/*
          Combined sticky header: top nav + Signal/Beat tabs as ONE unit
         NOTE: MobileNav is rendered as a sibling BELOW this div, not inside it.
@@ -289,25 +290,23 @@ function FeedPage() {
         <AppHeader controlled />
 
         {/* Signal / Beat tab switcher */}
-        <div
-          className="px-4 pt-2 pb-2.5 sm:px-6"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
-        >
+        <div className="px-4 pb-3 pt-1 sm:px-6">
           <div className="mx-auto max-w-2xl">
-            <div className="flex gap-0.5 rounded-xl border border-border/50 bg-secondary/15 p-1">
+            <div className="segmented">
               {(["signal", "beat"] as FeedTab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTab(t)}
-                  className={
-                    "flex-1 rounded-[9px] py-[7px] text-[13px] font-medium transition-all duration-150 " +
-                    (tab === t
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground/80")
-                  }
+                  data-active={tab === t}
+                  className="segmented-item"
                 >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t === "signal" ? (
+                    <Rss className="h-3.5 w-3.5" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {t === "signal" ? "Signal" : "Beat"}
                 </button>
               ))}
             </div>
@@ -318,7 +317,7 @@ function FeedPage() {
       {/* Mobile bottom nav — outside the transformed header so position:fixed works correctly */}
       <MobileNav />
 
-      <main className="mx-auto max-w-2xl px-4 pt-5 pb-32 sm:px-6 page-enter">
+      <main className="page-enter mx-auto max-w-2xl px-4 pb-mobile-nav pt-5 sm:px-6">
         {/*
           Moderation state, said out loud. RLS blocks posting, commenting, liking,
           re-shipping and messaging for a restricted or banned account, so without
@@ -345,20 +344,13 @@ function FeedPage() {
 
         {/* Feed load failures used to be a toast that vanished, leaving an empty page */}
         {feedError && (
-          <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4">
-            <p className="text-xs text-red-300">{feedError}</p>
-            <button
-              type="button"
-              onClick={() => loadPage({ append: false })}
-              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/60"
-            >
-              Retry
-            </button>
+          <div className="mb-5">
+            <ErrorState message={feedError} onRetry={() => loadPage({ append: false })} />
           </div>
         )}
 
         {/* Tab description */}
-        <p className="mb-5 text-[12px] leading-relaxed text-muted-foreground/70">
+        <p className="mb-4 text-[13px] leading-relaxed text-tertiary">
           {tab === "signal"
             ? "All builders, all tiers — the live pulse of everything being shipped."
             : "Studio cards — crafted status posts from every builder on the platform."}
@@ -366,75 +358,31 @@ function FeedPage() {
 
         {/* Feed */}
         {feedLoading ? (
-          <div className="space-y-4" aria-label="Loading feed…">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="rounded-2xl border border-border/40 bg-card/30 p-5">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary/60" />
-                  <div className="min-w-0 flex-1 space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-3.5 w-28 animate-pulse rounded-full bg-secondary/60"
-                        style={{ animationDelay: `${i * 80}ms` }}
-                      />
-                      <div
-                        className="h-3 w-16 animate-pulse rounded-full bg-secondary/40"
-                        style={{ animationDelay: `${i * 80 + 40}ms` }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div
-                        className="h-3.5 w-full animate-pulse rounded-full bg-secondary/50"
-                        style={{ animationDelay: `${i * 80 + 80}ms` }}
-                      />
-                      <div
-                        className="h-3.5 w-4/5 animate-pulse rounded-full bg-secondary/40"
-                        style={{ animationDelay: `${i * 80 + 120}ms` }}
-                      />
-                      {i % 2 === 0 && (
-                        <div
-                          className="h-3.5 w-2/3 animate-pulse rounded-full bg-secondary/30"
-                          style={{ animationDelay: `${i * 80 + 160}ms` }}
-                        />
-                      )}
-                    </div>
-                    <div className="flex gap-5 pt-1">
-                      {[20, 16, 16, 14].map((w, j) => (
-                        <div
-                          key={j}
-                          className={`h-3 w-${w} animate-pulse rounded-full bg-secondary/30`}
-                          style={{ animationDelay: `${i * 80 + j * 30}ms` }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <PostSkeleton count={4} />
         ) : displayedPosts.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/60 p-12 text-center">
-            {tab === "signal" ? (
-              <>
-                <p className="text-sm font-semibold text-foreground">No posts yet</p>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  Signal shows all text posts from every builder.
-                  <br />
-                  Be the first to ship something worth reading.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-semibold text-foreground">No studio cards yet</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Cards crafted in the Studio will appear here.
-                </p>
-              </>
-            )}
-          </div>
+          <EmptyState
+            icon={tab === "signal" ? Rss : Sparkles}
+            title={tab === "signal" ? "No posts yet" : "No studio cards yet"}
+            description={
+              tab === "signal"
+                ? "Signal carries every text post on the platform. Be the first to ship something worth reading."
+                : "Cards crafted in the Studio land here. Make one and it appears instantly."
+            }
+            action={
+              user ? (
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  className="btn btn-primary btn-sm"
+                >
+                  Write the first post
+                </button>
+              ) : undefined
+            }
+          />
         ) : (
           <>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {displayedPosts.map((p) => (
                 <PostCard
                   key={p.id}
@@ -460,7 +408,7 @@ function FeedPage() {
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-border/60 bg-card/40 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                className="btn btn-outline btn-block mt-6"
               >
                 {loadingMore ? (
                   <>
@@ -484,7 +432,7 @@ function FeedPage() {
           aria-label="Write a new card"
           className="fixed right-5 z-40 flex items-center justify-center rounded-full transition-all duration-300 active:scale-95 sm:right-8"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom) + 76px)",
+            bottom: "calc(env(safe-area-inset-bottom) + var(--mobile-nav-height) + 1rem)",
             width: "58px",
             height: "58px",
             background: "#FBBF24",

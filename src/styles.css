@@ -29,120 +29,165 @@
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  /* ── Luxury tech-noir palette ── */
-  --background: #0b0b0c;
-  --foreground: #f5f5f6;
-  --card: #1a1a1e;
-  --card-foreground: #f5f5f6;
-  --primary: #f5f5f6;
-  --primary-foreground: #0b0b0c;
-  --secondary: #1e1e23;
-  --secondary-foreground: #f5f5f6;
-  --muted: #1e1e23;
-  --muted-foreground: #6b6b7a;
-  --accent: #222228;
-  --accent-foreground: #f5f5f6;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.06);
-  --ring: rgba(255, 255, 255, 0.2);
+  /* ── Surfaces ───────────────────────────────────────────────────────────
+     Three deliberate levels. Cards used to sit at #1a1a1e on a #0b0b0c page,
+     which on a dim laptop screen was nearly invisible — every card read as a
+     faint rectangle. Base is now slightly darker and surfaces slightly lighter,
+     so the separation survives a bad screen without becoming grey soup.        */
+  --bg-base: #08080a;
+  --surface-1: #101015;
+  --surface-2: #17171d;
+  --surface-3: #1e1e25;
 
-  --dot-color: rgba(255, 255, 255, 0.035);
-  --bg-base: #0b0b0c;
-  --bg-surface: #121214;
-  --bg-card: #1a1a1e;
+  --background: var(--bg-base);
+  --card: var(--surface-1);
 
-  /* Luxury glow values */
+  /* ── Text ───────────────────────────────────────────────────────────────
+     --muted-foreground was #6b6b7a: about 3.4:1 on the page background, below
+     the 4.5:1 that body text needs, and it was carrying most of the product's
+     copy. Secondary text is now ~7:1 and there is a separate token for the
+     genuinely incidental stuff, so "dim" is a choice per element rather than
+     the default for everything that isn't a heading.                           */
+  --foreground: #f4f4f6;
+  --text-secondary: #a6a6b5;
+  --text-tertiary: #7c7c8c;
+  --muted-foreground: var(--text-secondary);
+
+  --card-foreground: var(--foreground);
+  --primary: #f4f4f6;
+  --primary-foreground: #08080a;
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-2);
+  --accent: var(--surface-3);
+  --accent-foreground: var(--foreground);
+
+  /* ── Lines ── */
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --input: rgba(255, 255, 255, 0.05);
+  --ring: rgba(255, 255, 255, 0.28);
+
+  /* ── Tier accents. The only saturated colour in the product. ── */
+  --gold: #fbbf24;
+  --silver: #cbd5e1;
+  --violet: #a78bfa;
+  --danger: #f87171;
+  --success: #4ade80;
+
   --glow-silver: rgba(148, 163, 184, 0.22);
   --glow-gold: rgba(251, 191, 36, 0.22);
   --glow-violet: rgba(167, 139, 250, 0.22);
+
+  --dot-color: rgba(255, 255, 255, 0.028);
+
+  /* Kept: referenced by inline styles in several screens. */
+  --bg-surface: var(--surface-1);
+  --bg-card: var(--surface-1);
+
+  /* ── Elevation ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+
+  /* ── Mobile chrome heights, so padding and scroll offsets agree ── */
+  --nav-height: 3.5rem;
+  --mobile-nav-height: 4rem;
 }
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--border);
     box-sizing: border-box;
   }
 
   html,
   body {
     background-color: var(--bg-base);
-    color: var(--color-foreground);
+    color: var(--foreground);
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    /* Mobile-first: prevent horizontal overflow on all pages */
     max-width: 100%;
     overflow-x: hidden;
   }
 
   body {
     background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
-    background-size: 24px 24px;
-    background-position: 0 0;
+    background-size: 28px 28px;
     background-attachment: fixed;
   }
 
-  /* ── Luxury input focus states ── */
+  /* Large type wants tighter tracking; small type wants none. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+
   input,
   textarea,
   select {
     outline: none;
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--border);
+    background: var(--input);
     transition:
-      border-color 180ms ease,
-      box-shadow 180ms ease;
-    background: rgba(255, 255, 255, 0.03);
+      border-color 160ms ease,
+      box-shadow 160ms ease;
   }
 
   input:focus,
   textarea:focus,
   select:focus {
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 0.04),
-      0 0 16px rgba(255, 255, 255, 0.04);
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
   }
 
-  /* Gold focus for verified contexts */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-tertiary);
+  }
+
   .focus-gold input:focus,
   .focus-gold textarea:focus {
-    border-color: rgba(251, 191, 36, 0.35);
-    box-shadow:
-      0 0 0 3px rgba(251, 191, 36, 0.06),
-      0 0 20px rgba(251, 191, 36, 0.08);
+    border-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.08);
   }
 
-  /* ── Text selection ── */
   ::selection {
-    background-color: rgba(255, 255, 255, 0.12);
-    color: #f5f5f6;
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #fff;
   }
 
-  /* ── Focus ring — keyboard-only ── */
+  /* A visible keyboard ring. The old 1px outline at 25% opacity was easy to
+     lose track of when tabbing through a form. */
   :focus-visible {
-    outline: 1px solid rgba(255, 255, 255, 0.25);
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 6px;
   }
 
-  /* ── Scrollbar — minimal ── */
   ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.2);
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -163,54 +208,293 @@
   [aria-disabled="true"] {
     cursor: not-allowed;
   }
+
+  /* Stops iOS zooming the page when a field is focused. */
+  @supports (-webkit-touch-callout: none) {
+    input,
+    textarea,
+    select {
+      font-size: max(16px, 1em);
+    }
+  }
+}
+
+@layer components {
+  /* ── Buttons ────────────────────────────────────────────────────────────
+     Most CTAs were hand-rolled with inline styles, so no two matched: the
+     landing page, the composer and the admin panel each had their own idea of
+     the right height, radius and disabled treatment. These four cover every
+     case in the product.                                                      */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 550;
+    line-height: 1;
+    padding: 0.6875rem 1.125rem;
+    /* Never smaller than the ~44px iOS touch target. */
+    min-height: 2.75rem;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      opacity 140ms ease,
+      transform 100ms ease;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.45;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #fff;
+  }
+
+  .btn-outline {
+    background: transparent;
+    border-color: var(--border-strong);
+    color: var(--foreground);
+  }
+  .btn-outline:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--foreground);
+  }
+
+  .btn-danger {
+    background: transparent;
+    border-color: rgba(248, 113, 113, 0.35);
+    color: var(--danger);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.1);
+  }
+
+  .btn-sm {
+    min-height: 2.25rem;
+    padding: 0.4375rem 0.8125rem;
+    font-size: 0.8125rem;
+    border-radius: 0.625rem;
+  }
+  .btn-lg {
+    min-height: 3rem;
+    padding: 0.875rem 1.5rem;
+    font-size: 0.9375rem;
+  }
+  .btn-block {
+    width: 100%;
+  }
+
+  /* Icon-only control. Square, centred, with a real hit area. */
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    color: var(--text-secondary);
+    transition:
+      background-color 140ms ease,
+      color 140ms ease;
+  }
+  .btn-icon:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--foreground);
+  }
+
+  /* ── Surfaces ── */
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+  }
+  .card-interactive {
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease;
+  }
+  .card-interactive:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+
+  /* ── Fields ── */
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--input);
+    padding: 0.6875rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--foreground);
+    min-height: 2.75rem;
+  }
+  /* Existing screens use .lux-field; keep it as an alias rather than touching
+     every form at once. (Duplicated rather than `composes`, which is a CSS
+     Modules feature and does nothing in a plain stylesheet.) */
+  .lux-field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--input);
+    padding: 0.6875rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--foreground);
+    min-height: 2.75rem;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 550;
+    color: var(--foreground);
+    margin-bottom: 0.4375rem;
+  }
+  .field-hint {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text-tertiary);
+    margin-top: 0.375rem;
+  }
+  .field-error {
+    font-size: 0.75rem;
+    color: var(--danger);
+    margin-top: 0.375rem;
+  }
+
+  /* ── Chips / pills ── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    padding: 0.3125rem 0.6875rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  /* ── Section furniture ── */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+
+  /* Segmented control: feed tabs, profile tabs, admin tabs. */
+  .segmented {
+    display: flex;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    border-radius: 0.875rem;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+  }
+  .segmented-item {
+    flex: 1 1 0%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 0.6875rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 550;
+    color: var(--text-secondary);
+    min-height: 2.25rem;
+    transition:
+      background-color 140ms ease,
+      color 140ms ease;
+  }
+  .segmented-item:hover {
+    color: var(--foreground);
+  }
+  .segmented-item[data-active="true"] {
+    background: var(--surface-3);
+    color: var(--foreground);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Count badge on tabs and nav icons. */
+  .badge-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    padding: 0 0.3125rem;
+    border-radius: 999px;
+    background: var(--gold);
+    color: #000;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1;
+  }
 }
 
 @layer utilities {
-  /* ── Glow utilities ── */
   .glow-gold {
     box-shadow:
-      0 0 0 1px rgba(251, 191, 36, 0.28),
-      0 0 24px rgba(251, 191, 36, 0.08);
+      0 0 0 1px rgba(251, 191, 36, 0.26),
+      0 0 24px rgba(251, 191, 36, 0.07);
   }
   .glow-silver {
     box-shadow:
-      0 0 0 1px rgba(148, 163, 184, 0.28),
-      0 0 16px rgba(148, 163, 184, 0.06);
+      0 0 0 1px rgba(203, 213, 225, 0.22),
+      0 0 16px rgba(203, 213, 225, 0.05);
   }
   .glow-violet {
     box-shadow:
-      0 0 0 1px rgba(167, 139, 250, 0.28),
-      0 0 20px rgba(167, 139, 250, 0.08);
+      0 0 0 1px rgba(167, 139, 250, 0.26),
+      0 0 20px rgba(167, 139, 250, 0.07);
   }
 
-  /* ── Glassmorphism ── */
   .glass {
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-    background: rgba(26, 26, 30, 0.7);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    background: rgba(12, 12, 15, 0.82);
   }
 
   .glass-silver {
     backdrop-filter: blur(12px) saturate(120%);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
-    background: linear-gradient(135deg, rgba(148, 163, 184, 0.06) 0%, rgba(26, 26, 30, 0.8) 100%);
-    border: 1px solid rgba(148, 163, 184, 0.18) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(148, 163, 184, 0.08),
-      0 4px 24px rgba(0, 0, 0, 0.4);
+    background: linear-gradient(135deg, rgba(203, 213, 225, 0.06) 0%, var(--surface-1) 100%);
+    border: 1px solid rgba(203, 213, 225, 0.18) !important;
+    box-shadow: var(--shadow-md);
   }
 
   .glass-gold {
     backdrop-filter: blur(12px) saturate(120%);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
-    background: linear-gradient(135deg, rgba(251, 191, 36, 0.07) 0%, rgba(26, 26, 30, 0.8) 100%);
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.07) 0%, var(--surface-1) 100%);
     border: 1px solid rgba(251, 191, 36, 0.22) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(251, 191, 36, 0.1),
-      0 4px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-md);
   }
 
-  /* ── Card hover lift ── */
   .card-hover {
     transition:
       transform 140ms ease,
@@ -218,36 +502,31 @@
   }
   .card-hover:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-md);
   }
 
-  /* ── Luxury field ── */
-  .lux-field {
-    width: 100%;
-    border-radius: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(255, 255, 255, 0.03);
-    padding: 0.625rem 0.75rem;
-    font-size: 0.875rem;
-    color: #f5f5f6;
-    outline: none;
-    transition:
-      border-color 180ms ease,
-      box-shadow 180ms ease;
+  /* Text roles, so "which grey is this" stops being a judgement call. */
+  .text-secondary {
+    color: var(--text-secondary);
   }
-  .lux-field::placeholder {
-    color: rgba(107, 107, 122, 0.7);
-  }
-  .lux-field:focus {
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+  .text-tertiary {
+    color: var(--text-tertiary);
   }
 
-  /* ── Page enter animation ── */
+  /* Bottom padding that clears the mobile tab bar and the home indicator. */
+  .pb-mobile-nav {
+    padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 1.5rem);
+  }
+  @media (min-width: 640px) {
+    .pb-mobile-nav {
+      padding-bottom: 4rem;
+    }
+  }
+
   @keyframes page-enter {
     from {
       opacity: 0;
-      transform: translateY(8px);
+      transform: translateY(6px);
     }
     to {
       opacity: 1;
@@ -255,10 +534,16 @@
     }
   }
   .page-enter {
-    animation: page-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: page-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page-enter {
+      animation: none;
+    }
   }
 
-  /* ── Shimmer effect for skeletons ── */
+  /* Skeletons. One shimmer, used everywhere, instead of per-screen pulses at
+     hand-picked animation delays. */
   @keyframes shimmer {
     0% {
       background-position: -400px 0;
@@ -267,18 +552,25 @@
       background-position: 400px 0;
     }
   }
-  .shimmer {
+  .shimmer,
+  .skeleton {
     background: linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.03) 25%,
-      rgba(255, 255, 255, 0.07) 50%,
-      rgba(255, 255, 255, 0.03) 75%
+      rgba(255, 255, 255, 0.035) 25%,
+      rgba(255, 255, 255, 0.075) 50%,
+      rgba(255, 255, 255, 0.035) 75%
     );
     background-size: 800px 100%;
     animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: 0.5rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer,
+    .skeleton {
+      animation: none;
+    }
   }
 
-  /* ── PulseAssist chat bubble typing indicator ── */
   @keyframes pulse-dot {
     0%,
     80%,
@@ -299,5 +591,23 @@
   }
   .typing-dot:nth-child(3) {
     animation-delay: 0.4s;
+  }
+
+  /* Clamp helpers for list previews. */
+  .clamp-1,
+  .clamp-2,
+  .clamp-3 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .clamp-1 {
+    -webkit-line-clamp: 1;
+  }
+  .clamp-2 {
+    -webkit-line-clamp: 2;
+  }
+  .clamp-3 {
+    -webkit-line-clamp: 3;
   }
 }

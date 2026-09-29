@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
+import { EmptyState, ListSkeleton, PageHeader } from "@/components/states";
+import { MessageSquare } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/messages")({
   head: () => ({ meta: [{ title: "Messages · The Ledger" }] }),
@@ -60,43 +62,28 @@ function MessagesIndex() {
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-2xl px-4 pt-10 pb-24 sm:px-6 page-enter">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Messages</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          New conversations are limited to 3 per day.
-        </p>
+      <main className="page-enter mx-auto max-w-2xl px-4 pb-mobile-nav pt-8 sm:px-6">
+        <PageHeader
+          eyebrow="Direct"
+          icon={MessageSquare}
+          title="Messages"
+          description="Private threads. Starting a new conversation costs one of three daily requests."
+        />
 
-        <div className="mt-8">
+        <div>
           {rows === null ? (
-            <div className="divide-y divide-border/60">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 py-4">
-                  <div
-                    className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary/60"
-                    style={{ animationDelay: `${i * 60}ms` }}
-                  />
-                  <div className="flex-1 space-y-2">
-                    <div
-                      className="h-3 w-40 animate-pulse rounded-full bg-secondary/60"
-                      style={{ animationDelay: `${i * 60 + 30}ms` }}
-                    />
-                    <div
-                      className="h-3 w-24 animate-pulse rounded-full bg-secondary/35"
-                      style={{ animationDelay: `${i * 60 + 60}ms` }}
-                    />
-                  </div>
-                  <div className="h-2.5 w-10 animate-pulse rounded-full bg-secondary/30" />
-                </div>
-              ))}
-            </div>
+            <ListSkeleton count={3} />
           ) : rows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
-              No conversations yet. Message someone from{" "}
-              <Link to="/feed" className="underline underline-offset-4">
-                The Ledger
-              </Link>
-              .
-            </div>
+            <EmptyState
+              icon={MessageSquare}
+              title="No conversations yet"
+              description="Open someone's profile and hit Message to start a thread."
+              action={
+                <Link to="/feed" className="btn btn-primary btn-sm">
+                  Find people in the feed
+                </Link>
+              }
+            />
           ) : (
             <ul className="divide-y divide-border/60">
               {rows.map((c) => {

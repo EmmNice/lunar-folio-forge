@@ -33,6 +33,7 @@ import {
 } from "@/lib/admin.functions";
 import { timeAgo } from "@/lib/time";
 import { MAX_REPORT_REASON_LENGTH } from "@/lib/limits";
+import { EmptyState, PageHeader } from "@/components/states";
 import type { AccountStatus, VerificationTier } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -343,28 +344,19 @@ function AdminPage() {
   const goldApps = (applications ?? []).filter((a) => a.tier === "gold");
 
   return (
-    <div className="min-h-screen pb-16 sm:pb-0">
+    <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-6xl px-4 pt-10 pb-24 sm:px-6">
+      <main className="page-enter mx-auto max-w-6xl px-4 pb-mobile-nav pt-8 sm:px-6">
         {/* Page title */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              Admin Panel
-            </p>
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Moderation & Members
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Review verification applications and reports, grant or revoke badges, restrict or
-            suspend accounts, and read the audit trail.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="Admin panel"
+          icon={ShieldCheck}
+          title="Moderation & Members"
+          description="Review verification applications and reports, grant or revoke badges, restrict or suspend accounts, and read the audit trail."
+        />
 
         {/* Tab bar */}
-        <div className="mb-6 flex max-w-2xl gap-1 rounded-xl border border-border/50 bg-secondary/10 p-1">
+        <div className="segmented mb-6 max-w-2xl">
           {(
             [
               {
@@ -382,20 +374,14 @@ function AdminPage() {
               key={key}
               type="button"
               onClick={() => setAdminTab(key)}
-              className={
-                "flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
-                (adminTab === key
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground/80")
-              }
+              data-active={adminTab === key}
+              className="segmented-item"
             >
               <Icon className="h-3.5 w-3.5" />
               {label}
-              {typeof count === "number" && count > 0 && (
-                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/80 px-1 text-[10px] font-bold text-black">
-                  {count}
-                </span>
-              )}
+              {typeof count === "number" && count > 0 ? (
+                <span className="badge-count">{count}</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -411,11 +397,11 @@ function AdminPage() {
             {reports === null ? (
               <div className="text-sm text-muted-foreground">Loading reports…</div>
             ) : reports.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/60 px-8 py-16 text-center">
-                <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-foreground">Queue is empty</p>
-                <p className="mt-1 text-xs text-muted-foreground">No open reports right now.</p>
-              </div>
+              <EmptyState
+                icon={CheckCircle2}
+                title="Queue is empty"
+                description="No open reports. Reported posts arrive here with the reason the member gave."
+              />
             ) : (
               reports.map((r) => (
                 <ReportCard
@@ -456,12 +442,11 @@ function AdminPage() {
             {audit === null ? (
               <div className="text-sm text-muted-foreground">Loading audit trail…</div>
             ) : audit.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/60 px-8 py-16 text-center">
-                <p className="text-sm font-medium text-foreground">Nothing logged yet</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Admin actions will appear here as they happen.
-                </p>
-              </div>
+              <EmptyState
+                icon={ScrollText}
+                title="Nothing logged yet"
+                description="Badge grants, suspensions, removals and review decisions appear here as they happen."
+              />
             ) : (
               <div className="overflow-hidden rounded-2xl border border-border/50">
                 {audit.map((entry, i) => (
@@ -478,13 +463,11 @@ function AdminPage() {
                     <span className="text-muted-foreground">
                       {entry.actor ? `@${entry.actor.handle}` : "unknown admin"}
                     </span>
-                    <span className="text-muted-foreground/70">
+                    <span className="text-tertiary">
                       {entry.target_type}
                       {entry.target_id ? ` ${entry.target_id.slice(0, 8)}` : ""}
                     </span>
-                    <span className="ml-auto text-muted-foreground/60">
-                      {timeAgo(entry.created_at)}
-                    </span>
+                    <span className="ml-auto text-tertiary">{timeAgo(entry.created_at)}</span>
                     {entry.detail != null && Object.keys(entry.detail as object).length > 0 && (
                       <p className="w-full break-all font-mono text-[10px] text-muted-foreground/50">
                         {JSON.stringify(entry.detail)}
@@ -505,13 +488,11 @@ function AdminPage() {
             {applications === null ? (
               <div className="text-sm text-muted-foreground">Loading applications…</div>
             ) : applications.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/60 px-8 py-16 text-center">
-                <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-foreground">All clear</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  No pending applications right now.
-                </p>
-              </div>
+              <EmptyState
+                icon={CheckCircle2}
+                title="All clear"
+                description="No pending verification applications right now."
+              />
             ) : (
               <div className="grid gap-6 lg:grid-cols-2">
                 {/* Silver Builder column */}
@@ -851,9 +832,7 @@ function ReportCard({
                 {author.account_status === "banned" ? "suspended" : "restricted"}
               </span>
             )}
-            <span className="ml-auto text-muted-foreground/60">
-              {timeAgo(report.post.created_at)}
-            </span>
+            <span className="ml-auto text-tertiary">{timeAgo(report.post.created_at)}</span>
           </div>
           <p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground/90">
             {report.post.content}
@@ -870,7 +849,7 @@ function ReportCard({
         onChange={(e) => setNote(e.target.value)}
         maxLength={MAX_REPORT_REASON_LENGTH}
         placeholder="Resolution note (optional, kept in the audit trail)"
-        className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-foreground/40"
+        className="field mt-3 !text-xs"
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -878,7 +857,7 @@ function ReportCard({
           type="button"
           disabled={busy}
           onClick={() => onDecide("dismissed", false, note)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="btn btn-outline btn-sm"
         >
           {busy ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -892,7 +871,7 @@ function ReportCard({
             type="button"
             disabled={busy}
             onClick={() => onDecide("actioned", true, note)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            className="btn btn-danger btn-sm"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Remove post
@@ -902,7 +881,7 @@ function ReportCard({
           type="button"
           disabled={busy}
           onClick={() => onDecide("actioned", false, note)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/40 disabled:opacity-50"
+          className="btn btn-outline btn-sm"
         >
           <CheckCircle2 className="h-3.5 w-3.5" />
           Action without removing
@@ -923,7 +902,7 @@ function ReportCard({
               type="button"
               disabled={busy}
               onClick={onSuspendAuthor}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+              className="btn btn-danger btn-sm"
             >
               <Ban className="h-3.5 w-3.5" />
               Suspend author

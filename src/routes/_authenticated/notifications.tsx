@@ -17,6 +17,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
 import { NOTIFICATION_PAGE_SIZE } from "@/lib/limits";
+import { EmptyState, ErrorState, ListSkeleton, PageHeader } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
   head: () => ({ meta: [{ title: "Notifications · The Ledger" }] }),
@@ -157,75 +158,43 @@ function NotificationsPage() {
   const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
 
   return (
-    <div className="min-h-screen pb-16 sm:pb-0">
+    <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-2xl px-4 pt-10 pb-24 sm:px-6 page-enter">
-        <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Notifications</h1>
-        </div>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">Activity on your posts and account.</p>
-          {unreadCount > 0 && (
-            <button
-              type="button"
-              onClick={markAllRead}
-              disabled={markingRead}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              {markingRead ? "Marking…" : `Mark all ${unreadCount} as read`}
-            </button>
-          )}
-        </div>
+      <main className="page-enter mx-auto max-w-2xl px-4 pb-mobile-nav pt-8 sm:px-6">
+        <PageHeader
+          eyebrow="Activity"
+          icon={Bell}
+          title="Notifications"
+          description="Likes, replies, re-ships, messages, pitches and verification decisions."
+          action={
+            unreadCount > 0 ? (
+              <button
+                type="button"
+                onClick={markAllRead}
+                disabled={markingRead}
+                className="btn btn-outline btn-sm"
+              >
+                {markingRead ? "Marking…" : `Mark ${unreadCount} read`}
+              </button>
+            ) : undefined
+          }
+        />
 
         {loadError && (
-          <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4">
-            <p className="text-xs text-red-300">{loadError}</p>
-            <button
-              type="button"
-              onClick={load}
-              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/60"
-            >
-              Retry
-            </button>
+          <div className="mb-5">
+            <ErrorState message={loadError} onRetry={load} />
           </div>
         )}
 
-        <div className="mt-8">
+        <div>
           {notifications === null ? (
-            <div className="space-y-0 divide-y divide-border/60">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-start gap-3 py-4">
-                  <div
-                    className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60"
-                    style={{ animationDelay: `${i * 50}ms` }}
-                  />
-                  <div className="flex-1 space-y-2 pt-0.5">
-                    <div
-                      className="h-3 w-48 animate-pulse rounded-full bg-secondary/60"
-                      style={{ animationDelay: `${i * 50 + 25}ms` }}
-                    />
-                    <div
-                      className="h-3 w-64 animate-pulse rounded-full bg-secondary/40"
-                      style={{ animationDelay: `${i * 50 + 50}ms` }}
-                    />
-                    <div
-                      className="h-2.5 w-16 animate-pulse rounded-full bg-secondary/25"
-                      style={{ animationDelay: `${i * 50 + 75}ms` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ListSkeleton count={5} />
           ) : notifications.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
-              <Bell className="mx-auto h-8 w-8 text-border" />
-              <p className="mt-3 text-sm text-muted-foreground">No notifications yet.</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Likes, comments, re-ships, messages, pitches and verification updates will appear
-                here.
-              </p>
-            </div>
+            <EmptyState
+              icon={Bell}
+              title="Nothing yet"
+              description="Likes, replies, re-ships, messages, pitches and verification decisions all land here."
+            />
           ) : (
             <ul className="divide-y divide-border/60">
               {notifications.map((n) => {
@@ -342,9 +311,7 @@ function NotificationsPage() {
                             : "Review in Inbound Pitches →"}
                         </Link>
                       )}
-                      <p className="mt-1 text-[11px] text-muted-foreground/60">
-                        {timeAgo(n.created_at)}
-                      </p>
+                      <p className="mt-1 text-[11px] text-tertiary">{timeAgo(n.created_at)}</p>
                     </div>
 
                     {!n.read && (

@@ -77,7 +77,7 @@ export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
   }
 
   const field =
-    "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition-colors focus:border-foreground/40";
+    "w-full rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-foreground placeholder:text-tertiary outline-none transition-colors focus:border-foreground/40";
 
   return (
     <div

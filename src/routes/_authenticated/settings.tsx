@@ -65,7 +65,7 @@ function AccountSettingsPage() {
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
-      <main className="mx-auto max-w-lg px-4 pt-10 pb-28 sm:px-6">
+      <main className="mx-auto max-w-lg px-4 pt-10 pb-mobile-nav sm:px-6">
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
           The Ledger
         </p>
@@ -180,7 +180,7 @@ function SecuritySection() {
               type="button"
               onClick={changePassword}
               disabled={busy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="btn btn-primary btn-block"
               style={{ background: "#F5F5F6" }}
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}

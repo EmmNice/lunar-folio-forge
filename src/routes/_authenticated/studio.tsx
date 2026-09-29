@@ -147,7 +147,7 @@ function StudioPage() {
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-4xl px-4 pt-10 pb-28 sm:px-6">
+      <main className="mx-auto max-w-4xl px-4 pt-10 pb-mobile-nav sm:px-6">
         <div className="mb-8">
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             Workspace
@@ -490,7 +490,7 @@ function StudioPage() {
               </button>
             </div>
 
-            <p className="text-[11px] text-muted-foreground/60">
+            <p className="text-[11px] text-tertiary">
               Download exports at 1080×1920 · perfect for WhatsApp Status.
             </p>
           </div>

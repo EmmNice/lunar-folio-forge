@@ -220,7 +220,7 @@ export function ComposerModal({
 
           {/* Card style */}
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground/70">Style:</span>
+            <span className="text-[11px] text-tertiary">Style:</span>
             <button
               type="button"
               onClick={() => setBackground("noir")}
@@ -250,7 +250,7 @@ export function ComposerModal({
                 ? "font-medium text-red-400"
                 : remaining <= 20
                   ? "font-medium text-amber-400"
-                  : "text-muted-foreground/60")
+                  : "text-tertiary")
             }
           >
             {remaining}
