@@ -45,6 +45,17 @@ export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
  */
 export const FEED_PAGE_SIZE = 30;
 
+/**
+ * Results per section on the search screen.
+ *
+ * People search is additionally capped inside search_profiles() at 50, so a larger
+ * value here would be silently truncated rather than honoured.
+ */
+export const SEARCH_PAGE_SIZE = 20;
+
+/** Shortest query worth sending. One letter matches most of the platform. */
+export const MIN_SEARCH_LENGTH = 2;
+
 /** Rows pulled for the notification bell and the pitch inbox. */
 export const NOTIFICATION_PAGE_SIZE = 50;
 export const PITCH_INBOX_PAGE_SIZE = 50;

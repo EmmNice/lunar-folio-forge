@@ -1,17 +1,22 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Plus, Loader2, ShieldAlert, Rss, Sparkles } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Loader2, ShieldAlert, Rss, Sparkles, Users } from "lucide-react";
 import { EmptyState, ErrorState, PostSkeleton } from "@/components/states";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader, MobileNav } from "@/components/AppHeader";
 import { toBackground } from "@/components/StatusCard";
-import { PostCard, type FeedPost, type PostStats } from "@/components/PostCard";
+import {
+  PostCard,
+  type FeedPost,
+  type PostStats,
+  type RepostAttribution,
+} from "@/components/PostCard";
 import { ComposerModal } from "@/components/ComposerModal";
 import { useAuth } from "@/hooks/use-auth";
 import type { VerificationTier } from "@/hooks/use-auth";
 import { useCardExport } from "@/hooks/use-card-export";
 import { FEED_PAGE_SIZE } from "@/lib/limits";
+import { fetchFollowingIds, fetchMutedIds } from "@/lib/social";
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
@@ -27,7 +32,28 @@ export const Route = createFileRoute("/feed")({
   component: FeedPage,
 });
 
-type FeedTab = "signal" | "beat";
+/**
+ * Signal and Beat are two cuts of the same global timeline, split by post shape.
+ * Following is a different axis — a narrower audience, not a different kind of
+ * post — and it is deliberately an *additional* lens rather than the default.
+ *
+ * The Ledger's premise is one chronological feed where a first post is as visible
+ * as a thousandth; making Following the landing tab would quietly turn it into a
+ * follower-count game, which is the thing this platform exists not to be.
+ */
+type FeedTab = "signal" | "beat" | "following";
+
+const POST_SELECT =
+  "id, content, background, comments_enabled, visibility, created_at, edited_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)";
+
+/**
+ * A repost, with the post it points at and who re-shipped it.
+ *
+ * The embedded post comes back null when RLS hides it — a whisper post from
+ * outside the audience, or an author who has since blocked the viewer — so the
+ * null case is filtered rather than rendered as an empty card.
+ */
+const REPOST_SELECT = `created_at, user_id, reposter:profiles!reposts_user_id_fkey(handle, display_name), post:posts!reposts_post_id_fkey(${POST_SELECT})`;
 
 /**
  * A row as it comes back from the feed query. background is free text in the DB,
@@ -39,6 +65,21 @@ type RawFeedRow = Omit<FeedPost, "background" | "comments_enabled" | "visibility
   comments_enabled: boolean | null;
   visibility: string | null;
   author: Omit<FeedPost["author"], "verification_tier"> & { verification_tier: string };
+};
+
+/**
+ * One entry in the Following timeline: either a post, or somebody's re-ship of one.
+ *
+ * `timelineAt` is what the list sorts on — the repost's timestamp for a re-ship,
+ * the post's own for an original. Sorting reposts by the original's date would
+ * bury a re-ship of an old post where nobody would ever see it, which defeats the
+ * point of re-shipping.
+ */
+type TimelineItem = {
+  key: string;
+  post: FeedPost;
+  repostedBy?: RepostAttribution;
+  timelineAt: string;
 };
 
 // Main feed page
@@ -53,7 +94,36 @@ function FeedPage() {
   // updated to match, but these comments were left behind.
   const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null); // Beat: Studio cards
   const [signalPosts, setSignalPosts] = useState<FeedPost[] | null>(null); // Signal: text posts
+  const [followingItems, setFollowingItems] = useState<TimelineItem[] | null>(null);
+  const [followingIds, setFollowingIds] = useState<string[] | null>(null);
+  /**
+   * Muted accounts, applied to the feed only.
+   *
+   * A mute is cosmetic and one-directional, so it is not in RLS: their posts still
+   * load, they are simply not shown here. A block is the one that removes them
+   * from the viewer's world entirely, and that lives in can_view_post().
+   */
+  const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
+  const [followingHasMore, setFollowingHasMore] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  /*
+    Mirrors of the two lists above, for the realtime handler.
+
+    That subscription is set up once per signed-in user and must not be torn down
+    and re-established every time a mute or a follow changes — re-subscribing a
+    channel by the same name is an error, not a no-op, and it cost us a crash
+    once already. Refs let the handler read current values without becoming a
+    dependency of the effect that owns the channel.
+  */
+  const mutedIdsRef = useRef(mutedIds);
+  const followingIdsRef = useRef(followingIds);
+  useEffect(() => {
+    mutedIdsRef.current = mutedIds;
+  }, [mutedIds]);
+  useEffect(() => {
+    followingIdsRef.current = followingIds;
+  }, [followingIds]);
   const [fabVisible, setFabVisible] = useState(true);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [stats, setStats] = useState<Map<string, PostStats>>(new Map());
@@ -98,6 +168,12 @@ function FeedPage() {
         verification_tier: p.author.verification_tier as VerificationTier,
       },
     }));
+  }
+
+  /** Drops posts by muted authors. Applied after the fetch — see `mutedIds`. */
+  function withoutMuted(posts: FeedPost[]): FeedPost[] {
+    if (mutedIds.size === 0) return posts;
+    return posts.filter((p) => !mutedIds.has(p.author.id));
   }
 
   /**
@@ -160,11 +236,9 @@ function FeedPage() {
    * left in this function: what comes back is already what the viewer may see.
    */
   async function loadPage(opts: { before?: string; append: boolean }) {
-    const FULL_SELECT = `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`;
-
     let query = supabase
       .from("posts")
-      .select(FULL_SELECT)
+      .select(POST_SELECT)
       .order("created_at", { ascending: false })
       .limit(FEED_PAGE_SIZE);
     if (opts.before) query = query.lt("created_at", opts.before);
@@ -195,8 +269,9 @@ function FeedPage() {
       return next;
     });
 
-    const signal = page.filter((p) => !p.background || p.background === "noir");
-    const beat = page.filter((p) => p.background && p.background !== "noir");
+    const visible = withoutMuted(page);
+    const signal = visible.filter((p) => !p.background || p.background === "noir");
+    const beat = visible.filter((p) => p.background && p.background !== "noir");
 
     if (opts.append) {
       setSignalPosts((prev) => [...(prev ?? []), ...signal]);
@@ -214,6 +289,185 @@ function FeedPage() {
     setLoadingMore(false);
   }
 
+  /**
+   * One page of the Following timeline: posts by people you follow, interleaved
+   * with their re-ships.
+   *
+   * Two queries rather than one. There is no single table holding "things that
+   * should reach me", and expressing this as one PostgREST query would mean either
+   * a view (which would need its own RLS reasoning) or an `or` across a join that
+   * the planner handles poorly. Two indexed reads and a merge in JS is both simpler
+   * to follow and honest about what it costs.
+   *
+   * Both halves are paged by the same `before` cursor, so the merged result is
+   * continuous even though the two sources advance at different rates.
+   */
+  async function loadFollowingPage(ids: string[], opts: { before?: string; append: boolean }) {
+    if (ids.length === 0) {
+      setFollowingItems([]);
+      setFollowingHasMore(false);
+      return;
+    }
+
+    let postQuery = supabase
+      .from("posts")
+      .select(POST_SELECT)
+      .in("author_id", ids)
+      .order("created_at", { ascending: false })
+      .limit(FEED_PAGE_SIZE);
+
+    let repostQuery = supabase
+      .from("reposts")
+      .select(REPOST_SELECT)
+      .in("user_id", ids)
+      .order("created_at", { ascending: false })
+      .limit(FEED_PAGE_SIZE);
+
+    if (opts.before) {
+      postQuery = postQuery.lt("created_at", opts.before);
+      repostQuery = repostQuery.lt("created_at", opts.before);
+    }
+
+    const [postsRes, repostsRes] = await Promise.all([postQuery, repostQuery]);
+
+    if (postsRes.error || repostsRes.error) {
+      setFeedError("Couldn't load your Following feed. Check your connection and try again.");
+      if (!opts.append) setFollowingItems([]);
+      return;
+    }
+
+    setFeedError(null);
+
+    const ownPosts: TimelineItem[] = withoutMuted(
+      normalisePosts((postsRes.data ?? []) as unknown as RawFeedRow[]),
+    ).map((post) => ({ key: `post:${post.id}`, post, timelineAt: post.created_at }));
+
+    type RawRepostRow = {
+      created_at: string;
+      user_id: string;
+      reposter: { handle: string; display_name: string } | null;
+      post: RawFeedRow | null;
+    };
+
+    const reposts: TimelineItem[] = [];
+    for (const row of (repostsRes.data ?? []) as unknown as RawRepostRow[]) {
+      // RLS hid the post, or it was deleted between the two queries.
+      if (!row.post || !row.reposter) continue;
+      const [post] = normalisePosts([row.post]);
+      if (!post) continue;
+      if (mutedIds.has(post.author.id)) continue;
+      reposts.push({
+        key: `repost:${row.user_id}:${post.id}`,
+        post,
+        repostedBy: row.reposter,
+        timelineAt: row.created_at,
+      });
+    }
+
+    /*
+      Merge, newest first, and show each post once.
+
+      A post can arrive twice — its author posted it and somebody else you follow
+      re-shipped it. Keeping the first occurrence after sorting means the timeline
+      shows it at the moment it most recently reached you, which is the entry the
+      reader is expecting to find.
+    */
+    const merged = [...ownPosts, ...reposts].sort((a, b) =>
+      a.timelineAt < b.timelineAt ? 1 : a.timelineAt > b.timelineAt ? -1 : 0,
+    );
+
+    const seen = new Set<string>();
+    const deduped: TimelineItem[] = [];
+    for (const item of merged) {
+      if (seen.has(item.post.id)) continue;
+      seen.add(item.post.id);
+      deduped.push(item);
+    }
+
+    // More to fetch if either source filled its page.
+    setFollowingHasMore(
+      (postsRes.data?.length ?? 0) === FEED_PAGE_SIZE ||
+        (repostsRes.data?.length ?? 0) === FEED_PAGE_SIZE,
+    );
+
+    const pageStats = await fetchStats(
+      deduped.map((i) => i.post.id),
+      user?.id,
+    );
+    setStats((prev) => {
+      const next = new Map(opts.append ? prev : prev);
+      pageStats.forEach((value, key) => next.set(key, value));
+      return next;
+    });
+
+    setFollowingItems((prev) => {
+      if (!opts.append) return deduped;
+      const existing = new Set((prev ?? []).map((i) => i.post.id));
+      return [...(prev ?? []), ...deduped.filter((i) => !existing.has(i.post.id))];
+    });
+  }
+
+  async function loadMoreFollowing() {
+    if (loadingMore || !followingHasMore || !followingItems || followingItems.length === 0) return;
+    const oldest = followingItems[followingItems.length - 1].timelineAt;
+    setLoadingMore(true);
+    await loadFollowingPage(followingIds ?? [], { before: oldest, append: true });
+    setLoadingMore(false);
+  }
+
+  /*
+    Who the viewer follows and mutes.
+
+    Loaded once per session rather than per page, because both lists are small and
+    change rarely, and re-reading them on every "load older posts" would triple the
+    request count for no benefit.
+  */
+  useEffect(() => {
+    if (!user) {
+      setMutedIds(new Set());
+      setFollowingIds(null);
+      setFollowingItems(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [muted, follows] = await Promise.all([
+        fetchMutedIds(user.id),
+        fetchFollowingIds(user.id),
+      ]);
+      if (cancelled) return;
+      setMutedIds(new Set(muted));
+      setFollowingIds(follows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  /*
+    Re-filter anything already on screen once the mute list arrives.
+
+    The first page is requested before this list is known — without this, a muted
+    author's post would be visible until the next fetch, which is precisely the
+    moment the reader notices.
+  */
+  useEffect(() => {
+    if (mutedIds.size === 0) return;
+    setSignalPosts((prev) => (prev ? prev.filter((p) => !mutedIds.has(p.author.id)) : prev));
+    setBeatPosts((prev) => (prev ? prev.filter((p) => !mutedIds.has(p.author.id)) : prev));
+    setFollowingItems((prev) =>
+      prev ? prev.filter((i) => !mutedIds.has(i.post.author.id)) : prev,
+    );
+  }, [mutedIds]);
+
+  /* First page of the Following tab, fetched when it is first opened. */
+  useEffect(() => {
+    if (tab !== "following" || !user) return;
+    if (followingIds === null || followingItems !== null) return;
+    loadFollowingPage(followingIds, { append: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user, followingIds, followingItems]);
+
   useEffect(() => {
     loadPage({ append: false });
 
@@ -230,9 +484,7 @@ function FeedPage() {
           if (!id) return;
           const { data } = await supabase
             .from("posts")
-            .select(
-              `id, content, background, comments_enabled, visibility, created_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)`,
-            )
+            .select(POST_SELECT)
             .eq("id", id)
             .maybeSingle();
           // RLS decides whether this viewer is in the audience; a whisper post
@@ -240,12 +492,29 @@ function FeedPage() {
           if (!data) return;
           const [fresh] = normalisePosts([data as unknown as RawFeedRow]);
           if (!fresh) return;
+          // A muted author's post still arrives over the wire — the mute is a
+          // display rule, so it has to be applied here too.
+          if (mutedIdsRef.current.has(fresh.author.id)) return;
           const isCard = fresh.background && fresh.background !== "noir";
           const setter = isCard ? setBeatPosts : setSignalPosts;
           setter((prev) => {
             if (prev?.some((p) => p.id === fresh.id)) return prev;
             return prev ? [fresh, ...prev] : [fresh];
           });
+
+          // Same post, second home: the Following tab keeps its own list, so a
+          // live post from someone the viewer follows has to be inserted there as
+          // well or the tab silently goes stale while it is open.
+          if (followingIdsRef.current?.includes(fresh.author.id)) {
+            setFollowingItems((prev) => {
+              if (prev === null) return prev;
+              if (prev.some((i) => i.post.id === fresh.id)) return prev;
+              return [
+                { key: `post:${fresh.id}`, post: fresh, timelineAt: fresh.created_at },
+                ...prev,
+              ];
+            });
+          }
         },
       )
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, (payload) => {
@@ -253,6 +522,7 @@ function FeedPage() {
         if (!id) return;
         setSignalPosts((prev) => prev?.filter((p) => p.id !== id) ?? null);
         setBeatPosts((prev) => prev?.filter((p) => p.id !== id) ?? null);
+        setFollowingItems((prev) => prev?.filter((i) => i.post.id !== id) ?? null);
       })
       .subscribe();
     return () => {
@@ -261,9 +531,64 @@ function FeedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Instant tab switch — both caches pre-loaded at mount
-  const displayedPosts = tab === "signal" ? (signalPosts ?? []) : (beatPosts ?? []);
-  const feedLoading = tab === "signal" ? signalPosts === null : beatPosts === null;
+  /*
+    Signal and Beat are both pre-loaded at mount from one query, so switching
+    between them is instant. Following is fetched on first open instead: it is a
+    different query against a list the viewer may not even have, and paying for it
+    on every feed visit would slow the common case down for the rarer one.
+  */
+  const displayedItems: TimelineItem[] =
+    tab === "following"
+      ? (followingItems ?? [])
+      : (tab === "signal" ? (signalPosts ?? []) : (beatPosts ?? [])).map((post) => ({
+          key: `post:${post.id}`,
+          post,
+          timelineAt: post.created_at,
+        }));
+
+  const feedLoading =
+    tab === "following"
+      ? followingItems === null
+      : tab === "signal"
+        ? signalPosts === null
+        : beatPosts === null;
+
+  // Following is meaningless without an account to follow from.
+  const visibleTabs: FeedTab[] = user ? ["signal", "beat", "following"] : ["signal", "beat"];
+
+  const TAB_META: Record<FeedTab, { label: string; icon: typeof Rss; blurb: string }> = {
+    signal: {
+      label: "Signal",
+      icon: Rss,
+      blurb: "All builders, all tiers — the live pulse of everything being shipped.",
+    },
+    beat: {
+      label: "Beat",
+      icon: Sparkles,
+      blurb: "Studio cards — crafted status posts from every builder on the platform.",
+    },
+    following: {
+      label: "Following",
+      icon: Users,
+      blurb: "Only the builders you follow, plus what they re-ship.",
+    },
+  };
+
+  /** Replaces one post in whichever list holds it, after an in-place edit. */
+  function applyEdit(id: string, content: string, editedAt: string | null) {
+    const patch = (p: FeedPost) => (p.id === id ? { ...p, content, edited_at: editedAt } : p);
+    setSignalPosts((prev) => prev?.map(patch) ?? null);
+    setBeatPosts((prev) => prev?.map(patch) ?? null);
+    setFollowingItems(
+      (prev) => prev?.map((i) => (i.post.id === id ? { ...i, post: patch(i.post) } : i)) ?? null,
+    );
+  }
+
+  function removePostFromLists(id: string) {
+    setBeatPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
+    setSignalPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
+    setFollowingItems((prev) => prev?.filter((i) => i.post.id !== id) ?? null);
+  }
 
   return (
     <div className="min-h-screen">
@@ -292,23 +617,22 @@ function FeedPage() {
         {/* Signal / Beat tab switcher */}
         <div className="mx-auto max-w-2xl px-4 pb-3 pt-1 sm:px-6">
           <div>
-            <div className="segmented sm:max-w-[18rem]">
-              {(["signal", "beat"] as FeedTab[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  data-active={tab === t}
-                  className="segmented-item"
-                >
-                  {t === "signal" ? (
-                    <Rss className="h-3.5 w-3.5" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  {t === "signal" ? "Signal" : "Beat"}
-                </button>
-              ))}
+            <div className="segmented sm:max-w-[24rem]">
+              {visibleTabs.map((t) => {
+                const Icon = TAB_META[t].icon;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTab(t)}
+                    data-active={tab === t}
+                    className="segmented-item"
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {TAB_META[t].label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -350,36 +674,60 @@ function FeedPage() {
         )}
 
         {/* Tab description */}
-        <p className="mb-4 text-[13px] leading-relaxed text-tertiary">
-          {tab === "signal"
-            ? "All builders, all tiers — the live pulse of everything being shipped."
-            : "Studio cards — crafted status posts from every builder on the platform."}
-        </p>
+        <p className="mb-4 text-[13px] leading-relaxed text-tertiary">{TAB_META[tab].blurb}</p>
 
         {/* Feed */}
         {feedLoading ? (
           <PostSkeleton count={4} />
-        ) : displayedPosts.length === 0 ? (
-          <EmptyState
-            icon={tab === "signal" ? Rss : Sparkles}
-            title={tab === "signal" ? "No posts yet" : "No studio cards yet"}
-            description={
-              tab === "signal"
-                ? "Signal carries every text post on the platform. Be the first to ship something worth reading."
-                : "Cards crafted in the Studio land here. Make one and it appears instantly."
-            }
-            action={
-              user ? (
-                <button
-                  type="button"
-                  onClick={() => setShowModal(true)}
+        ) : displayedItems.length === 0 ? (
+          tab === "following" ? (
+            /* Distinct from an empty platform: there is plenty to read, the viewer
+               just hasn't followed anyone. Point them at the timeline that works
+               without a follow graph rather than at the composer. */
+            <EmptyState
+              icon={Users}
+              title={
+                followingIds && followingIds.length > 0
+                  ? "Nothing new from the people you follow"
+                  : "You're not following anyone yet"
+              }
+              description={
+                followingIds && followingIds.length > 0
+                  ? "When they post or re-ship something, it lands here."
+                  : "Follow a few builders and their posts — and anything they re-ship — will collect here. Explore is where everyone is."
+              }
+              action={
+                <Link
+                  to="/search"
+                  search={{ q: undefined, tab: undefined }}
                   className="btn btn-primary btn-sm"
                 >
-                  Write the first post
-                </button>
-              ) : undefined
-            }
-          />
+                  Find builders
+                </Link>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={tab === "signal" ? Rss : Sparkles}
+              title={tab === "signal" ? "No posts yet" : "No studio cards yet"}
+              description={
+                tab === "signal"
+                  ? "Signal carries every text post on the platform. Be the first to ship something worth reading."
+                  : "Cards crafted in the Studio land here. Make one and it appears instantly."
+              }
+              action={
+                user ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(true)}
+                    className="btn btn-primary btn-sm"
+                  >
+                    Write the first post
+                  </button>
+                ) : undefined
+              }
+            />
+          )
         ) : (
           <>
             {user && profile ? (
@@ -411,17 +759,16 @@ function FeedPage() {
             ) : null}
 
             <div className="space-y-3">
-              {displayedPosts.map((p) => (
+              {displayedItems.map((item) => (
                 <PostCard
-                  key={p.id}
-                  post={p}
-                  stats={stats.get(p.id)}
+                  key={item.key}
+                  post={item.post}
+                  repostedBy={item.repostedBy}
+                  stats={stats.get(item.post.id)}
                   onDownload={requestExport}
                   currentUserId={user?.id}
-                  onDeleted={(id) => {
-                    setBeatPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
-                    setSignalPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
-                  }}
+                  onDeleted={removePostFromLists}
+                  onEdited={applyEdit}
                 />
               ))}
             </div>
@@ -431,10 +778,10 @@ function FeedPage() {
               way to reach anything older — once the platform passed 200 posts,
               earlier ones became permanently unreachable.
             */}
-            {hasMore && (
+            {(tab === "following" ? followingHasMore : hasMore) && (
               <button
                 type="button"
-                onClick={loadMore}
+                onClick={tab === "following" ? loadMoreFollowing : loadMore}
                 disabled={loadingMore}
                 className="btn btn-outline btn-block mt-6"
               >

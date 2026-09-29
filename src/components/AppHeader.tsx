@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { MessageSquare, Bell, Rss, PenSquare, Zap } from "lucide-react";
+import { MessageSquare, Bell, Rss, PenSquare, Zap, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { subscribeToUnreadCount } from "@/lib/unread-count";
@@ -177,6 +177,24 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
               <span className="skeleton h-9 w-9 rounded-full" />
             ) : user ? (
               <>
+                {/*
+                  Search is the one control here that is NOT desktop-only.
+                  The five bottom tabs are full, and search is how somebody finds
+                  a builder to follow — leaving it off phones would make the
+                  Following feed unreachable for most of the traffic.
+                */}
+                <Link
+                  to="/search"
+                  search={{ q: undefined, tab: undefined }}
+                  aria-label="Search"
+                  className="btn-icon"
+                  activeProps={{
+                    style: { background: "var(--surface-2)", color: "var(--foreground)" },
+                  }}
+                >
+                  <Search className="h-[18px] w-[18px]" />
+                </Link>
+
                 {/* Inbox and alerts: desktop only — the tab bar covers them on phones. */}
                 <Link
                   to="/messages"

@@ -2,6 +2,25 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { dsnOrigin, initMonitoring, reportError } from "./lib/monitoring";
+// Path only — the handler itself is imported lazily so Stripe's SDK stays out of
+// the startup path of a deployment that has no billing configured.
+import { STRIPE_WEBHOOK_PATH } from "./lib/stripe-webhook.server";
+
+/**
+ * Server-side error reporting, configured once per process.
+ *
+ * `SENTRY_DSN` is unprefixed and so never reaches the browser; the browser reads
+ * VITE_SENTRY_DSN and initialises itself (see lib/monitoring.browser.ts). The
+ * release defaults to the commit Railway built, which is what makes a stack trace
+ * attributable to a specific deploy.
+ */
+initMonitoring({
+  dsn: process.env.SENTRY_DSN,
+  release: process.env.APP_RELEASE ?? process.env.RAILWAY_GIT_COMMIT_SHA,
+  environment: process.env.NODE_ENV === "production" ? "production" : "development",
+  runtime: "server",
+});
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -20,7 +39,10 @@ async function getServerEntry(): Promise<ServerEntry> {
 
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
-async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
+async function normalizeCatastrophicSsrResponse(
+  response: Response,
+  requestUrl: string,
+): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -28,7 +50,9 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   const body = await response.clone().text();
   if (!isH3SwallowedErrorBody(body)) return response;
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  const error = consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`);
+  console.error(error);
+  reportError(error, { source: "ssr:h3-swallowed", url: requestUrl });
   return new Response(renderErrorPage(), {
     status: 500,
     headers: { "content-type": "text/html; charset=utf-8" },
@@ -93,9 +117,20 @@ function contentSecurityPolicy(): string {
   // saved card rendered in a fallback system font instead of Inter. These are the
   // same two origins style-src and font-src already trust to render the page, so
   // naming them here grants nothing new.
+  // The browser reporter POSTs an envelope to the Sentry ingest host. Without
+  // that origin in connect-src the CSP blocks the request, which would look
+  // exactly like "we have no client-side errors". Both DSN variables are
+  // consulted so a split server/browser project configuration still works.
+  const monitoringOrigins = new Set<string>();
+  for (const dsn of [process.env.SENTRY_DSN, process.env.VITE_SENTRY_DSN]) {
+    const origin = dsnOrigin(dsn);
+    if (origin) monitoringOrigins.add(origin);
+  }
+
   const connectSrc = [
     "'self'",
     ...supabaseOrigins,
+    ...monitoringOrigins,
     "https://fonts.googleapis.com",
     "https://fonts.gstatic.com",
   ].join(" ");
@@ -134,12 +169,31 @@ function applySecurityHeaders(response: Response): Response {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      /*
+       * Stripe's webhook is handled here, ahead of the router.
+       *
+       * Signature verification needs the unmodified request body, and this is the
+       * last point at which that is guaranteed. It also has to bypass the CSRF
+       * origin check that guards server functions: Stripe posts from its own
+       * infrastructure and sends no Origin header, so it would be rejected.
+       *
+       * Its own signature check is the authentication — see stripe-webhook.server.ts.
+       */
+      const url = new URL(request.url);
+      if (url.pathname === STRIPE_WEBHOOK_PATH) {
+        const { handleStripeWebhook } = await import("./lib/stripe-webhook.server");
+        // No security headers: this response is read by Stripe, not a browser, and
+        // a CSP on a JSON acknowledgement means nothing.
+        return await handleStripeWebhook(request);
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      const normalized = await normalizeCatastrophicSsrResponse(response);
+      const normalized = await normalizeCatastrophicSsrResponse(response, request.url);
       return applySecurityHeaders(normalized);
     } catch (error) {
       console.error(error);
+      reportError(error, { source: "ssr:unhandled", url: request.url });
       const errResponse = new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
