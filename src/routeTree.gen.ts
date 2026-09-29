@@ -27,6 +27,7 @@ import { Route as AuthenticatedAccountUsernameRouteImport } from './routes/_auth
 import { Route as AuthenticatedAccountSecurityRouteImport } from './routes/_authenticated/account-security'
 import { Route as AuthenticatedAccountPrivacyRouteImport } from './routes/_authenticated/account-privacy'
 import { Route as AuthenticatedAccountNotificationsRouteImport } from './routes/_authenticated/account-notifications'
+import { Route as AuthenticatedAccountDeleteRouteImport } from './routes/_authenticated/account-delete'
 import { Route as AuthenticatedMessagesIdRouteImport } from './routes/_authenticated/messages.$id'
 
 const SearchRoute = SearchRouteImport.update({
@@ -123,6 +124,12 @@ const AuthenticatedAccountNotificationsRoute =
     path: '/account-notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAccountDeleteRoute =
+  AuthenticatedAccountDeleteRouteImport.update({
+    id: '/account-delete',
+    path: '/account-delete',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMessagesIdRoute = AuthenticatedMessagesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -134,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/feed': typeof FeedRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
+  '/account-delete': typeof AuthenticatedAccountDeleteRoute
   '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/account-security': typeof AuthenticatedAccountSecurityRoute
@@ -154,6 +162,7 @@ export interface FileRoutesByTo {
   '/feed': typeof FeedRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
+  '/account-delete': typeof AuthenticatedAccountDeleteRoute
   '/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/account-security': typeof AuthenticatedAccountSecurityRoute
@@ -176,6 +185,7 @@ export interface FileRoutesById {
   '/feed': typeof FeedRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
+  '/_authenticated/account-delete': typeof AuthenticatedAccountDeleteRoute
   '/_authenticated/account-notifications': typeof AuthenticatedAccountNotificationsRoute
   '/_authenticated/account-privacy': typeof AuthenticatedAccountPrivacyRoute
   '/_authenticated/account-security': typeof AuthenticatedAccountSecurityRoute
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/reset-password'
     | '/search'
+    | '/account-delete'
     | '/account-notifications'
     | '/account-privacy'
     | '/account-security'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/reset-password'
     | '/search'
+    | '/account-delete'
     | '/account-notifications'
     | '/account-privacy'
     | '/account-security'
@@ -239,6 +251,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/reset-password'
     | '/search'
+    | '/_authenticated/account-delete'
     | '/_authenticated/account-notifications'
     | '/_authenticated/account-privacy'
     | '/_authenticated/account-security'
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/account-delete': {
+      id: '/_authenticated/account-delete'
+      path: '/account-delete'
+      fullPath: '/account-delete'
+      preLoaderRoute: typeof AuthenticatedAccountDeleteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/messages/$id': {
       id: '/_authenticated/messages/$id'
       path: '/$id'
@@ -416,6 +436,7 @@ const AuthenticatedMessagesRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAccountDeleteRoute: typeof AuthenticatedAccountDeleteRoute
   AuthenticatedAccountNotificationsRoute: typeof AuthenticatedAccountNotificationsRoute
   AuthenticatedAccountPrivacyRoute: typeof AuthenticatedAccountPrivacyRoute
   AuthenticatedAccountSecurityRoute: typeof AuthenticatedAccountSecurityRoute
@@ -431,6 +452,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAccountDeleteRoute: AuthenticatedAccountDeleteRoute,
   AuthenticatedAccountNotificationsRoute:
     AuthenticatedAccountNotificationsRoute,
   AuthenticatedAccountPrivacyRoute: AuthenticatedAccountPrivacyRoute,

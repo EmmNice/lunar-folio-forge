@@ -23,6 +23,10 @@ import {
   Ban,
   VolumeX,
   Volume2,
+  MapPin,
+  Code2,
+  FolderGit2,
+  Bookmark,
 } from "lucide-react";
 import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,8 +56,21 @@ import {
 import { describeWriteError } from "@/lib/db-errors";
 import { timeAgo } from "@/lib/time";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { SkillsInput } from "@/components/SkillsInput";
+import { FollowList } from "@/components/FollowList";
+import { SavedPosts } from "@/components/SavedPosts";
+import { AVAILABILITY_LABEL, AVAILABILITY_OPTIONS } from "@/lib/roles";
 
-const PROFILE_TABS = ["posts", "comments", "likes", "edit", "verification"] as const;
+const PROFILE_TABS = [
+  "posts",
+  "comments",
+  "likes",
+  "saved",
+  "followers",
+  "following",
+  "edit",
+  "verification",
+] as const;
 
 export const Route = createFileRoute("/u/$handle")({
   head: ({ params }) => ({
@@ -85,6 +102,18 @@ type ProfileRow = {
   hide_from_search: boolean;
   pitch_limit: number | null;
   dm_cloaking_enabled: boolean;
+  skills: string[] | null;
+  location: string | null;
+  availability_status: string | null;
+};
+
+/** A pinned project, in the order the owner arranged them. */
+type ProjectRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  url: string | null;
+  repo_url: string | null;
 };
 
 type PostRow = {
@@ -133,20 +162,35 @@ function tierRingColor(tier?: string | null) {
  * describes. Renders a placeholder dash until the counts arrive rather than a
  * zero, so the numbers never appear to drop from 0 to their real value.
  */
-function FollowCounts({ counts }: { counts: FollowCounts | null }) {
-  const cell = (value: number | null, label: string) => (
-    <span className="inline-flex items-baseline gap-1">
+function FollowCounts({
+  counts,
+  onOpen,
+}: {
+  counts: FollowCounts | null;
+  /** Counts that cannot be opened are just trivia; this is how the graph is browsed. */
+  onOpen: (mode: "followers" | "following") => void;
+}) {
+  const cell = (value: number | null, label: string, mode: "followers" | "following") => (
+    <button
+      type="button"
+      onClick={() => onOpen(mode)}
+      className="inline-flex items-baseline gap-1 rounded transition-opacity hover:opacity-80"
+    >
       <span className="text-[13px] font-semibold tabular-nums text-foreground">
         {value === null ? "—" : value.toLocaleString()}
       </span>
       <span className="text-[12px] text-tertiary">{label}</span>
-    </span>
+    </button>
   );
 
   return (
     <div className="mt-3 flex items-center gap-4">
-      {cell(counts?.followers ?? null, counts?.followers === 1 ? "follower" : "followers")}
-      {cell(counts?.following ?? null, "following")}
+      {cell(
+        counts?.followers ?? null,
+        counts?.followers === 1 ? "follower" : "followers",
+        "followers",
+      )}
+      {cell(counts?.following ?? null, "following", "following")}
     </div>
   );
 }
@@ -169,6 +213,7 @@ function ProfilePage() {
   const [busyMsg, setBusyMsg] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
 
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [counts, setCounts] = useState<FollowCounts | null>(null);
   const [rel, setRel] = useState<Relationship | null>(null);
   const [busyFollow, setBusyFollow] = useState(false);
@@ -197,7 +242,7 @@ function ProfilePage() {
       const { data: pf, error } = await supabase
         .from("profiles")
         .select(
-          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search, pitch_limit, dm_cloaking_enabled",
+          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search, pitch_limit, dm_cloaking_enabled, skills, location, availability_status",
         )
         .eq("handle", handle)
         .maybeSingle();
@@ -207,6 +252,16 @@ function ProfilePage() {
         return;
       }
       setProfile(pf as ProfileRow);
+
+      // Pinned projects — public, and ordered the way the owner arranged them.
+      const { data: projectData } = await supabase
+        .from("profile_projects")
+        .select("id, name, description, url, repo_url")
+        .eq("user_id", pf.id)
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (cancelled) return;
+      setProjects((projectData ?? []) as ProjectRow[]);
 
       // Posts
       const { data: postsData } = await supabase
@@ -528,16 +583,30 @@ function ProfilePage() {
 
   // SELF VIEW
   if (isSelf && me) {
-    const activeTab = tab === "comments" || tab === "likes" ? tab : "posts";
+    type SelfTab = "posts" | "comments" | "likes" | "saved" | "followers" | "following";
+    const activeTab: SelfTab =
+      tab === "comments" ||
+      tab === "likes" ||
+      tab === "saved" ||
+      tab === "followers" ||
+      tab === "following"
+        ? tab
+        : "posts";
 
-    function setTab(t: "posts" | "comments" | "likes") {
+    function setTab(t: SelfTab) {
       navigate({ to: "/u/$handle", params: { handle }, search: { tab: t } });
     }
 
+    /*
+      Four tabs in the bar, not six. Followers and Following are reached by tapping
+      the counts above — putting six tabs across a 390px viewport makes each one a
+      cramped target, and the counts are the affordance people already reach for.
+    */
     const PROFILE_TABS = [
       { key: "posts" as const, label: "Posts", icon: FileText },
       { key: "comments" as const, label: "Comments", icon: MessageSquare },
       { key: "likes" as const, label: "Likes", icon: Heart },
+      { key: "saved" as const, label: "Saved", icon: Bookmark },
     ];
 
     return (
@@ -603,7 +672,18 @@ function ProfilePage() {
               {me.role_type ? ` · ${ROLE_LABEL[me.role_type]}` : ""}
             </p>
             {me.bio && <p className="mt-2 max-w-prose text-sm text-foreground/85">{me.bio}</p>}
-            <FollowCounts counts={counts} />
+            <DeveloperDetails
+              skills={me.skills}
+              location={me.location}
+              availability={me.availability_status}
+              projects={projects}
+            />
+            <FollowCounts
+              counts={counts}
+              onOpen={(mode) =>
+                navigate({ to: "/u/$handle", params: { handle }, search: { tab: mode } })
+              }
+            />
           </div>
 
           {/* Tab bar */}
@@ -760,6 +840,29 @@ function ProfilePage() {
                   ))}
                 </div>
               ))}
+
+            {/* FOLLOWERS / FOLLOWING — opened from the counts above */}
+            {(activeTab === "followers" || activeTab === "following") && (
+              <div>
+                <div className="segmented mb-4 sm:max-w-[16rem]">
+                  {(["followers", "following"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setTab(m)}
+                      data-active={activeTab === m}
+                      className="segmented-item"
+                    >
+                      {m === "followers" ? "Followers" : "Following"}
+                    </button>
+                  ))}
+                </div>
+                <FollowList profileId={me.id} mode={activeTab} />
+              </div>
+            )}
+
+            {/* SAVED — private to the owner, enforced by the bookmarks policies */}
+            {activeTab === "saved" && <SavedPosts userId={me.id} />}
 
             {/* LIKES */}
             {activeTab === "likes" &&
@@ -973,7 +1076,12 @@ function ProfilePage() {
             {profile.bio && (
               <p className="mt-2 max-w-prose text-sm text-foreground/90">{profile.bio}</p>
             )}
-            <FollowCounts counts={counts} />
+            <FollowCounts
+              counts={counts}
+              onOpen={(mode) =>
+                navigate({ to: "/u/$handle", params: { handle }, search: { tab: mode } })
+              }
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1156,50 +1264,82 @@ function ProfilePage() {
           </div>
         )}
 
-        {/* Cards grid */}
-        <section className="mt-10">
-          <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Cards
-          </h2>
-          {posts.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">Nothing published yet.</p>
-          ) : (
-            <div className="mt-4 space-y-4">
-              {posts.map((p) => {
-                const feedPost: FeedPost = {
-                  id: p.id,
-                  content: p.content,
-                  background: p.background,
-                  comments_enabled: p.comments_enabled,
-                  visibility: p.visibility,
-                  created_at: p.created_at,
-                  edited_at: p.edited_at,
-                  author: {
-                    id: profile.id,
-                    handle: profile.handle,
-                    display_name: profile.display_name,
-                    avatar_url: profile.avatar_url,
-                    verification_tier: profile.verification_tier,
-                  },
-                };
-                return (
-                  <PostCard
-                    key={p.id}
-                    post={feedPost}
-                    currentUserId={user?.id}
-                    onDownload={requestExport}
-                    onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
-                    onEdited={(id, content, editedAt) =>
-                      setPosts((prev) =>
-                        prev.map((x) => (x.id === id ? { ...x, content, edited_at: editedAt } : x)),
-                      )
-                    }
-                  />
-                );
-              })}
+        {tab === "followers" || tab === "following" ? (
+          <section className="mt-8">
+            <div className="segmented mb-4 sm:max-w-[16rem]">
+              {(["followers", "following"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() =>
+                    navigate({ to: "/u/$handle", params: { handle }, search: { tab: m } })
+                  }
+                  data-active={tab === m}
+                  className="segmented-item"
+                >
+                  {m === "followers" ? "Followers" : "Following"}
+                </button>
+              ))}
             </div>
-          )}
-        </section>
+            <FollowList profileId={profile.id} mode={tab} />
+          </section>
+        ) : (
+          <>
+            <DeveloperDetails
+              skills={profile.skills}
+              location={profile.location}
+              availability={profile.availability_status}
+              projects={projects}
+            />
+
+            {/* Cards grid */}
+            <section className="mt-10">
+              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Cards
+              </h2>
+              {posts.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">Nothing published yet.</p>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  {posts.map((p) => {
+                    const feedPost: FeedPost = {
+                      id: p.id,
+                      content: p.content,
+                      background: p.background,
+                      comments_enabled: p.comments_enabled,
+                      visibility: p.visibility,
+                      created_at: p.created_at,
+                      edited_at: p.edited_at,
+                      author: {
+                        id: profile.id,
+                        handle: profile.handle,
+                        display_name: profile.display_name,
+                        avatar_url: profile.avatar_url,
+                        verification_tier: profile.verification_tier,
+                      },
+                    };
+                    return (
+                      <PostCard
+                        key={p.id}
+                        post={feedPost}
+                        currentUserId={user?.id}
+                        onDownload={requestExport}
+                        onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                        onEdited={(id, content, editedAt) =>
+                          setPosts((prev) =>
+                            prev.map((x) =>
+                              x.id === id ? { ...x, content, edited_at: editedAt } : x,
+                            ),
+                          )
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
 
       {showPitchModal && user && me && (
@@ -1211,6 +1351,128 @@ function ProfilePage() {
       )}
 
       {exportSurface}
+    </div>
+  );
+}
+
+/**
+ * The part of a profile that says what someone builds.
+ *
+ * Kept as one block used by both the owner's and the visitor's view, because the
+ * two views of a profile drifting apart is a bug this file has already had once.
+ * Renders nothing at all when there is nothing to say — an empty "Skills" heading
+ * is worse than no heading.
+ */
+function DeveloperDetails({
+  skills,
+  location,
+  availability,
+  projects,
+}: {
+  skills: string[] | null;
+  location: string | null;
+  availability: string | null;
+  projects: ProjectRow[];
+}) {
+  const hasSkills = (skills?.length ?? 0) > 0;
+  const hasProjects = projects.length > 0;
+  if (!hasSkills && !location && !availability && !hasProjects) return null;
+
+  return (
+    <div className="mt-6 space-y-6">
+      {(location || availability) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+          {location && (
+            <span className="inline-flex items-center gap-1.5 text-secondary">
+              <MapPin className="h-3.5 w-3.5 text-tertiary" />
+              {location}
+            </span>
+          )}
+          {availability && AVAILABILITY_LABEL[availability] && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium"
+              style={{
+                background: "rgba(52,211,153,0.10)",
+                color: "#34d399",
+                border: "1px solid rgba(52,211,153,0.22)",
+              }}
+            >
+              {AVAILABILITY_LABEL[availability]}
+            </span>
+          )}
+        </div>
+      )}
+
+      {hasSkills && (
+        <div>
+          <h2 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">
+            <Code2 className="h-3 w-3" />
+            Builds with
+          </h2>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {skills!.map((skill) => (
+              /* Each skill links into search, which is what makes them worth
+                 storing: a tag you cannot follow to other people is decoration. */
+              <Link
+                key={skill}
+                to="/search"
+                search={{ q: skill, tab: "people" }}
+                className="rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors"
+                style={{
+                  background: "rgba(251,191,36,0.10)",
+                  color: "var(--gold)",
+                  border: "1px solid rgba(251,191,36,0.20)",
+                }}
+              >
+                {skill}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {hasProjects && (
+        <div>
+          <h2 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-tertiary">
+            <FolderGit2 className="h-3 w-3" />
+            Pinned work
+          </h2>
+          <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+            {projects.map((proj) => (
+              <div key={proj.id} className="card p-3.5">
+                <p className="text-[13px] font-semibold text-foreground">{proj.name}</p>
+                {proj.description && (
+                  <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-secondary">
+                    {proj.description}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
+                  {proj.url && (
+                    <a
+                      href={proj.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 text-sky-400 hover:underline underline-offset-2"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Live
+                    </a>
+                  )}
+                  {proj.repo_url && (
+                    <a
+                      href={proj.repo_url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 text-secondary hover:underline underline-offset-2"
+                    >
+                      <Github className="h-3 w-3" /> Code
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1227,6 +1489,9 @@ type SelfProfile = {
   verification_tier: VerificationTier;
   github_url: string | null;
   portfolio_url: string | null;
+  skills: string[] | null;
+  location: string | null;
+  availability_status: string | null;
 };
 
 // Inline edit form
@@ -1244,6 +1509,9 @@ function EditProfileForm({
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
   const [githubUrl, setGithubUrl] = useState(profile.github_url ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(profile.portfolio_url ?? "");
+  const [skills, setSkills] = useState<string[]>(profile.skills ?? []);
+  const [location, setLocation] = useState(profile.location ?? "");
+  const [availability, setAvailability] = useState(profile.availability_status ?? "");
   const [busy, setBusy] = useState(false);
 
   const roleOptions: { value: RoleType | ""; label: string }[] = [
@@ -1275,6 +1543,11 @@ function EditProfileForm({
         role_type: roleType || null,
         github_url: githubUrl.trim() || null,
         portfolio_url: websiteUrl.trim() || null,
+        skills,
+        location: location.trim() || null,
+        // "" is the placeholder option, and the CHECK only accepts a known value
+        // or NULL — so an empty selection has to become NULL, not an empty string.
+        availability_status: availability || null,
       })
       .eq("id", profile.id);
     setBusy(false);
@@ -1341,6 +1614,36 @@ function EditProfileForm({
           maxLength={200}
         />
       </Field>
+
+      <Field label="Skills" hint="Languages, frameworks and tools. People search by these.">
+        <SkillsInput value={skills} onChange={setSkills} disabled={busy} />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Location" hint="Optional. A city, a country, or just a timezone.">
+          <input
+            className="lux-field"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            maxLength={80}
+            placeholder="Lagos · remote"
+          />
+        </Field>
+        <Field label="Open to">
+          <select
+            className="lux-field"
+            value={availability}
+            onChange={(e) => setAvailability(e.target.value)}
+          >
+            <option value="">Not saying</option>
+            {AVAILABILITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
 
       <div
         className="rounded-2xl p-1"

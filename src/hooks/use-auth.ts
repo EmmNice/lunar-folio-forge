@@ -4,7 +4,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { parseNotificationPrefs, type NotificationPrefs } from "@/lib/notification-prefs";
 import { resetPerUserState } from "@/lib/session-reset";
 
-export type RoleType = "founder" | "developer" | "pm" | "investor";
+export type RoleType =
+  | "founder"
+  | "developer"
+  | "pm"
+  | "investor"
+  // Added with the widened role_type CHECK in 20260930000200.
+  | "designer"
+  | "devops"
+  | "data"
+  | "security"
+  | "student";
 export type VerificationTier = "none" | "silver" | "gold";
 
 export type Profile = {
@@ -17,6 +27,11 @@ export type Profile = {
   role_type: RoleType | null;
   company_name: string | null;
   onboarding_completed: boolean;
+  /** Languages, frameworks and tools. Normalised lowercase by the DB trigger. */
+  skills: string[] | null;
+  location: string | null;
+  /** What they are open to; see AVAILABILITY_LABEL in lib/roles.ts. */
+  availability_status: string | null;
   verification_tier: VerificationTier;
   github_url: string | null;
   portfolio_url: string | null;

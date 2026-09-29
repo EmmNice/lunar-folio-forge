@@ -11,6 +11,7 @@ import {
   Inbox,
   CreditCard,
   AtSign,
+  Trash2,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
@@ -56,6 +57,12 @@ const SETTINGS_NAV = [
     desc: "Plan & payment method",
     icon: CreditCard,
     to: "/billing",
+  },
+  {
+    label: "Delete account",
+    desc: "Permanently remove your data",
+    icon: Trash2,
+    to: "/account-delete",
   },
 ] as const;
 
