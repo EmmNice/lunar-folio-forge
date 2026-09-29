@@ -80,6 +80,7 @@ sync — whichever builder is active needs every one declared.
 > removes the failure mode; if you ever pin back, re-test static assets directly
 > rather than relying on a healthcheck against `/`, which is SSR and stays green
 > either way.
+
 - **Start**: `bun .output/server/index.mjs`
   - Listens on `PORT` (Railway injects this)
   - Serves static assets from `.output/public/`
