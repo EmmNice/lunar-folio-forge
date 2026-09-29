@@ -239,6 +239,8 @@ function useAuthState(): AuthState {
   const resolutionSeq = useRef(0);
   /** Last committed user id, to detect an account switch rather than a refresh. */
   const committedUserId = useRef<string | null>(null);
+  /** Whether a profile has actually been loaded for the committed user. */
+  const hasProfile = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -260,6 +262,7 @@ function useAuthState(): AuthState {
         if (cancelled || seq !== resolutionSeq.current) return;
 
         committedUserId.current = user?.id ?? null;
+        hasProfile.current = profile !== null;
         setState({ loading: false, session, user, profile, isAdmin });
       } catch (error) {
         logAuthIssue(`${reason} failed:`, error);
@@ -282,6 +285,20 @@ function useAuthState(): AuthState {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+
+      /*
+        Supabase fires SIGNED_IN when it restores a session on page load, which the
+        getSession() call above has already resolved — so every load did the work
+        twice. Measured as 2 x current_profile and 2 x user_roles per cold feed load
+        after the provider landed.
+
+        Skipped only when the user is unchanged AND a profile is already in hand.
+        USER_UPDATED always re-reads, because that is the event that means the
+        profile changed.
+      */
+      const sameUser = (session?.user?.id ?? null) === committedUserId.current;
+      if (event === "SIGNED_IN" && sameUser && hasProfile.current) return;
+
       void resolve(session, event);
     });
 
@@ -301,6 +318,7 @@ function useAuthState(): AuthState {
       const { profile, isAdmin } = await loadProfile(user);
       if (seq !== resolutionSeq.current) return;
       committedUserId.current = user?.id ?? null;
+      hasProfile.current = profile !== null;
       setState((s) => ({ ...s, user, session: data.session, profile, isAdmin }));
     } catch (error) {
       logAuthIssue("profile refresh failed:", error);

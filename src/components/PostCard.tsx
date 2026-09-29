@@ -76,6 +76,14 @@ export type PostStats = {
   comments: number;
   likedByMe: boolean;
   repostedByMe: boolean;
+  /**
+   * Whether the viewer has saved this post.
+   *
+   * Batched with the rest rather than fetched per card. Adding bookmarks as a
+   * per-card query reintroduced exactly the N+1 this type exists to prevent —
+   * measured as one `bookmarks` request per rendered post on the live feed.
+   */
+  bookmarkedByMe: boolean;
 };
 
 export function PostCard({
@@ -160,6 +168,8 @@ export function PostCard({
     read. One indexed primary-key lookup per card, and none at all when signed out.
   */
   useEffect(() => {
+    // The parent batched it; one request for the whole page already covered this.
+    if (stats) return;
     const uid = user?.id;
     if (!uid) {
       setBookmarked(false);
@@ -178,7 +188,7 @@ export function PostCard({
     return () => {
       cancelled = true;
     };
-  }, [user?.id, post.id]);
+  }, [user?.id, post.id, stats]);
 
   async function toggleBookmark() {
     if (!user) {
@@ -220,6 +230,7 @@ export function PostCard({
     setCommentCount(stats.comments);
     setLiked(stats.likedByMe);
     setReposted(stats.repostedByMe);
+    setBookmarked(stats.bookmarkedByMe);
   }, [stats]);
 
   // Standalone fallback for cards rendered outside a list that batches counts.
