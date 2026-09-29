@@ -10,7 +10,20 @@ import { timeAgo } from "@/lib/time";
 import { EmptyState, ListSkeleton, PageHeader } from "@/components/states";
 import { MessageSquare } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/messages")({
+/*
+ * Named messages.index.tsx, not messages.tsx, and that matters.
+ *
+ * As `messages.tsx` this file became the *parent layout* of messages.$id: the
+ * router nested the two, so navigating to /messages/<id> rendered this list and
+ * mounted the thread only where an <Outlet /> was — and there is no Outlet here.
+ * Tapping a conversation changed the URL and left you looking at the same list,
+ * with no composer anywhere, because the thread had never been rendered. Messaging
+ * was unusable end to end.
+ *
+ * As an index route the two are siblings: /messages renders this, /messages/<id>
+ * renders the thread.
+ */
+export const Route = createFileRoute("/_authenticated/messages/")({
   head: () => ({ meta: [{ title: "Messages · The Ledger" }] }),
   component: MessagesIndex,
 });
