@@ -20,12 +20,7 @@ import { resetPerUserState } from "@/lib/session-reset";
 import { useQueryClient } from "@tanstack/react-query";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { LedgerMark } from "@/components/AppHeader";
-
-function tierRingColor(tier?: string | null) {
-  if (tier === "gold") return "rgba(251,191,36,0.85)";
-  if (tier === "silver") return "rgba(148,163,184,0.70)";
-  return "rgba(255,255,255,0.15)";
-}
+import { ACTION_INK, ACTION_SURFACE, tierVisual, type Tier } from "@/lib/tier-style";
 
 const SETTINGS_NAV = [
   {
@@ -85,6 +80,8 @@ export function ProfileDrawer({
   onOpenChange: (o: boolean) => void;
 }) {
   const { user, profile } = useAuth();
+  // One derivation for every tier-coloured surface in the drawer.
+  const visual = tierVisual(profile?.verification_tier as Tier);
   const isGold = profile?.verification_tier === "gold";
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -126,8 +123,7 @@ export function ProfileDrawer({
           <div
             className="pointer-events-none absolute inset-0"
             style={{
-              background:
-                "radial-gradient(ellipse 200px 130px at 30px -20px, rgba(251,191,36,0.07) 0%, transparent 100%)",
+              background: `radial-gradient(ellipse 200px 130px at 30px -20px, ${visual.wash} 0%, transparent 100%)`,
             }}
           />
 
@@ -136,7 +132,7 @@ export function ProfileDrawer({
             className="relative h-[60px] w-[60px] overflow-hidden rounded-full"
             style={{
               background: "rgba(255,255,255,0.07)",
-              boxShadow: `0 0 0 2.5px ${tierRingColor(profile?.verification_tier)}, 0 0 0 4.5px #0B0B0C`,
+              boxShadow: `0 0 0 2.5px ${visual.ring}, 0 0 0 4.5px #0B0B0C`,
             }}
           >
             {profile?.avatar_url ? (
@@ -180,7 +176,7 @@ export function ProfileDrawer({
               to="/onboarding"
               onClick={close}
               className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-background transition-opacity hover:opacity-90"
-              style={{ background: "#FBBF24" }}
+              style={{ background: ACTION_SURFACE, color: ACTION_INK }}
             >
               <User className="h-3 w-3" />
               Complete your profile
@@ -236,7 +232,7 @@ export function ProfileDrawer({
               >
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-                  style={{ background: "rgba(251,191,36,0.10)" }}
+                  style={{ background: visual.wash }}
                 >
                   <item.icon className="h-[15px] w-[15px] text-amber-400" strokeWidth={1.8} />
                 </div>

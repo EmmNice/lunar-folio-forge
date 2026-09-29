@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { subscribeToUnreadCount } from "@/lib/unread-count";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
+import { tierVisual, type Tier } from "@/lib/tier-style";
 
 /** The Ledger geometric mark — three ascending signal bars */
 export function LedgerMark({ className }: { className?: string }) {
@@ -15,13 +16,6 @@ export function LedgerMark({ className }: { className?: string }) {
       <rect x="17" y="0" width="5" height="18" rx="1.5" fill="#FBBF24" />
     </svg>
   );
-}
-
-/** Tier-colored avatar ring */
-function tierRingColor(tier?: string | null) {
-  if (tier === "gold") return "rgba(251,191,36,0.80)";
-  if (tier === "silver") return "rgba(203,213,225,0.65)";
-  return "rgba(255,255,255,0.14)";
 }
 
 const PRIMARY_NAV = [
@@ -73,14 +67,17 @@ function Avatar({
   tier?: string | null;
   size?: number;
 }) {
+  // Derived, not hardcoded: an unverified member gets a neutral avatar rather than
+  // the amber one that used to imply a badge they do not hold.
+  const visual = tierVisual(tier as Tier);
   return (
     <span
       className="relative flex shrink-0 overflow-hidden rounded-full"
       style={{
         width: size,
         height: size,
-        boxShadow: `0 0 0 2px ${tierRingColor(tier)}`,
-        background: url ? "transparent" : "rgba(251,191,36,0.16)",
+        boxShadow: `0 0 0 2px ${visual.ring}`,
+        background: url ? "transparent" : visual.fill,
       }}
     >
       {url ? (
@@ -88,7 +85,7 @@ function Avatar({
       ) : (
         <span
           className="grid h-full w-full place-items-center text-[13px] font-bold"
-          style={{ color: "var(--gold)" }}
+          style={{ color: visual.ink }}
         >
           {initial}
         </span>
@@ -300,7 +297,7 @@ export function MobileNav() {
             {isActive && (
               <span
                 className="absolute inset-x-[26%] top-0 h-[2px] rounded-b-full"
-                style={{ background: "var(--gold)" }}
+                style={{ background: "var(--foreground)" }}
               />
             )}
 
@@ -316,8 +313,8 @@ export function MobileNav() {
                 <span
                   className="absolute -right-1.5 -top-1 rounded-full px-1 text-[9px] font-bold leading-[14px]"
                   style={{
-                    background: "var(--gold)",
-                    color: "#000",
+                    background: "var(--foreground)",
+                    color: "#0B0B0C",
                     minWidth: 14,
                     height: 14,
                     textAlign: "center",
