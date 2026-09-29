@@ -236,7 +236,7 @@ export const recheckVerificationProof = createServerFn({ method: "POST" })
     const { data: application } = await supabaseAdmin
       .from("verification_requests")
       .select(
-        "id, tier, status, github_url, portfolio_url, linkedin_or_x_url, live_project_url, proof_checked_at, proof_verified_at",
+        "id, tier, status, github_url, portfolio_url, linkedin_or_x_url, live_project_url, traction_evidence_url, gold_track, proof_checked_at, proof_verified_at",
       )
       .eq("user_id", userId)
       .eq("tier", data.tier)
@@ -268,6 +268,8 @@ export const recheckVerificationProof = createServerFn({ method: "POST" })
       portfolioUrl: application.portfolio_url,
       linkedinOrXUrl: application.linkedin_or_x_url,
       liveProjectUrl: application.live_project_url,
+      tractionEvidenceUrl: application.traction_evidence_url,
+      goldTrack: application.gold_track as "founder" | "backer" | null,
     });
 
     return { ...outcome, alreadyVerified: false };
@@ -290,6 +292,8 @@ async function checkAndRecordProof(
     portfolioUrl: string | null;
     linkedinOrXUrl: string | null;
     liveProjectUrl: string | null;
+    tractionEvidenceUrl: string | null;
+    goldTrack: "founder" | "backer" | null;
   },
 ): Promise<{ verified: boolean; detail: string }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -674,6 +678,8 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
           portfolioUrl: data.portfolio_url || null,
           linkedinOrXUrl: data.linkedin_or_x_url || null,
           liveProjectUrl: data.live_project_url || null,
+          tractionEvidenceUrl: data.traction_evidence_url || null,
+          goldTrack: data.tier === "gold" ? (data.gold_track ?? null) : null,
         });
       } catch (checkError) {
         console.error("[verification] Proof check failed after submit:", checkError);
