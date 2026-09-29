@@ -729,6 +729,100 @@ chk "a mention in a comment also notifies" "1" \
 chk "notifications accept type=mention" "t" \
   "select pg_get_constraintdef(oid) like '%mention%' from pg_constraint where conname='notifications_type_check'"
 
+echo
+echo "Verification anti-fraud"
+
+# Every member gets a proof code, and it is NOT public. The code is what ties a
+# claimed GitHub account or domain to this member, so one member being able to read
+# another's would let them publish somebody else's proof.
+chk "every profile has a verification proof code" "0" \
+  "select count(*) from public.profiles where verification_proof_code is null"
+chk "proof codes are distinct per member" "t" \
+  "select count(distinct verification_proof_code) = count(*) from public.profiles"
+chk "proof code is NOT readable by authenticated" "f" \
+  "select has_column_privilege('authenticated','public.profiles','verification_proof_code','select')"
+chk "proof code is NOT readable by anon" "f" \
+  "select has_column_privilege('anon','public.profiles','verification_proof_code','select')"
+chk "proof code is not client-writable" "f" \
+  "select has_column_privilege('authenticated','public.profiles','verification_proof_code','update')"
+
+# Gold was obtainable by typing a company name with no link of any kind. A reviewer
+# cannot check a string, and neither can the automated proof check.
+chk_err "a gold application with no verifiable link is refused" \
+  "insert into public.verification_requests (user_id, tier, link_primary, fund_or_company_name) values ('$MEMBER','gold','https://example.com','Totally Real Capital')"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+insert into public.verification_requests (user_id, tier, link_primary, fund_or_company_name, portfolio_url)
+  values ('$MEMBER','gold','https://example.com','Real Capital','https://realcapital.example');
+SQL
+chk "a gold application WITH a link is accepted" "1" \
+  "select count(*) from public.verification_requests where user_id='$MEMBER' and tier='gold'"
+chk_err "a silver application with no github is refused" \
+  "insert into public.verification_requests (user_id, tier, link_primary) values ('$GOLD','silver','https://example.com')"
+
+# Only a *pending* application used to block a new one, so a rejected applicant
+# could resubmit instantly and without limit.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.verification_requests;
+insert into public.verification_requests (user_id, tier, link_primary, github_url, status, reviewed_at)
+  values ('$MEMBER','silver','https://github.com/x','https://github.com/x','rejected', now() - interval '2 days');
+SQL
+chk_err "reapplying 2 days after a rejection is refused" \
+  "insert into public.verification_requests (user_id, tier, link_primary, github_url) values ('$MEMBER','silver','https://github.com/x','https://github.com/x')"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.verification_requests set reviewed_at = now() - interval '9 days' where user_id='$MEMBER';
+SQL
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+insert into public.verification_requests (user_id, tier, link_primary, github_url)
+  values ('$MEMBER','silver','https://github.com/x','https://github.com/x');
+SQL
+chk "reapplying 9 days after a rejection is allowed" "1" \
+  "select count(*) from public.verification_requests where user_id='$MEMBER' and tier='silver' and status='pending'"
+
+# An account with no finished profile has no identity to verify.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.verification_requests;
+update public.profiles set onboarding_completed = false where id='$MEMBER';
+SQL
+chk_err "an unonboarded account cannot apply" \
+  "insert into public.verification_requests (user_id, tier, link_primary, github_url) values ('$MEMBER','silver','https://github.com/x','https://github.com/x')"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set onboarding_completed = true where id='$MEMBER';
+SQL
+
+# A newly approved Gold member had pitch_limit NULL, i.e. an uncapped inbox, at
+# exactly the moment they became the most attractive target on the platform.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set verification_tier='none', pitch_limit=null where id='$MEMBER';
+update public.profiles set verification_tier='gold' where id='$MEMBER';
+SQL
+chk "approving Gold caps the inbox by default" "10" \
+  "select pitch_limit from public.profiles where id='$MEMBER'"
+# ...but a Gold member who already chose a limit keeps it.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set verification_tier='none', pitch_limit=3 where id='$MEMBER';
+update public.profiles set verification_tier='gold' where id='$MEMBER';
+SQL
+chk "an existing pitch limit is not overwritten" "3" \
+  "select pitch_limit from public.profiles where id='$MEMBER'"
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+update public.profiles set verification_tier='none', pitch_limit=null where id='$MEMBER';
+SQL
+
+# The tier itself still cannot be self-granted -- the whole process rests on this.
+asb "a member still cannot grant themselves gold" "ERROR" "$MEMBER" \
+  "update public.profiles set verification_tier='gold' where id='$MEMBER';"
+# RLS filters the row rather than raising, so the statement reports UPDATE 0. That
+# is the secure outcome; the property worth asserting is that the status did not move.
+q -v ON_ERROR_STOP=1 >/dev/null 2>&1 <<SQL
+delete from public.verification_requests;
+insert into public.verification_requests (user_id, tier, link_primary, github_url, status)
+  values ('$MEMBER','silver','https://github.com/x','https://github.com/x','pending');
+SQL
+asb "a member's self-approval affects no rows" "UPDATE0" "$MEMBER" \
+  "update public.verification_requests set status='approved' where user_id='$MEMBER';"
+chk "the application is still pending afterwards" "pending" \
+  "select status from public.verification_requests where user_id='$MEMBER'"
+
 
 echo
 printf "TOTAL: \033[32m%d passed\033[0m, \033[31m%d failed\033[0m\n" "$PASS" "$FAIL"
