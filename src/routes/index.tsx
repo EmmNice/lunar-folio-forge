@@ -150,10 +150,30 @@ function Landing() {
   const [confirmEmail, setConfirmEmail] = useState("");
 
   useEffect(() => {
+    // A recovery link normally lands on /reset-password, because that is the
+    // redirectTo we ask for. But if the URL ever falls back to the project's Site
+    // URL -- an allow-list that does not cover the path, or a link generated
+    // elsewhere such as the Supabase dashboard -- it arrives here instead. Without
+    // this branch, detectSessionInUrl would quietly establish the recovery
+    // session, the redirect below would send the member to /feed, and the one
+    // thing they came to do would be impossible.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const query = new URLSearchParams(window.location.search);
+    const isRecovery = hash.get("type") === "recovery" || query.get("type") === "recovery";
+
+    if (isRecovery) {
+      navigate({ to: "/reset-password", replace: true });
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/feed", replace: true });
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate({ to: "/reset-password", replace: true });
+        return;
+      }
       if (event === "SIGNED_IN" && session) navigate({ to: "/feed", replace: true });
     });
     return () => sub.subscription.unsubscribe();
