@@ -59,23 +59,34 @@ function VerificationPage() {
           <p className="text-[13px] leading-relaxed text-secondary">
             A badge is not decoration — it decides where your posts appear and who can reach you.
           </p>
-          <ul className="space-y-2 text-[12px] leading-relaxed text-tertiary">
+          <ul className="space-y-2.5 text-[12px] leading-relaxed text-tertiary">
             <li>
-              <span className="font-medium text-secondary">Silver — for builders who ship.</span>{" "}
-              Your posts appear in Signal alongside the rest of the verified feed, and PulseAssist
-              stops counting your credits.
+              <span className="font-medium text-secondary">Silver — for builders.</span> Developers,
+              startup teams, designers, indie hackers: anyone shipping. You need a GitHub profile
+              and one thing you have actually built — a live URL or a deployed contract. Your posts
+              then appear in Signal, and PulseAssist stops counting your credits.
             </li>
             <li>
-              <span className="font-medium text-secondary">
-                Gold — for investors, funds and companies.
-              </span>{" "}
-              Signal visibility, the Whisper audience, and a pitch inbox other members can reach.
+              <span className="font-medium text-secondary">Gold — two ways in.</span>
+              <span className="mt-1 block">
+                <span className="font-medium text-secondary">Founders and operators</span> who have
+                launched something with real users and real transactions. Not an idea, not a
+                waitlist — a product people use, with somewhere public a reviewer can see that.
+              </span>
+              <span className="mt-1 block">
+                <span className="font-medium text-secondary">Backers</span> — funds, angels and
+                companies that invest.
+              </span>
+              <span className="mt-1 block">
+                Either way: Signal visibility, the Whisper audience, and a pitch inbox other members
+                can reach.
+              </span>
             </li>
           </ul>
           <p className="text-[12px] leading-relaxed text-tertiary">
-            Both tracks ask you to publish a short code where only the real owner of the account
-            could put it. That is the part a human reviewer cannot check by eye, and it is what
-            keeps somebody from applying with a link to your GitHub.
+            Every track asks you to publish a short code where only the real owner could put it —
+            your GitHub bio, or the site you are claiming. That is the part a reviewer cannot check
+            by eye, and it is what stops somebody applying with a link to your work.
           </p>
         </div>
 

@@ -48,7 +48,7 @@ function optionalText(max: number) {
 }
 
 function approvalEmailHtml(tierLabel: string, ctaUrl: string) {
-  const isSilver = tierLabel === "Silver Builder";
+  const isSilver = tierLabel.startsWith("Silver");
 
   const badge = isSilver
     ? `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.30);border-radius:100px;padding:5px 12px;font-size:12px;font-weight:600;color:#94a3b8;">&#10022; Silver Verified</span>`
@@ -60,18 +60,27 @@ function approvalEmailHtml(tierLabel: string, ctaUrl: string) {
         [
           "&#128225;",
           "Signal feed visibility",
-          "your posts surface in the highest-signal tab on the platform.",
+          "your posts appear in Signal, the verified builders' timeline.",
         ],
         ["&#128304;", "Silver badge", "displayed on your profile and every post you publish."],
       ]
     : [
         ["&#9854;", "Unlimited AI & pitch credits", "every PulseAssist and pitch tool, no limits."],
         [
-          "&#127760;",
-          "Premium network access",
-          "connect with verified founders and investors directly.",
+          "&#128233;",
+          "A pitch inbox",
+          "other verified members can reach you directly, with a weekly cap you control.",
         ],
-        ["&#129351;", "Gold badge", "the highest prestige tier on The Ledger."],
+        [
+          "&#128272;",
+          "The Whisper audience",
+          "read and publish to the feed reserved for Gold members.",
+        ],
+        [
+          "&#129351;",
+          "Gold badge",
+          "for founders who have launched, and the people who back them.",
+        ],
       ];
 
   const perkRows = perks
@@ -137,9 +146,11 @@ function rejectionEmailHtml(ctaUrl: string) {
       we were unable to verify your account with the details provided at this time.
     </p>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.65;color:rgba(245,245,246,0.70);">
-      Please make sure you provide accurate information and meet all the required criteria
-      for your chosen track — your GitHub profile should show active public repositories,
-      or your fund/company should be publicly verifiable.
+      Please make sure the details are accurate and meet the criteria for your track.
+      Silver asks for a GitHub profile with active public repositories and something you have
+      shipped. Gold asks either for a launched product with evidence of real users and
+      transactions, or for a fund or company whose work is publicly verifiable. Either way, the
+      proof code must be published where we can find it.
     </p>
     <p style="margin:0 0 32px;font-size:15px;line-height:1.65;color:rgba(245,245,246,0.70);">
       <strong style="color:#F5F5F6;">You are welcome to reapply at any time.</strong> Simply visit your
@@ -332,6 +343,15 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
     z
       .object({
         tier: z.enum(["silver", "gold"]),
+        /*
+          Which kind of Gold. A founder who has launched something with real users
+          and a fund that writes cheques both need the same reach and prove it in
+          completely different ways, so the tier carries a track and the evidence
+          rules branch on it (20260930000700).
+        */
+        gold_track: z.enum(["founder", "backer"]).optional(),
+        traction_summary: optionalText(280),
+        traction_evidence_url: httpUrl(500),
         // The content of each link is judged by a human reviewer, but the *shape*
         // is not a matter of opinion. These were plain `z.string().max(500)`,
         // so "javascript:..." reached the database and then an <a href> in the
@@ -353,25 +373,58 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    if (data.tier === "silver" && !data.github_url) {
-      throw new Error("A GitHub URL is required for Silver Builder verification.");
-    }
-    if (data.tier === "gold" && !data.fund_or_company_name) {
-      throw new Error("Fund or company name is required for Gold Investor verification.");
-    }
     /*
-      Gold needs somewhere checkable, not just a name — the rule the database
-      enforces as vr_gold_needs_a_link (20260930000300). Stated here as well
-      because link_primary is NOT NULL and is built from these two: without a URL
-      there is nothing valid to put in it, and the applicant deserves to be told
-      which field to fill rather than shown a constraint.
+      Requirements, per tier and track. Each of these is also a CHECK constraint
+      (20260930000700) — stated here so the applicant is told which field to fill
+      instead of being shown a constraint name, and enforced there so the rule
+      holds for anything that writes this table.
     */
-    const goldLink = data.portfolio_url ?? data.linkedin_or_x_url ?? null;
-    if (data.tier === "gold" && !goldLink) {
-      throw new Error(
-        "Gold verification needs a link we can check — your company site, portfolio, or LinkedIn/X profile.",
-      );
+    if (data.tier === "silver") {
+      if (!data.github_url) {
+        throw new Error("Silver needs a link to your GitHub profile.");
+      }
+      if (!data.live_project_url && !data.deployed_contract_address) {
+        throw new Error(
+          "Silver needs something you have shipped — a live project URL, or a deployed contract address.",
+        );
+      }
     }
+
+    if (data.tier === "gold" && !data.gold_track) {
+      throw new Error("Choose whether you are applying as a founder or as a backer.");
+    }
+
+    if (data.tier === "gold" && data.gold_track === "founder") {
+      if (!data.live_project_url) {
+        throw new Error("The founder track needs a link to the product you have launched.");
+      }
+      if (!data.traction_evidence_url && !data.deployed_contract_address) {
+        throw new Error(
+          "The founder track needs evidence of real usage: a public analytics page, a store listing, a block explorer link, or your deployed contract address.",
+        );
+      }
+    }
+
+    if (data.tier === "gold" && data.gold_track === "backer") {
+      if (!data.fund_or_company_name) {
+        throw new Error("The backer track needs the name of your fund or company.");
+      }
+      if (!data.portfolio_url && !data.linkedin_or_x_url) {
+        throw new Error(
+          "The backer track needs a link we can check — your fund's site, a portfolio page, or your LinkedIn/X profile.",
+        );
+      }
+    }
+
+    /*
+      link_primary is NOT NULL and URL-shaped, so it needs the most representative
+      link for whichever track this is: the product for a founder, the fund's page
+      for a backer, the GitHub profile for Silver.
+    */
+    const goldLink =
+      data.gold_track === "founder"
+        ? (data.live_project_url ?? null)
+        : (data.portfolio_url ?? data.linkedin_or_x_url ?? null);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -446,6 +499,9 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
         portfolio_url: data.portfolio_url || null,
         linkedin_or_x_url: data.linkedin_or_x_url || null,
         invite_code: data.invite_code || null,
+        gold_track: data.tier === "gold" ? (data.gold_track ?? null) : null,
+        traction_summary: data.traction_summary || null,
+        traction_evidence_url: data.traction_evidence_url || null,
       })
       .select("id")
       .maybeSingle();
@@ -475,6 +531,33 @@ export const submitVerificationApplication = createServerFn({ method: "POST" })
       } catch (checkError) {
         console.error("[verification] Proof check failed after submit:", checkError);
       }
+
+      /*
+        Measure the objective half separately from the proof check, and separately
+        from the applicant's own answers. A reviewer needs to be able to tell which
+        statements on a card came from the person asking for the badge and which
+        came from going and looking; before this, every field was the former.
+      */
+      try {
+        const { collectSignals } = await import("./verification-proof.server");
+        const signals = await collectSignals({
+          githubUrl: data.github_url || null,
+          urls: [
+            { label: "Product", url: data.live_project_url || null },
+            { label: "Traction evidence", url: data.traction_evidence_url || null },
+            { label: "Fund / portfolio", url: data.portfolio_url || null },
+          ],
+        });
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin
+          .from("verification_requests")
+          .update({ applicant_signals: signals })
+          .eq("id", inserted.id);
+      } catch (signalError) {
+        // Best-effort, like the proof check: an application with no signals is
+        // reviewable, an application that failed to save is not.
+        console.error("[verification] Signal collection failed:", signalError);
+      }
     }
 
     return { ok: true, proof };
@@ -498,6 +581,7 @@ export const listPendingApplications = createServerFn({ method: "GET" })
         github_url, deployed_contract_address, live_project_url, recent_ship_desc,
         fund_or_company_name, portfolio_url, linkedin_or_x_url, invite_code,
         link_primary, link_secondary,
+        gold_track, traction_summary, traction_evidence_url, applicant_signals,
         proof_verified_at, proof_method, proof_detail, proof_checked_at, proof_attempts,
         profiles!verification_requests_user_id_fkey(
           id, handle, display_name, avatar_url, company_name,
@@ -658,7 +742,7 @@ async function emailDecision(
       ? await sendEmail(
           email,
           "[The Ledger] Congratulations! Your Verification Has Been Approved",
-          approvalEmailHtml(tier === "silver" ? "Silver Builder" : "Gold Investor", ctaUrl),
+          approvalEmailHtml(tier === "silver" ? "Silver Builder" : "Gold", ctaUrl),
         )
       : await sendEmail(
           email,

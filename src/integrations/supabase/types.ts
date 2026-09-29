@@ -908,12 +908,16 @@ export type Database = {
           linkedin_or_x_url: string | null
           live_project_url: string | null
           portfolio_url: string | null
+          applicant_signals: Json
+          gold_track: string | null
           proof_attempts: number
           proof_checked_at: string | null
           proof_detail: string | null
           proof_method: string | null
           proof_verified_at: string | null
           recent_ship_desc: string | null
+          traction_evidence_url: string | null
+          traction_summary: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
@@ -932,12 +936,16 @@ export type Database = {
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
           portfolio_url?: string | null
+          applicant_signals?: Json
+          gold_track?: string | null
           proof_attempts?: number
           proof_checked_at?: string | null
           proof_detail?: string | null
           proof_method?: string | null
           proof_verified_at?: string | null
           recent_ship_desc?: string | null
+          traction_evidence_url?: string | null
+          traction_summary?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -956,12 +964,16 @@ export type Database = {
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
           portfolio_url?: string | null
+          applicant_signals?: Json
+          gold_track?: string | null
           proof_attempts?: number
           proof_checked_at?: string | null
           proof_detail?: string | null
           proof_method?: string | null
           proof_verified_at?: string | null
           recent_ship_desc?: string | null
+          traction_evidence_url?: string | null
+          traction_summary?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
