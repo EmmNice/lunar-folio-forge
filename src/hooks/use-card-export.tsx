@@ -8,51 +8,41 @@ const EXPORT_WIDTH = 1080;
 const EXPORT_HEIGHT = 1920;
 const FALLBACK_BACKGROUND = "#0b0b0c";
 
-/** `navigator.canShare` is still missing from some TS lib.dom versions. */
-type ShareCapableNavigator = Navigator & {
-  canShare?: (data?: ShareData) => boolean;
-};
-
-function canShareFile(file: File): boolean {
-  if (typeof navigator === "undefined") return false;
-  const nav = navigator as ShareCapableNavigator;
-  if (typeof nav.share !== "function" || typeof nav.canShare !== "function") return false;
-  try {
-    return nav.canShare({ files: [file] });
-  } catch {
-    return false;
-  }
-}
-
-/** Desktop path: a normal file download. */
+/**
+ * Saves the PNG as a normal file download.
+ *
+ * The link is put in the document before being clicked and removed afterwards.
+ * A detached anchor's synthetic click is ignored by some browsers, which is a
+ * silent failure — nothing downloads and nothing errors.
+ */
 function downloadFile(file: File) {
   const url = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.download = file.name;
   link.href = url;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
+  link.remove();
   // Give the browser a moment to start the download before dropping the blob.
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /**
- * Renders a post as a 1080x1920 PNG and saves it to the device.
+ * Renders a post as a 1080x1920 PNG and downloads it.
  *
- * On a phone this hands the image to the OS share sheet, where "Save Image" puts
- * it straight into Photos (iOS) or the gallery (Android). It used to click a
- * synthetic `<a download>` instead, which on mobile is treated as a web file
- * download: iOS dropped it into Files rather than Photos, and Android filed it
- * under Downloads as though it had come off the internet. A website cannot write
- * to the camera roll directly — the share sheet is the platform's route for it —
- * so the sheet is the primary path and the download is the desktop fallback.
+ * One tap, one file, no intermediate UI. This previously routed through
+ * `navigator.share()` on mobile, on the reasoning that the OS share sheet is the
+ * only way a web page can get an image into the camera roll. That is technically
+ * true and beside the point: the button says download, and it made the member pick
+ * a destination out of a list every single time. A download that always works the
+ * same way is worth more than one that occasionally lands somewhere nicer.
  *
- * The capture has to stay inside the promise chain that the tap started. Safari
- * only allows `navigator.share()` under transient user activation, and the old
- * arrangement (set state, capture later in an effect) severed that chain. So
- * `requestExport` awaits the off-screen card mounting and then captures and
- * shares without ever returning to the event loop on its own terms. If activation
- * is lost anyway on a slow device, the toast offers a second tap, which restores
- * it rather than silently falling back to a download the member did not ask for.
+ * Where the file ends up is the browser's business: Downloads on Android (visible
+ * in Google Photos under the Download album), Files on iOS, the download folder on
+ * desktop. A website cannot write to the gallery directly, and pretending
+ * otherwise is what produced the share sheet.
  *
  * Render `exportSurface` somewhere in the tree and call `requestExport(post)`.
  */
@@ -70,43 +60,9 @@ export function useCardExport() {
     resolve?.();
   }, [post]);
 
-  const save = useCallback(async (file: File) => {
-    if (canShareFile(file)) {
-      try {
-        await (navigator as ShareCapableNavigator).share({
-          files: [file],
-          title: "The Ledger",
-        });
-        return;
-      } catch (error) {
-        const name = error instanceof Error ? error.name : "";
-        // The member dismissed the sheet. Nothing went wrong.
-        if (name === "AbortError") return;
-        // Activation expired while the image was rendering. A fresh tap fixes it.
-        if (name === "NotAllowedError") {
-          toast("Your card is ready", {
-            description: "Tap to save it to your photos.",
-            action: {
-              label: "Save",
-              onClick: () => {
-                (navigator as ShareCapableNavigator)
-                  .share({ files: [file], title: "The Ledger" })
-                  .catch((retryError: unknown) => {
-                    if (retryError instanceof Error && retryError.name === "AbortError") return;
-                    downloadFile(file);
-                  });
-              },
-            },
-            duration: 15_000,
-          });
-          return;
-        }
-        // Anything else: fall through to the download rather than lose the card.
-      }
-    }
-
+  const save = useCallback((file: File) => {
     downloadFile(file);
-    toast.success("Card saved.");
+    toast.success("Card downloaded.");
   }, []);
 
   const requestExport = useCallback(
@@ -138,7 +94,7 @@ export function useCardExport() {
           type: "image/png",
         });
 
-        await save(file);
+        save(file);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Couldn't save the card.");
       } finally {

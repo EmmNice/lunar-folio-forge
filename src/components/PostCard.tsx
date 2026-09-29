@@ -661,7 +661,8 @@ export function PostCard({
         type="button"
         onClick={() => onDownload(post)}
         className={actionBtn + " hover:text-foreground"}
-        aria-label="Save card as an image"
+        aria-label="Download card as an image"
+        title="Download card as an image"
       >
         <Download className="h-4 w-4" />
       </button>

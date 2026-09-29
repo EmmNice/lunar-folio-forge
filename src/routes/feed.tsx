@@ -170,10 +170,20 @@ function FeedPage() {
     }));
   }
 
-  /** Drops posts by muted authors. Applied after the fetch — see `mutedIds`. */
+  /**
+   * Drops posts by muted authors. Applied after the fetch — see `mutedIds`.
+   *
+   * Reads the ref, not the state. The effect that calls loadPage runs once on
+   * mount and therefore captures the *first* render's copy of this function,
+   * whose `mutedIds` is still empty. The mute list usually resolves before the
+   * posts query returns, and in that order the re-filter effect below sees
+   * `signalPosts === null` and does nothing — so the page painted a muted
+   * author's posts and only hid them on the next fetch. The ref is always current.
+   */
   function withoutMuted(posts: FeedPost[]): FeedPost[] {
-    if (mutedIds.size === 0) return posts;
-    return posts.filter((p) => !mutedIds.has(p.author.id));
+    const muted = mutedIdsRef.current;
+    if (muted.size === 0) return posts;
+    return posts.filter((p) => !muted.has(p.author.id));
   }
 
   /**
@@ -355,7 +365,8 @@ function FeedPage() {
       if (!row.post || !row.reposter) continue;
       const [post] = normalisePosts([row.post]);
       if (!post) continue;
-      if (mutedIds.has(post.author.id)) continue;
+      // Ref, for the same stale-closure reason as withoutMuted above.
+      if (mutedIdsRef.current.has(post.author.id)) continue;
       reposts.push({
         key: `repost:${row.user_id}:${post.id}`,
         post,
