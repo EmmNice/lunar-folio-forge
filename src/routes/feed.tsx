@@ -892,7 +892,11 @@ function FeedPage() {
                   // profile, which left them to discover that the portal was inside
                   // the Edit-profile sheet — so the link did not actually lead
                   // anywhere useful.
-                  <Link to="/verification" className="btn btn-secondary btn-sm">
+                  <Link
+                    to="/verification"
+                    search={{ fee: undefined }}
+                    className="btn btn-secondary btn-sm"
+                  >
                     Apply for verification
                   </Link>
                 ) : undefined

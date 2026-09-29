@@ -908,8 +908,13 @@ export type Database = {
           linkedin_or_x_url: string | null
           live_project_url: string | null
           portfolio_url: string | null
+          amount_cents: number | null
           applicant_signals: Json
           gold_track: string | null
+          paid_at: string | null
+          payment_reference: string | null
+          payment_status: string
+          payment_waived_reason: string | null
           proof_attempts: number
           proof_checked_at: string | null
           proof_detail: string | null
@@ -936,8 +941,13 @@ export type Database = {
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
           portfolio_url?: string | null
+          amount_cents?: number | null
           applicant_signals?: Json
           gold_track?: string | null
+          paid_at?: string | null
+          payment_reference?: string | null
+          payment_status?: string
+          payment_waived_reason?: string | null
           proof_attempts?: number
           proof_checked_at?: string | null
           proof_detail?: string | null
@@ -964,8 +974,13 @@ export type Database = {
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
           portfolio_url?: string | null
+          amount_cents?: number | null
           applicant_signals?: Json
           gold_track?: string | null
+          paid_at?: string | null
+          payment_reference?: string | null
+          payment_status?: string
+          payment_waived_reason?: string | null
           proof_attempts?: number
           proof_checked_at?: string | null
           proof_detail?: string | null

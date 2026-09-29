@@ -104,10 +104,23 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+
+    /*
+      The verification application fee is a one-off payment, so it arrives in the
+      branch below that used to return early with "nothing to record". Routed by
+      metadata rather than by the absence of a subscription, because "not a
+      subscription" will not stay a reliable synonym for "verification fee" the
+      first time anything else one-off is sold.
+    */
+    if (session.metadata?.kind === "verification_fee") {
+      await markVerificationFeePaid(session);
+      return;
+    }
+
     const subscriptionId =
       typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
 
-    // A one-off payment has no subscription; nothing to record.
+    // A one-off payment we do not recognise. Nothing to record.
     if (!subscriptionId) return;
 
     // Re-fetch rather than trusting the session's embedded copy: the session is a
@@ -122,4 +135,53 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
   // reflecting the change — including 'deleted', where status is 'canceled'.
   const subscription = event.data.object as Stripe.Subscription;
   await applySubscription(subscription);
+}
+
+/**
+ * Records that a verification application's fee was paid.
+ *
+ * Only ever called from a signature-verified webhook, which is the whole reason
+ * the application starts life as `unpaid`: the client is told to go to Stripe, and
+ * Stripe is what says it came back. A success_url redirect is not proof of payment
+ * — anybody can visit a URL — so nothing about the payment state is written from
+ * the browser's return trip.
+ *
+ * Scoped to `payment_status = 'unpaid'` so a replayed event cannot overwrite a
+ * later state, and so this can never quietly resurrect an application that has
+ * since been rejected or refunded. Idempotency is already handled upstream by
+ * claimBillingEvent, but the narrow WHERE costs nothing and does not depend on it.
+ */
+async function markVerificationFeePaid(session: Stripe.Checkout.Session): Promise<void> {
+  const applicationId = session.metadata?.application_id;
+  if (!applicationId) {
+    console.error("[billing] verification_fee session with no application_id:", session.id);
+    return;
+  }
+
+  // Stripe sends checkout.session.completed for sessions that are complete but not
+  // necessarily *paid* — a delayed payment method can still fail afterwards.
+  if (session.payment_status !== "paid") {
+    console.warn(
+      `[billing] verification fee session ${session.id} completed with payment_status=${session.payment_status}; leaving application unpaid`,
+    );
+    return;
+  }
+
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error } = await supabaseAdmin
+    .from("verification_requests")
+    .update({
+      payment_status: "paid",
+      payment_reference: session.id,
+      paid_at: new Date().toISOString(),
+      amount_cents: session.amount_total ?? null,
+    })
+    .eq("id", applicationId)
+    .eq("payment_status", "unpaid");
+
+  if (error) {
+    // Thrown so the caller returns 500 and Stripe retries: a paid application
+    // stuck as unpaid is invisible to reviewers, which is the worst outcome here.
+    throw new Error(`Could not mark verification fee paid: ${error.message}`);
+  }
 }

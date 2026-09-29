@@ -4,6 +4,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { VerificationSection } from "@/components/VerificationPortal";
 
 export const Route = createFileRoute("/_authenticated/verification")({
+  // Stripe sends the member back here with ?fee=paid or ?fee=cancelled. Validated
+  // rather than read raw, so the banner cannot be driven by an arbitrary value.
+  validateSearch: (search: Record<string, unknown>) => ({
+    fee: search.fee === "paid" || search.fee === "cancelled" ? search.fee : undefined,
+  }),
   head: () => ({ meta: [{ title: "Verification · The Ledger" }] }),
   component: VerificationPage,
 });
@@ -18,6 +23,38 @@ export const Route = createFileRoute("/_authenticated/verification")({
  */
 function VerificationPage() {
   const { profile, loading } = useAuth();
+  const { fee } = Route.useSearch();
+
+  /*
+    Stripe's redirect is a hint, not proof. Payment is recorded by the webhook, so
+    "paid" here says the checkout page finished rather than that the money arrived —
+    which is why it points at the panel below instead of claiming the application is
+    now in the queue.
+  */
+  const feeNotice =
+    fee === "paid" ? (
+      <div
+        className="mb-5 rounded-xl px-4 py-3 text-[12px]"
+        style={{
+          background: "rgba(34,197,94,0.07)",
+          border: "1px solid rgba(34,197,94,0.22)",
+          color: "#4ade80",
+        }}
+      >
+        Payment received. Your application status is below — it updates as soon as Stripe confirms.
+      </div>
+    ) : fee === "cancelled" ? (
+      <div
+        className="mb-5 rounded-xl px-4 py-3 text-[12px]"
+        style={{
+          background: "rgba(251,191,36,0.06)",
+          border: "1px solid rgba(251,191,36,0.20)",
+          color: "#fbbf24",
+        }}
+      >
+        Checkout was cancelled. Your answers are saved — you can finish paying below.
+      </div>
+    ) : null;
 
   return (
     <div className="min-h-screen">
@@ -48,47 +85,31 @@ function VerificationPage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
-        {/* What the badges are for, before the form asks for anything. */}
+        {/*
+          What a badge does, and what it costs. Deliberately not what it requires:
+          the requirements appear once somebody has said which they are, so the
+          choice is made on identity rather than on whichever checklist looks
+          shortest.
+        */}
         <div
-          className="mb-6 space-y-3 rounded-2xl p-5"
+          className="mb-6 space-y-2 rounded-2xl p-5"
           style={{
             background: "rgba(255,255,255,0.02)",
             border: "1px solid rgba(255,255,255,0.07)",
           }}
         >
           <p className="text-[13px] leading-relaxed text-secondary">
-            A badge is not decoration — it decides where your posts appear and who can reach you.
+            A badge decides where your posts appear and who can reach you. Verified builders show up
+            in Signal, and Gold members get the Whisper audience and a pitch inbox.
           </p>
-          <ul className="space-y-2.5 text-[12px] leading-relaxed text-tertiary">
-            <li>
-              <span className="font-medium text-secondary">Silver — for builders.</span> Developers,
-              startup teams, designers, indie hackers: anyone shipping. You need a GitHub profile
-              and one thing you have actually built — a live URL or a deployed contract. Your posts
-              then appear in Signal, and PulseAssist stops counting your credits.
-            </li>
-            <li>
-              <span className="font-medium text-secondary">Gold — two ways in.</span>
-              <span className="mt-1 block">
-                <span className="font-medium text-secondary">Founders and operators</span> who have
-                launched something with real users and real transactions. Not an idea, not a
-                waitlist — a product people use, with somewhere public a reviewer can see that.
-              </span>
-              <span className="mt-1 block">
-                <span className="font-medium text-secondary">Backers</span> — funds, angels and
-                companies that invest.
-              </span>
-              <span className="mt-1 block">
-                Either way: Signal visibility, the Whisper audience, and a pitch inbox other members
-                can reach.
-              </span>
-            </li>
-          </ul>
           <p className="text-[12px] leading-relaxed text-tertiary">
-            Every track asks you to publish a short code where only the real owner could put it —
-            your GitHub bio, or the site you are claiming. That is the part a reviewer cannot check
-            by eye, and it is what stops somebody applying with a link to your work.
+            It costs <span className="font-semibold text-secondary">$1</span> to apply, either
+            badge. That pays for the review, not the outcome. Tell us which you are below and we'll
+            show you what's needed.
           </p>
         </div>
+
+        {feeNotice}
 
         {loading ? (
           <div className="space-y-3">

@@ -670,6 +670,7 @@ function ProfilePage() {
                 {me.verification_tier === "none" && (
                   <Link
                     to="/verification"
+                    search={{ fee: undefined }}
                     className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors hover:bg-white/10"
                     style={{ border: "1px solid rgba(255,255,255,0.30)", color: "inherit" }}
                   >
@@ -1024,6 +1025,7 @@ function ProfilePage() {
                 >
                   <Link
                     to="/verification"
+                    search={{ fee: undefined }}
                     className="flex items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-white/[0.03]"
                     style={{ border: "1px solid rgba(255,255,255,0.07)" }}
                   >
