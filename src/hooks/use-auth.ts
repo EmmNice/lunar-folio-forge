@@ -1,9 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { parseNotificationPrefs, type NotificationPrefs } from "@/lib/notification-prefs";
+import { resetPerUserState } from "@/lib/session-reset";
 
-export type RoleType = "founder" | "developer" | "pm" | "investor";
+export type RoleType =
+  | "founder"
+  | "developer"
+  | "pm"
+  | "investor"
+  // Added with the widened role_type CHECK in 20260930000200.
+  | "designer"
+  | "devops"
+  | "data"
+  | "security"
+  | "student";
 export type VerificationTier = "none" | "silver" | "gold";
 
 export type Profile = {
@@ -16,6 +27,11 @@ export type Profile = {
   role_type: RoleType | null;
   company_name: string | null;
   onboarding_completed: boolean;
+  /** Languages, frameworks and tools. Normalised lowercase by the DB trigger. */
+  skills: string[] | null;
+  location: string | null;
+  /** What they are open to; see AVAILABILITY_LABEL in lib/roles.ts. */
+  availability_status: string | null;
   verification_tier: VerificationTier;
   github_url: string | null;
   portfolio_url: string | null;
@@ -27,6 +43,14 @@ export type Profile = {
   pitch_limit: number | null;
   dm_cloaking_enabled: boolean;
   hide_from_search: boolean;
+  /**
+   * When the username was last changed after onboarding; null means never.
+   *
+   * Deliberately not granted to `authenticated` at the column level — when someone
+   * last renamed is nobody else's business. It reaches the owner only because
+   * current_profile() is SECURITY DEFINER and returns the whole row.
+   */
+  handle_changed_at: string | null;
   notification_prefs: NotificationPrefs;
   /** 'active' | 'restricted' | 'banned' — moderation state, set by admins only. */
   account_status: AccountStatus;
@@ -55,7 +79,7 @@ function logAuthIssue(message: string, detail?: unknown) {
  * the publishable key). The RPC is SECURITY DEFINER and scoped to auth.uid(), so
  * it returns exactly one row: yours.
  */
-async function fetchProfile(_userId: string): Promise<Profile | null> {
+async function fetchProfile(userId: string): Promise<Profile | null> {
   for (const delay of PROFILE_RETRY_DELAYS_MS) {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
 
@@ -70,6 +94,32 @@ async function fetchProfile(_userId: string): Promise<Profile | null> {
         notification_prefs: unknown;
         account_status: string | null;
       };
+
+      /*
+        The identity check that makes this safe.
+
+        current_profile() resolves through auth.uid() — it returns whoever the
+        *current access token* belongs to, and takes no argument. This parameter
+        used to be named `_userId` and was genuinely unused, which meant
+        loadProfile(userA) could return user B's profile whenever the token had
+        rotated while the read was in flight: sign out of A and into B quickly
+        enough and the resolved profile was B's, but it was stored in state
+        alongside `user: A`.
+
+        That is the cross-account leak. `user` and `profile` could disagree, and
+        every screen trusts `profile` for identity — the header avatar and handle,
+        the composer's author, the self-view of a profile page. So account A's
+        session could render account B's name, handle and private fields.
+
+        Discarding a mismatch is the correct response rather than trusting the
+        row: whichever token won, this caller asked about a different user, and
+        the caller for the *other* user is already in flight behind it.
+      */
+      if (row.id !== userId) {
+        logAuthIssue("discarded a profile belonging to a different user than requested");
+        return null;
+      }
+
       return {
         ...row,
         notification_prefs: parseNotificationPrefs(row.notification_prefs),
@@ -139,36 +189,62 @@ export function useAuth(): AuthState {
     isAdmin: false,
   });
 
+  /**
+   * Monotonic counter for auth resolutions.
+   *
+   * Every path here is async, so two of them can be in flight at once — an
+   * initial session load and a SIGNED_IN, or a sign-out immediately followed by a
+   * sign-in. Without a sequence number the slower one wins simply by finishing
+   * last, which is how a previous account's state could be written over a newer
+   * one. Only the most recently *started* resolution is allowed to commit.
+   */
+  const resolutionSeq = useRef(0);
+  /** Last committed user id, to detect an account switch rather than a refresh. */
+  const committedUserId = useRef<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function init() {
+    async function resolve(session: Session | null, reason: string) {
+      const seq = (resolutionSeq.current += 1);
+      const user = session?.user ?? null;
+
+      // Switching accounts (or leaving one) must not inherit the previous
+      // account's cached client state. Done before the profile read so the new
+      // session never observes the old account's unread count.
+      if (committedUserId.current !== null && committedUserId.current !== (user?.id ?? null)) {
+        resetPerUserState();
+      }
+
+      try {
+        const { profile, isAdmin } = await loadProfile(user);
+        // A newer resolution started while this one was reading: discard.
+        if (cancelled || seq !== resolutionSeq.current) return;
+
+        committedUserId.current = user?.id ?? null;
+        setState({ loading: false, session, user, profile, isAdmin });
+      } catch (error) {
+        logAuthIssue(`${reason} failed:`, error);
+        if (!cancelled && seq === resolutionSeq.current) {
+          setState((s) => ({ ...s, loading: false }));
+        }
+      }
+    }
+
+    (async () => {
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
-
-        const user = data.session?.user ?? null;
-        const { profile, isAdmin } = await loadProfile(user);
-        if (cancelled) return;
-
-        setState({ loading: false, session: data.session, user, profile, isAdmin });
+        await resolve(data.session, "session load");
       } catch (error) {
         logAuthIssue("session load failed:", error);
         if (!cancelled) setState((s) => ({ ...s, loading: false }));
       }
-    }
-    init();
+    })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      try {
-        const user = session?.user ?? null;
-        const { profile, isAdmin } = await loadProfile(user);
-        if (cancelled) return;
-        setState({ loading: false, session, user, profile, isAdmin });
-      } catch (error) {
-        logAuthIssue(`${event} handling failed:`, error);
-      }
+      void resolve(session, event);
     });
 
     return () => {
@@ -178,10 +254,15 @@ export function useAuth(): AuthState {
   }, []);
 
   async function refreshProfile() {
+    // Shares the sequence counter with the effect above: a refresh triggered by a
+    // profile edit must not land after a sign-out and resurrect the old account.
+    const seq = (resolutionSeq.current += 1);
     try {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user ?? null;
       const { profile, isAdmin } = await loadProfile(user);
+      if (seq !== resolutionSeq.current) return;
+      committedUserId.current = user?.id ?? null;
       setState((s) => ({ ...s, user, session: data.session, profile, isAdmin }));
     } catch (error) {
       logAuthIssue("profile refresh failed:", error);

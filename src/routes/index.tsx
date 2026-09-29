@@ -20,6 +20,15 @@ import { StatusCard } from "@/components/StatusCard";
 import { LedgerMark } from "@/components/AppHeader";
 import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
 import { passwordProblem } from "@/lib/password";
+import { UsernameField } from "@/components/UsernameField";
+import {
+  checkUsername,
+  describeUsernameError,
+  slugifyUsername,
+  USERNAME_HINT,
+  USERNAME_MIN,
+  type UsernameState,
+} from "@/lib/username";
 import { PasswordRequirements } from "@/components/PasswordRequirements";
 
 // Terms live outside the app. Set VITE_TERMS_URL to link them from the consent
@@ -152,6 +161,8 @@ function Landing() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameState, setUsernameState] = useState<UsernameState>({ status: "empty" });
 
   useEffect(() => {
     // A recovery link normally lands on /reset-password, because that is the
@@ -246,11 +257,34 @@ function Landing() {
     }
   }
 
-  /* Email sign-up */
+  /**
+   * Email sign-up.
+   *
+   * The username is collected here and passed through `options.data`, which lands
+   * in `raw_user_meta_data` for the `handle_new_user` trigger to read. Before this,
+   * signup asked only for an email and password and the trigger built a handle out
+   * of the email's local part — so people ended up publicly identified by the front
+   * half of their email address without ever being asked.
+   *
+   * A taken name makes the trigger raise, which rolls the whole signup back. That
+   * is deliberate: no account should exist in a half-named state, and the
+   * alternative (quietly appending a digit) hands someone an identity they never
+   * chose and cannot easily undo.
+   */
   async function handleEmailSignUp(e: FormEvent) {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("Enter your email and password.");
+    const desiredUsername = slugifyUsername(username);
+
+    if (!desiredUsername || !email || !password) {
+      toast.error("Choose a username and enter your email and password.");
+      return;
+    }
+    if (desiredUsername.length < USERNAME_MIN) {
+      toast.error(USERNAME_HINT);
+      return;
+    }
+    if (usernameState.status === "unavailable") {
+      toast.error(usernameState.message);
       return;
     }
     const problem = passwordProblem(password);
@@ -258,11 +292,26 @@ function Landing() {
       toast.error(`Password needs: ${problem.toLowerCase()}.`);
       return;
     }
+
     setSubmitting("email-signup");
+    // Re-checked immediately before submitting. The live check debounces, so a fast
+    // typist can reach this button while the answer for their final keystroke is
+    // still in flight.
+    const finalCheck = await checkUsername(desiredUsername);
+    if (finalCheck.status === "unavailable") {
+      setSubmitting(null);
+      setUsernameState(finalCheck);
+      toast.error(finalCheck.message);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/feed` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/feed`,
+        data: { username: desiredUsername },
+      },
     });
     setSubmitting(null);
     if (error) {
@@ -273,7 +322,7 @@ function Landing() {
         toast.error("An account with this email already exists. Sign in instead.");
         setView("email-signin");
       } else {
-        toast.error(error.message);
+        toast.error(describeUsernameError(error.message));
       }
       return;
     }
@@ -523,24 +572,53 @@ function Landing() {
     if (view === "email-signup") {
       return (
         <div>
-          <h2 className="mb-4 text-center text-base font-semibold">Create your account</h2>
+          <h2 className="mb-1 text-center text-base font-semibold">Create your account</h2>
+          <p className="mb-4 text-center text-xs leading-relaxed text-tertiary">
+            Your username is how people find you: theledger.app/u/
+            <span className="text-secondary">{slugifyUsername(username) || "yourname"}</span>
+          </p>
           <form onSubmit={handleEmailSignUp} className="space-y-3">
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              className={inputCls}
-              required
+            {/* First field, because it is the identity decision — the rest is just
+                credentials. It is also the only one that can be taken. */}
+            <UsernameField
+              value={username}
+              onChange={setUsername}
+              onStateChange={setUsernameState}
+              autoFocus
+              disabled={submitting !== null}
             />
-            <div className="space-y-1">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="signup-email"
+                className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-tertiary"
+              >
+                Email
+              </label>
               <input
+                id="signup-email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className={inputCls}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label
+                htmlFor="signup-password"
+                className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-tertiary"
+              >
+                Password
+              </label>
+              <input
+                id="signup-password"
                 type="password"
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={`Password (${MIN_PASSWORD_LENGTH}+ characters)`}
+                placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                 className={inputCls}
                 minLength={MIN_PASSWORD_LENGTH}
                 required
@@ -549,7 +627,13 @@ function Landing() {
             </div>
             <button
               type="submit"
-              disabled={submitting !== null}
+              disabled={
+                submitting !== null ||
+                usernameState.status === "checking" ||
+                usernameState.status === "unavailable" ||
+                usernameState.status === "too-short" ||
+                usernameState.status === "empty"
+              }
               className="btn btn-primary btn-block"
             >
               {submitting === "email-signup" ? (

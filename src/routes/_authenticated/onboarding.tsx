@@ -1,23 +1,23 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { RoleType } from "@/hooks/use-auth";
 import { ROLE_OPTIONS } from "@/lib/roles";
+import { UsernameField } from "@/components/UsernameField";
+import {
+  describeUsernameError,
+  slugifyUsername,
+  USERNAME_MIN,
+  type UsernameState,
+} from "@/lib/username";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({ meta: [{ title: "Set up your profile · The Ledger" }] }),
   component: OnboardingPage,
 });
-
-function slugifyHandle(v: string) {
-  return v
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, "")
-    .slice(0, 20);
-}
 
 function OnboardingPage() {
   const { user, profile, loading, refreshProfile } = useAuth();
@@ -31,10 +31,7 @@ function OnboardingPage() {
   const [bio, setBio] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken">(
-    "idle",
-  );
-  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [usernameState, setUsernameState] = useState<UsernameState>({ status: "empty" });
 
   useEffect(() => {
     if (!loading && profile) {
@@ -43,37 +40,19 @@ function OnboardingPage() {
         return;
       }
       setFullName(profile.display_name ?? "");
-      setHandle(profile.handle ?? "");
+      /*
+        An OAuth signup arrives with a neutral placeholder handle (`dev_<hex>`)
+        because there was no opportunity to ask for one. Prefilling it would invite
+        people to keep a machine-generated identity, so the field starts empty and
+        they have to choose. A handle they picked at signup is prefilled as normal.
+        display_name gets the same treatment when it only mirrors the placeholder.
+      */
+      const generated = /^dev_[0-9a-f]{8}$/.test(profile.handle ?? "");
+      setHandle(generated ? "" : (profile.handle ?? ""));
+      if (generated && profile.display_name === profile.handle) setFullName("");
       setBio(profile.bio ?? "");
     }
   }, [loading, profile, navigate]);
-
-  useEffect(() => {
-    if (checkTimer.current) clearTimeout(checkTimer.current);
-    const h = slugifyHandle(handle);
-    if (h.length < 2) {
-      setHandleStatus("idle");
-      return;
-    }
-    setHandleStatus("checking");
-    checkTimer.current = setTimeout(async () => {
-      // Don't run the check until the user session is confirmed
-      if (!user?.id) {
-        setHandleStatus("idle");
-        return;
-      }
-      const { data } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("handle", h)
-        .neq("id", user.id)
-        .maybeSingle();
-      setHandleStatus(data ? "taken" : "available");
-    }, 400);
-    return () => {
-      if (checkTimer.current) clearTimeout(checkTimer.current);
-    };
-  }, [handle, user?.id]);
 
   const minDob = (() => {
     const d = new Date();
@@ -84,8 +63,8 @@ function OnboardingPage() {
   const canSubmit =
     !!user &&
     fullName.trim().length > 0 &&
-    slugifyHandle(handle).length >= 2 &&
-    handleStatus === "available" &&
+    slugifyUsername(handle).length >= USERNAME_MIN &&
+    usernameState.status === "available" &&
     !!dob &&
     !!roleType &&
     companyName.trim().length > 0 &&
@@ -98,7 +77,7 @@ function OnboardingPage() {
       .from("profiles")
       .update({
         display_name: fullName.trim(),
-        handle: slugifyHandle(handle),
+        handle: slugifyUsername(handle),
         date_of_birth: dob,
         role_type: roleType,
         company_name: companyName.trim(),
@@ -113,11 +92,7 @@ function OnboardingPage() {
       sessionStorage.removeItem(`ob:${user.id}`);
     }
     if (error) {
-      toast.error(
-        error.message.includes("profiles_handle_key")
-          ? "That handle was just taken — try another."
-          : error.message,
-      );
+      toast.error(describeUsernameError(error.message));
       return;
     }
     await refreshProfile();
@@ -130,7 +105,10 @@ function OnboardingPage() {
 
   // Progress tracking based on filled fields
   const steps = [
-    { label: "Identity", done: fullName.trim().length > 0 && handleStatus === "available" },
+    {
+      label: "Identity",
+      done: fullName.trim().length > 0 && usernameState.status === "available",
+    },
     { label: "Role", done: !!dob && !!roleType && companyName.trim().length > 0 },
     { label: "Your story", done: bio.trim().length > 0 },
   ];
@@ -209,39 +187,12 @@ function OnboardingPage() {
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">
-              Tech name / handle
-            </label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                @
-              </span>
-              <input
-                className={field + " pl-6 pr-9"}
-                value={handle}
-                onChange={(e) => setHandle(slugifyHandle(e.target.value))}
-                maxLength={20}
-                placeholder="ariastone"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                {handleStatus === "checking" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : handleStatus === "available" ? (
-                  <Check className="h-4 w-4 text-emerald-400" />
-                ) : handleStatus === "taken" ? (
-                  <X className="h-4 w-4 text-red-400" />
-                ) : null}
-              </span>
-            </div>
-            {handleStatus === "taken" ? (
-              <p className="text-xs text-red-400">That handle is already taken.</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Lowercase letters, numbers, underscore. Unique across The Ledger.
-              </p>
-            )}
-          </div>
+          <UsernameField
+            value={handle}
+            onChange={setHandle}
+            onStateChange={setUsernameState}
+            disabled={busy}
+          />
 
           <div className="space-y-1.5">
             <label className="text-xs uppercase tracking-wider text-muted-foreground">

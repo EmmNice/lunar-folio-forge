@@ -16,6 +16,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 import type { VerificationTier } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { resetPerUserState } from "@/lib/session-reset";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { acceptPitch } from "@/lib/pitch.functions";
@@ -248,6 +249,18 @@ function PrivacySection() {
   const { profile, user, refreshProfile } = useAuth();
   const [dmRestrict, setDmRestrict] = useState(profile?.dm_cloaking_enabled ?? false);
   const [hideSearch, setHideSearch] = useState(profile?.hide_from_search ?? false);
+
+  /*
+    useState's initialiser runs once, and `profile` arrives asynchronously — so on a
+    cold load both switches rendered OFF regardless of what was stored, and flipping
+    a stale-off switch "on" wrote a value that was already true. A settings screen
+    that misreports stored state is worse than one that is slow.
+  */
+  useEffect(() => {
+    if (!profile) return;
+    setDmRestrict(profile.dm_cloaking_enabled);
+    setHideSearch(profile.hide_from_search);
+  }, [profile]);
   const [busyDm, setBusyDm] = useState(false);
   const [busyHide, setBusyHide] = useState(false);
 
@@ -364,6 +377,14 @@ function PitchesSection() {
   const navigate = useNavigate();
   const accept = useServerFn(acceptPitch);
   const [pitchLimit, setPitchLimit] = useState<number | null>(profile?.pitch_limit ?? null);
+  // Same re-sync reason as the privacy toggles.
+  useEffect(() => {
+    if (profile) setPitchLimit(profile.pitch_limit);
+  }, [profile]);
+  /* The option buttons look committed the moment they are clicked but are local
+     until Save, so without this a member could change the limit, navigate away and
+     silently lose it. */
+  const pitchLimitDirty = (profile?.pitch_limit ?? null) !== pitchLimit;
   const [busy, setBusy] = useState(false);
   const [pitches, setPitches] = useState<PitchRow[] | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -471,16 +492,21 @@ function PitchesSection() {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={saveLimit}
-          disabled={busy}
-          className="mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ background: "#F5F5F6" }}
-        >
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Save limit
-        </button>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={saveLimit}
+            disabled={busy || !pitchLimitDirty}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+            style={{ background: "#F5F5F6" }}
+          >
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {pitchLimitDirty ? "Save limit" : "Saved"}
+          </button>
+          {/* Selecting an option only changes local state; say so, because the
+              button turning amber reads as "done". */}
+          {pitchLimitDirty && <span className="text-[11px] text-amber-400">Unsaved change</span>}
+        </div>
       </Row>
 
       <Row divider={false}>
@@ -596,7 +622,8 @@ function DangerSection() {
     setBusy(true);
     await qc.cancelQueries();
     qc.clear();
-    await supabase.auth.signOut();
+    resetPerUserState();
+    await supabase.auth.signOut({ scope: "local" });
     navigate({ to: "/", replace: true });
   }
 

@@ -13,6 +13,7 @@ import {
   Lock,
   Pencil,
   CornerDownRight,
+  Bookmark,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +24,7 @@ import { timeAgo } from "@/lib/time";
 import { removePost } from "@/lib/admin.functions";
 import { MAX_POST_LENGTH, MAX_REPORT_REASON_LENGTH } from "@/lib/limits";
 import { describeWriteError } from "@/lib/db-errors";
+import { RichText } from "@/components/RichText";
 import type { VerificationTier } from "@/hooks/use-auth";
 
 export type FeedAuthor = {
@@ -118,6 +120,9 @@ export function PostCard({
   /** Top-level comment this reply will hang under, or null for a new thread. */
   const [replyParent, setReplyParent] = useState<CommentRow | null>(null);
 
+  const [bookmarked, setBookmarked] = useState(false);
+  const [busyBookmark, setBusyBookmark] = useState(false);
+
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(post.content);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -146,6 +151,66 @@ export function PostCard({
     setEditedAt(post.edited_at ?? null);
     setEditDraft(post.content);
   }, [post.content, post.edited_at]);
+
+  /*
+    Whether *this* member has saved the post.
+
+    Not part of PostStats: bookmarks are private, so unlike likes and reposts there
+    is no shared count to batch — only the viewer's own row, which nobody else can
+    read. One indexed primary-key lookup per card, and none at all when signed out.
+  */
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) {
+      setBookmarked(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("bookmarks")
+        .select("post_id")
+        .eq("user_id", uid)
+        .eq("post_id", post.id)
+        .maybeSingle();
+      if (!cancelled) setBookmarked(Boolean(data));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, post.id]);
+
+  async function toggleBookmark() {
+    if (!user) {
+      toast.error("Sign in to save posts.");
+      return;
+    }
+    setBusyBookmark(true);
+    if (bookmarked) {
+      const { error } = await supabase
+        .from("bookmarks")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("post_id", post.id);
+      setBusyBookmark(false);
+      if (error) {
+        toast.error(describeWriteError(error.message, "remove this save"));
+        return;
+      }
+      setBookmarked(false);
+    } else {
+      const { error } = await supabase
+        .from("bookmarks")
+        .insert({ user_id: user.id, post_id: post.id });
+      setBusyBookmark(false);
+      if (error) {
+        toast.error(describeWriteError(error.message, "save posts"));
+        return;
+      }
+      setBookmarked(true);
+      toast.success("Saved.");
+    }
+  }
 
   // When the parent supplied stats, adopt them and issue no queries at all.
   useEffect(() => {
@@ -659,6 +724,18 @@ export function PostCard({
 
       <button
         type="button"
+        onClick={toggleBookmark}
+        disabled={busyBookmark}
+        aria-pressed={bookmarked}
+        className={actionBtn + (bookmarked ? " text-[var(--gold)]" : " hover:text-foreground")}
+        aria-label={bookmarked ? "Remove from saved" : "Save post"}
+        title={bookmarked ? "Remove from saved" : "Save for later"}
+      >
+        <Bookmark className="h-4 w-4" fill={bookmarked ? "currentColor" : "none"} />
+      </button>
+
+      <button
+        type="button"
         onClick={() => onDownload(post)}
         className={actionBtn + " hover:text-foreground"}
         aria-label="Download card as an image"
@@ -770,9 +847,10 @@ export function PostCard({
             <span className="text-muted-foreground">@{c.author.handle}</span>
             <span className="text-muted-foreground">· {timeAgo(c.created_at)}</span>
           </div>
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90">
-            {c.content}
-          </p>
+          <RichText
+            text={c.content}
+            className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90"
+          />
           {user ? (
             <button
               type="button"
@@ -1004,12 +1082,11 @@ export function PostCard({
             {editing ? (
               renderBody({ color: theme.body, surface: "rgba(0,0,0,0.06)", border: theme.border })
             ) : (
-              <p
+              <RichText
+                text={content}
                 className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.6] tracking-[-0.01em]"
                 style={{ color: theme.body }}
-              >
-                {content}
-              </p>
+              />
             )}
           </div>
         </div>
@@ -1118,9 +1195,10 @@ export function PostCard({
             {editing ? (
               renderBody(null)
             ) : (
-              <p className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground/95 tracking-[-0.01em]">
-                {content}
-              </p>
+              <RichText
+                text={content}
+                className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground/95 tracking-[-0.01em]"
+              />
             )}
 
             {actionsRow}

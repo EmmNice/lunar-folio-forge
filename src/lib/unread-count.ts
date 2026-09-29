@@ -105,3 +105,22 @@ export function subscribeToUnreadCount(userId: string, listener: Listener): () =
 export function setUnreadCount(value: number) {
   emit(Math.max(0, value));
 }
+
+/**
+ * Drops the channel, the cached count and every listener.
+ *
+ * Needed because all of the above is module state, which outlives any component.
+ * Teardown previously happened only when the last listener detached — i.e. as a
+ * side effect of the header unmounting — so a sign-out that did not unmount the
+ * header (the global SIGNED_OUT handler in __root.tsx, for instance) left the
+ * previous account's notification channel subscribed and its count in memory for
+ * the next person to sign in on this tab.
+ *
+ * Listeners are cleared too, not just notified: they belong to components from the
+ * previous session, and their own effect cleanup will run momentarily anyway.
+ */
+export function resetUnreadCount() {
+  for (const listener of listeners) listener(0);
+  listeners = new Set();
+  teardown();
+}

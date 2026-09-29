@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { supabase } from "@/integrations/supabase/client";
 import { initBrowserMonitoring } from "@/lib/monitoring.browser";
 import { reportError, setMonitoringUser } from "@/lib/monitoring";
+import { resetPerUserState } from "@/lib/session-reset";
 import { Toaster } from "sonner";
 
 function NotFoundComponent() {
@@ -166,6 +167,11 @@ function RootComponent() {
       setMonitoringUser(session?.user?.id);
       if (event === "SIGNED_OUT") {
         queryClient.clear();
+        // This listener is the catch-all for sign-outs that did not come from a
+        // button — a revoked token, another tab, an expired refresh. It unmounts
+        // nothing, so without this the previous account's unread-count channel
+        // stayed subscribed.
+        resetPerUserState();
         router.invalidate();
       }
     });
