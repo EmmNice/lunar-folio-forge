@@ -1,35 +1,27 @@
 /**
- * AvatarPicker
+ * Lets the user either upload a photo (to the `avatars` Supabase Storage bucket,
+ * created in supabase/migrations/20260718_storage_avatars.sql) or pick one of the
+ * bundled pixel-art avatars.
  *
- * Lets the user either:
- *  1. Upload a photo from their device → Supabase Storage → public URL
- *  2. Pick a Web3-style pixel-art avatar from a curated set (DiceBear)
- *
- * Requires the `avatars` Supabase Storage bucket to be created.
- * See supabase/migrations/20260718_storage_avatars.sql
+ * The preset avatars were generated with DiceBear's pixel-art style and are
+ * served from public/avatars rather than hit api.dicebear.com on every render:
+ * that kept a third-party origin in the critical path for something static, and
+ * sent each visitor's IP to it.
  */
 import { useRef, useState } from "react";
 import { Camera, Sparkles, Loader2, Check, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { MAX_AVATAR_BYTES } from "@/lib/limits";
 
-// DiceBear pixel-art — v7.x is stable
-const DB = "https://api.dicebear.com/7.x/pixel-art/svg";
+const PRESET_AVATAR_COUNT = 24;
 
-// 24 curated seeds with Web3 culture names — each generates a unique PFP
-const NFT_SEEDS = [
-  "satoshi",   "vitalik",  "nakamoto", "genesis",
-  "defi",      "nouns",    "cryptonaut","wagmi",
-  "dao",       "degen",    "gm",        "lfg",
-  "hodler",    "fren",     "anon",      "based",
-  "alpha",     "sigma",    "zkproof",   "l2giant",
-  "ethmaxi",   "builder",  "founder",   "shiller",
-];
-
-function nftUrl(seed: string) {
-  return `${DB}?seed=${encodeURIComponent(seed)}&backgroundColor=0b0b0c`;
-}
+/** public/avatars/pixel-01.svg … pixel-24.svg */
+const PRESET_AVATARS = Array.from(
+  { length: PRESET_AVATAR_COUNT },
+  (_, i) => `/avatars/pixel-${String(i + 1).padStart(2, "0")}.svg`,
+);
 
 export function AvatarPicker({
   value,
@@ -47,8 +39,8 @@ export function AvatarPicker({
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be under 5 MB.");
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast.error(`Image must be under ${Math.round(MAX_AVATAR_BYTES / 1024 / 1024)} MB.`);
       return;
     }
     if (!file.type.startsWith("image/")) {
@@ -177,14 +169,14 @@ export function AvatarPicker({
 
           {/* Grid — 6 columns */}
           <div className="grid grid-cols-6 gap-2">
-            {NFT_SEEDS.map((seed) => {
-              const url = nftUrl(seed);
+            {PRESET_AVATARS.map((url, index) => {
               const isSelected = value === url;
+              const label = `Preset avatar ${index + 1}`;
               return (
                 <button
-                  key={seed}
+                  key={url}
                   type="button"
-                  title={`@${seed}`}
+                  title={label}
                   onClick={() => {
                     onChange(url);
                     setShowNft(false);
@@ -199,7 +191,7 @@ export function AvatarPicker({
                 >
                   <img
                     src={url}
-                    alt={seed}
+                    alt={label}
                     className="h-full w-full"
                     loading="lazy"
                     style={{ imageRendering: "pixelated" }}

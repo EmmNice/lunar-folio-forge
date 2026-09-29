@@ -9,39 +9,33 @@ import { ProfileDrawer } from "@/components/ProfileDrawer";
 /** The Ledger geometric mark — three ascending signal bars */
 export function LedgerMark({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 22 18"
-      fill="none"
-      aria-label="The Ledger"
-      role="img"
-    >
-      <rect x="0"    y="9"   width="5" height="9"    rx="1.5" fill="#F5F5F6" />
-      <rect x="8.5"  y="4.5" width="5" height="13.5" rx="1.5" fill="#F5F5F6" />
-      <rect x="17"   y="0"   width="5" height="18"   rx="1.5" fill="#FBBF24" />
+    <svg className={className} viewBox="0 0 22 18" fill="none" aria-label="The Ledger" role="img">
+      <rect x="0" y="9" width="5" height="9" rx="1.5" fill="#F5F5F6" />
+      <rect x="8.5" y="4.5" width="5" height="13.5" rx="1.5" fill="#F5F5F6" />
+      <rect x="17" y="0" width="5" height="18" rx="1.5" fill="#FBBF24" />
     </svg>
   );
 }
 
 /** Tier-colored avatar ring */
 function tierRingColor(tier?: string | null) {
-  if (tier === "gold")   return "rgba(251,191,36,0.80)";
+  if (tier === "gold") return "rgba(251,191,36,0.80)";
   if (tier === "silver") return "rgba(148,163,184,0.65)";
   return "rgba(255,255,255,0.13)";
 }
 
 const DESKTOP_NAV = [
-  { to: "/feed"    as const, label: "Explore",     icon: Rss      },
-  { to: "/pulse"   as const, label: "PulseAssist", icon: Zap      },
-  { to: "/studio"  as const, label: "Workspace",   icon: PenSquare },
+  { to: "/feed" as const, label: "Explore", icon: Rss },
+  { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
+  { to: "/studio" as const, label: "Workspace", icon: PenSquare },
 ] as const;
 
 const BOTTOM_TABS = [
-  { to: "/feed"          as const, label: "Feed",     icon: Rss            },
-  { to: "/studio"        as const, label: "Studio",   icon: PenSquare      },
-  { to: "/pulse"         as const, label: "Pulse",    icon: Zap            },
-  { to: "/messages"      as const, label: "Messages", icon: MessageSquare  },
-  { to: "/notifications" as const, label: "Alerts",   icon: Bell           },
+  { to: "/feed" as const, label: "Feed", icon: Rss },
+  { to: "/studio" as const, label: "Studio", icon: PenSquare },
+  { to: "/pulse" as const, label: "Pulse", icon: Zap },
+  { to: "/messages" as const, label: "Messages", icon: MessageSquare },
+  { to: "/notifications" as const, label: "Alerts", icon: Bell },
 ] as const;
 
 /**
@@ -72,17 +66,20 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
     <>
       <header
         className={controlled ? "" : "sticky top-0 z-40 border-b backdrop-blur-md"}
-        style={controlled ? {} : {
-          background: "rgba(11,11,12,0.90)",
-          borderColor: "rgba(255,255,255,0.06)",
-          transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-          transform: hidden ? "translateY(-100%)" : "translateY(0)",
-        }}
+        style={
+          controlled
+            ? {}
+            : {
+                background: "rgba(11,11,12,0.90)",
+                borderColor: "rgba(255,255,255,0.06)",
+                transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                transform: hidden ? "translateY(-100%)" : "translateY(0)",
+              }
+        }
       >
         {/* Three-column grid: left | center | right */}
         <div className="mx-auto grid h-14 max-w-6xl grid-cols-3 items-center px-4 sm:px-6">
-
-          {/* ── LEFT: avatar → profile + settings ── */}
+          {/* LEFT: avatar → profile + settings */}
           <div className="flex items-center gap-1.5">
             {loading ? (
               <span className="h-8 w-20 animate-pulse rounded-full bg-white/5" />
@@ -133,7 +130,7 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
             ) : null}
           </div>
 
-          {/* ── CENTER: brand mark ── */}
+          {/* CENTER: brand mark */}
           <div className="flex justify-center">
             <Link
               to={user ? "/feed" : "/"}
@@ -144,7 +141,7 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
             </Link>
           </div>
 
-          {/* ── RIGHT: desktop nav (auth) / sign-in (guest) ── */}
+          {/* RIGHT: desktop nav (auth) / sign-in (guest) */}
           <div className="flex items-center justify-end">
             {loading ? null : user ? (
               <nav className="hidden items-center gap-0.5 sm:flex">
@@ -154,7 +151,8 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
                     to={t.to}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                     activeProps={{
-                      className: "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] text-foreground font-medium",
+                      className:
+                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] text-foreground font-medium",
                       style: { background: "rgba(255,255,255,0.06)" },
                     }}
                   >
@@ -200,7 +198,10 @@ export function MobileNav() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (!user) { setUnreadCount(0); return; }
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
     let cancelled = false;
 
     async function fetchUnread() {
@@ -216,17 +217,32 @@ export function MobileNav() {
 
     const channel = supabase
       .channel(`mobile-notif:${user.id}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public", table: "notifications",
-        filter: `user_id=eq.${user.id}`,
-      }, () => setUnreadCount((n) => n + 1))
-      .on("postgres_changes", {
-        event: "UPDATE", schema: "public", table: "notifications",
-        filter: `user_id=eq.${user.id}`,
-      }, () => fetchUnread())
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => setUnreadCount((n) => n + 1),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => fetchUnread(),
+      )
       .subscribe();
 
-    return () => { cancelled = true; supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   return (

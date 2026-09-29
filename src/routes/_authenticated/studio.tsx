@@ -9,6 +9,7 @@ import { StatusCard, type Background, BACKGROUND_BASE_COLORS } from "@/component
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { pulseAssistDraft } from "@/lib/pulse-assist.functions";
+import { MAX_POST_LENGTH } from "@/lib/limits";
 
 export const Route = createFileRoute("/_authenticated/studio")({
   head: () => ({ meta: [{ title: "Workspace · The Ledger" }] }),
@@ -19,11 +20,9 @@ export const Route = createFileRoute("/_authenticated/studio")({
   component: StudioPage,
 });
 
-const MAX = 280;
 type PulseMode = "polish" | "expand" | "shorten";
 
-const field =
-  "lux-field resize-y leading-relaxed";
+const field = "lux-field resize-y leading-relaxed";
 
 function StudioPage() {
   const { profile } = useAuth();
@@ -54,14 +53,17 @@ function StudioPage() {
 
   const name = profile?.display_name ?? "";
   const handle = profile?.handle ?? "";
-  const remaining = MAX - content.length;
+  const remaining = MAX_POST_LENGTH - content.length;
   const isVerified = profile?.verification_tier !== "none";
   const isGold = profile?.verification_tier === "gold";
   const hasUnlimitedAI = isVerified;
 
   async function handlePulseAssist() {
     const body = content.trim();
-    if (!body) { toast.error("Write something first."); return; }
+    if (!body) {
+      toast.error("Write something first.");
+      return;
+    }
     setAiLoading(true);
     try {
       const result = await assist({ data: { content: body, mode: aiMode } });
@@ -77,7 +79,7 @@ function StudioPage() {
         setShowCreditWarning(true);
         toast.error("No PulseAssist credits left today. Verify to unlock unlimited.");
       } else if (msg.includes("AI_NOT_CONFIGURED")) {
-        toast.error("Add OPENAI_API_KEY to Replit secrets to enable PulseAssist.");
+        toast.error("PulseAssist isn't available right now. Please try again later.");
       } else {
         toast.error("PulseAssist couldn't process your request. Try again.");
       }
@@ -111,8 +113,14 @@ function StudioPage() {
   async function handlePublish() {
     if (!profile) return;
     const body = content.trim();
-    if (!body) { toast.error("Write something first."); return; }
-    if (body.length > MAX) { toast.error(`Posts are limited to ${MAX} characters.`); return; }
+    if (!body) {
+      toast.error("Write something first.");
+      return;
+    }
+    if (body.length > MAX_POST_LENGTH) {
+      toast.error(`Posts are limited to ${MAX_POST_LENGTH} characters.`);
+      return;
+    }
     setBusy("publish");
     const actualVisibility = whisperFeed ? "whisper" : visibility;
     const { error } = await supabase.from("posts").insert({
@@ -121,18 +129,19 @@ function StudioPage() {
       background,
       comments_enabled: commentsEnabled,
       visibility: actualVisibility,
-    } as any);
+    });
     setBusy(null);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Published to The Ledger.");
     navigate({ to: "/feed" });
   }
 
   const modeBtn = (active: boolean) =>
     "rounded-md px-2.5 py-1.5 text-xs font-medium transition-all " +
-    (active
-      ? "bg-violet-500/15 text-violet-300"
-      : "text-muted-foreground hover:text-foreground");
+    (active ? "bg-violet-500/15 text-violet-300" : "text-muted-foreground hover:text-foreground");
 
   return (
     <div className="min-h-screen">
@@ -149,25 +158,30 @@ function StudioPage() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)]">
-          {/* ── Controls ── (left column on desktop, top on mobile) */}
+          {/* Controls: left column on desktop, top on mobile */}
           <div className="space-y-6">
-
-            {/* ── Content textarea ── */}
+            {/* Content textarea */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Content
                 </label>
-                <span className={
-                  "text-xs tabular-nums " +
-                  (remaining < 0 ? "text-red-400" : remaining <= 20 ? "text-amber-400" : "text-muted-foreground")
-                }>
+                <span
+                  className={
+                    "text-xs tabular-nums " +
+                    (remaining < 0
+                      ? "text-red-400"
+                      : remaining <= 20
+                        ? "text-amber-400"
+                        : "text-muted-foreground")
+                  }
+                >
                   {remaining}
                 </span>
               </div>
               <textarea
                 rows={7}
-                maxLength={MAX + 40}
+                maxLength={MAX_POST_LENGTH + 40}
                 className={field}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -175,7 +189,7 @@ function StudioPage() {
               />
             </div>
 
-            {/* ── PulseAssist panel ── */}
+            {/* PulseAssist panel */}
             <div
               className="rounded-2xl p-4"
               style={{
@@ -209,7 +223,10 @@ function StudioPage() {
               </div>
 
               {/* Mode selector */}
-              <div className="mb-3 flex gap-1 rounded-xl p-1" style={{ background: "rgba(0,0,0,0.20)" }}>
+              <div
+                className="mb-3 flex gap-1 rounded-xl p-1"
+                style={{ background: "rgba(0,0,0,0.20)" }}
+              >
                 {(["polish", "expand", "shorten"] as PulseMode[]).map((m) => (
                   <button
                     key={m}
@@ -234,13 +251,20 @@ function StudioPage() {
                 ) : (
                   <Zap className="h-3.5 w-3.5" />
                 )}
-                {aiMode === "polish" ? "Polish my draft" : aiMode === "expand" ? "Expand this" : "Shorten this"}
+                {aiMode === "polish"
+                  ? "Polish my draft"
+                  : aiMode === "expand"
+                    ? "Expand this"
+                    : "Shorten this"}
               </button>
 
               {showCreditWarning && !hasUnlimitedAI && (
                 <div
                   className="mt-3 flex items-start gap-2 rounded-xl p-3 text-xs text-amber-300/80"
-                  style={{ background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.15)" }}
+                  style={{
+                    background: "rgba(251,191,36,0.07)",
+                    border: "1px solid rgba(251,191,36,0.15)",
+                  }}
                 >
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
                   Daily credits used. Verify your account to unlock unlimited PulseAssist.
@@ -248,7 +272,7 @@ function StudioPage() {
               )}
             </div>
 
-            {/* ── Background theme picker ── */}
+            {/* Background theme picker */}
             <div className="space-y-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Card Theme
@@ -256,14 +280,50 @@ function StudioPage() {
               <div className="grid grid-cols-4 gap-1.5">
                 {(
                   [
-                    { id: "noir",     label: "Noir",     swatch: "#0b0b0c",    ring: "ring-white/20" },
-                    { id: "cream",    label: "Cream",    swatch: "#f5f0e6",    ring: "ring-black/15" },
-                    { id: "gradient", label: "Violet",   swatch: "#1a0d2e",    ring: "ring-violet-400/30",  accent: "#a78bfa" },
-                    { id: "gold",     label: "Gold",     swatch: "#211700",    ring: "ring-amber-400/30",   accent: "#fbbf24" },
-                    { id: "steel",    label: "Steel",    swatch: "#0d1525",    ring: "ring-slate-400/30",   accent: "#94a3b8" },
-                    { id: "emerald",  label: "Emerald",  swatch: "#061a0e",    ring: "ring-emerald-400/30", accent: "#34d399" },
-                    { id: "midnight", label: "Midnight", swatch: "#060d20",    ring: "ring-indigo-400/30",  accent: "#6366f1" },
-                  ] as { id: Background; label: string; swatch: string; ring: string; accent?: string }[]
+                    { id: "noir", label: "Noir", swatch: "#0b0b0c", ring: "ring-white/20" },
+                    { id: "cream", label: "Cream", swatch: "#f5f0e6", ring: "ring-black/15" },
+                    {
+                      id: "gradient",
+                      label: "Violet",
+                      swatch: "#1a0d2e",
+                      ring: "ring-violet-400/30",
+                      accent: "#a78bfa",
+                    },
+                    {
+                      id: "gold",
+                      label: "Gold",
+                      swatch: "#211700",
+                      ring: "ring-amber-400/30",
+                      accent: "#fbbf24",
+                    },
+                    {
+                      id: "steel",
+                      label: "Steel",
+                      swatch: "#0d1525",
+                      ring: "ring-slate-400/30",
+                      accent: "#94a3b8",
+                    },
+                    {
+                      id: "emerald",
+                      label: "Emerald",
+                      swatch: "#061a0e",
+                      ring: "ring-emerald-400/30",
+                      accent: "#34d399",
+                    },
+                    {
+                      id: "midnight",
+                      label: "Midnight",
+                      swatch: "#060d20",
+                      ring: "ring-indigo-400/30",
+                      accent: "#6366f1",
+                    },
+                  ] as {
+                    id: Background;
+                    label: string;
+                    swatch: string;
+                    ring: string;
+                    accent?: string;
+                  }[]
                 ).map(({ id, label, swatch, ring, accent }) => {
                   const isActive = background === id;
                   return (
@@ -274,9 +334,7 @@ function StudioPage() {
                       title={label}
                       className={
                         "flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all " +
-                        (isActive
-                          ? "ring-1 ring-white/30 bg-white/06"
-                          : "hover:bg-white/04")
+                        (isActive ? "ring-1 ring-white/30 bg-white/06" : "hover:bg-white/04")
                       }
                       style={isActive ? { background: "rgba(255,255,255,0.06)" } : {}}
                     >
@@ -289,7 +347,9 @@ function StudioPage() {
                           boxShadow: isActive ? `0 0 0 2px ${accent ?? "#ffffff"}44` : undefined,
                         }}
                       />
-                      <span className={`text-[10px] font-medium ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
+                      <span
+                        className={`text-[10px] font-medium ${isActive ? "text-foreground" : "text-muted-foreground"}`}
+                      >
                         {label}
                       </span>
                     </button>
@@ -298,12 +358,17 @@ function StudioPage() {
               </div>
             </div>
 
-            {/* ── Avatar ── */}
+            {/* Avatar */}
             <div className="space-y-2">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Avatar</label>
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Avatar
+              </label>
               <div
                 className="flex items-center rounded-xl p-1"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                }}
               >
                 {[
                   { label: "Profile photo", val: profile?.avatar_url ?? null },
@@ -333,11 +398,14 @@ function StudioPage() {
               />
             </div>
 
-            {/* ── Privacy controls (verified only) ── */}
+            {/* Privacy controls (verified only) */}
             {isVerified && (
               <div
                 className="space-y-3 rounded-2xl p-4"
-                style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}
+                style={{
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                }}
               >
                 <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   <Lock className="h-3 w-3" /> Privacy Controls
@@ -347,7 +415,9 @@ function StudioPage() {
                   label="Verified audience only"
                   description="Only Silver & Gold users can see this post"
                   checked={visibility === "verified_only"}
-                  onChange={() => setVisibility((v) => (v === "verified_only" ? "public" : "verified_only"))}
+                  onChange={() =>
+                    setVisibility((v) => (v === "verified_only" ? "public" : "verified_only"))
+                  }
                 />
 
                 <Toggle
@@ -360,7 +430,10 @@ function StudioPage() {
                 {isGold && (
                   <div
                     className="rounded-xl p-3"
-                    style={{ background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.18)" }}
+                    style={{
+                      background: "rgba(167,139,250,0.06)",
+                      border: "1px solid rgba(167,139,250,0.18)",
+                    }}
                   >
                     <Toggle
                       label={
@@ -378,7 +451,7 @@ function StudioPage() {
               </div>
             )}
 
-            {/* ── Action buttons ── */}
+            {/* Action buttons */}
             <div className="flex items-center gap-3 pt-1">
               {/* Download — borderless icon button */}
               <button
@@ -387,7 +460,10 @@ function StudioPage() {
                 disabled={busy !== null}
                 title="Download for WhatsApp (1080×1920)"
                 className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-all hover:text-foreground disabled:opacity-50"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
               >
                 {busy === "download" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -418,7 +494,7 @@ function StudioPage() {
             </p>
           </div>
 
-          {/* ── Live Preview ── (right column on desktop, below controls on mobile) */}
+          {/* Live preview: right column on desktop, below the controls on mobile */}
           <div className="flex flex-col items-center">
             <p className="mb-3 self-start text-xs font-medium uppercase tracking-wider text-muted-foreground lg:self-auto">
               Preview
@@ -442,7 +518,14 @@ function StudioPage() {
         {/* Off-screen export render */}
         <div
           aria-hidden
-          style={{ position: "fixed", top: 0, left: 0, pointerEvents: "none", opacity: 0, zIndex: -1 }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            pointerEvents: "none",
+            opacity: 0,
+            zIndex: -1,
+          }}
         >
           <StatusCard
             ref={exportRef}
@@ -461,7 +544,7 @@ function StudioPage() {
   );
 }
 
-// ── Reusable luxury toggle ──────────────────────────────────────────────────
+// Reusable luxury toggle
 function Toggle({
   label,
   description,

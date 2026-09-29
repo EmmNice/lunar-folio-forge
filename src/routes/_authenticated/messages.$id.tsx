@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
+import { MAX_MESSAGE_LENGTH } from "@/lib/limits";
 
 export const Route = createFileRoute("/_authenticated/messages/$id")({
   head: () => ({ meta: [{ title: "Conversation · The Ledger" }] }),
@@ -13,7 +14,6 @@ export const Route = createFileRoute("/_authenticated/messages/$id")({
 
 type Profile = { id: string; handle: string; display_name: string; avatar_url: string | null };
 type Message = { id: string; sender_id: string; body: string; created_at: string };
-const MAX = 1000;
 
 function ThreadPage() {
   const { id } = Route.useParams();
@@ -57,7 +57,12 @@ function ThreadPage() {
       .channel(`messages:${id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${id}` },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${id}`,
+        },
         (payload) => {
           const m = payload.new as Message;
           setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
@@ -76,8 +81,8 @@ function ThreadPage() {
     if (!user) return;
     const trimmed = body.trim();
     if (!trimmed) return;
-    if (trimmed.length > MAX) {
-      toast.error(`Messages are limited to ${MAX} characters.`);
+    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+      toast.error(`Messages are limited to ${MAX_MESSAGE_LENGTH} characters.`);
       return;
     }
     setSending(true);
@@ -109,7 +114,12 @@ function ThreadPage() {
             >
               <div className="grid h-8 w-8 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
                 {other.avatar_url ? (
-                  <img src={other.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  <img
+                    src={other.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
                   <span className="grid h-full w-full place-items-center">
                     {other.display_name.charAt(0).toUpperCase()}
@@ -155,7 +165,7 @@ function ThreadPage() {
         >
           <textarea
             rows={2}
-            maxLength={MAX + 40}
+            maxLength={MAX_MESSAGE_LENGTH + 40}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {

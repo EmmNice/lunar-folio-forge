@@ -11,8 +11,14 @@ export const Route = createFileRoute("/_authenticated/account-privacy")({
 });
 
 function LuxToggle({
-  checked, onChange, disabled = false,
-}: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -40,8 +46,8 @@ function PrivacySettingsPage() {
 
   const [dmRestrict, setDmRestrict] = useState(profile?.dm_cloaking_enabled ?? false);
   const [hideSearch, setHideSearch] = useState(profile?.hide_from_search ?? false);
-  const [busyDm, setBusyDm]         = useState(false);
-  const [busyHide, setBusyHide]     = useState(false);
+  const [busyDm, setBusyDm] = useState(false);
+  const [busyHide, setBusyHide] = useState(false);
 
   async function toggleDm(next: boolean) {
     if (!user) return;
@@ -49,10 +55,14 @@ function PrivacySettingsPage() {
     setBusyDm(true);
     const { error } = await supabase
       .from("profiles")
-      .update({ dm_cloaking_enabled: next } as any)
+      .update({ dm_cloaking_enabled: next })
       .eq("id", user.id);
     setBusyDm(false);
-    if (error) { toast.error(error.message); setDmRestrict(!next); return; }
+    if (error) {
+      toast.error(error.message);
+      setDmRestrict(!next);
+      return;
+    }
     await refreshProfile();
     toast.success(next ? "DMs restricted to verified members." : "DM restriction removed.");
   }
@@ -63,10 +73,14 @@ function PrivacySettingsPage() {
     setBusyHide(true);
     const { error } = await supabase
       .from("profiles")
-      .update({ hide_from_search: next } as any)
+      .update({ hide_from_search: next })
       .eq("id", user.id);
     setBusyHide(false);
-    if (error) { toast.error(error.message); setHideSearch(!next); return; }
+    if (error) {
+      toast.error(error.message);
+      setHideSearch(!next);
+      return;
+    }
     await refreshProfile();
     toast.success(next ? "Profile hidden from search engines." : "Profile visible in search.");
   }
@@ -121,7 +135,9 @@ function PrivacySettingsPage() {
             <div
               key={r.label}
               className="flex items-center justify-between gap-6 px-5 py-4"
-              style={i < rows.length - 1 ? { borderBottom: "1px solid rgba(255,255,255,0.05)" } : {}}
+              style={
+                i < rows.length - 1 ? { borderBottom: "1px solid rgba(255,255,255,0.05)" } : {}
+              }
             >
               <div className="flex items-center gap-3">
                 <div

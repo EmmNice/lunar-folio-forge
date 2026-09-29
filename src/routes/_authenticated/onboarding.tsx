@@ -5,21 +5,18 @@ import { Loader2, Check, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { RoleType } from "@/hooks/use-auth";
+import { ROLE_OPTIONS } from "@/lib/roles";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({ meta: [{ title: "Set up your profile · The Ledger" }] }),
   component: OnboardingPage,
 });
 
-const ROLE_OPTIONS: { value: RoleType; label: string }[] = [
-  { value: "founder", label: "Startup Founder" },
-  { value: "developer", label: "Core Developer" },
-  { value: "pm", label: "Technical PM" },
-  { value: "investor", label: "VC / Investor" },
-];
-
 function slugifyHandle(v: string) {
-  return v.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
+  return v
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 20);
 }
 
 function OnboardingPage() {
@@ -34,7 +31,9 @@ function OnboardingPage() {
   const [bio, setBio] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken">(
+    "idle",
+  );
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -59,7 +58,10 @@ function OnboardingPage() {
     setHandleStatus("checking");
     checkTimer.current = setTimeout(async () => {
       // Don't run the check until the user session is confirmed
-      if (!user?.id) { setHandleStatus("idle"); return; }
+      if (!user?.id) {
+        setHandleStatus("idle");
+        return;
+      }
       const { data } = await supabase
         .from("profiles")
         .select("id")
@@ -112,7 +114,9 @@ function OnboardingPage() {
     }
     if (error) {
       toast.error(
-        error.message.includes("profiles_handle_key") ? "That handle was just taken — try another." : error.message,
+        error.message.includes("profiles_handle_key")
+          ? "That handle was just taken — try another."
+          : error.message,
       );
       return;
     }
@@ -126,8 +130,8 @@ function OnboardingPage() {
 
   // Progress tracking based on filled fields
   const steps = [
-    { label: "Identity",  done: fullName.trim().length > 0 && handleStatus === "available" },
-    { label: "Role",      done: !!dob && !!roleType && companyName.trim().length > 0 },
+    { label: "Identity", done: fullName.trim().length > 0 && handleStatus === "available" },
+    { label: "Role", done: !!dob && !!roleType && companyName.trim().length > 0 },
     { label: "Your story", done: bio.trim().length > 0 },
   ];
   const completedCount = steps.filter((s) => s.done).length;
@@ -160,7 +164,9 @@ function OnboardingPage() {
                 </div>
                 <span
                   className="hidden text-[11px] font-medium sm:block"
-                  style={{ color: step.done ? "#F5F5F6" : i === completedCount ? "#A0A0AA" : "#6B6B7A" }}
+                  style={{
+                    color: step.done ? "#F5F5F6" : i === completedCount ? "#A0A0AA" : "#6B6B7A",
+                  }}
                 >
                   {step.label}
                 </span>
@@ -185,20 +191,32 @@ function OnboardingPage() {
           Set up your Ledger profile
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This is a high-signal, professional network for tech founders and builders — a few
-          real details before you can post or browse the feed.
+          This is a high-signal, professional network for tech founders and builders — a few real
+          details before you can post or browse the feed.
         </p>
 
         <div className="mt-8 space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Full real name</label>
-            <input className={field} value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={60} placeholder="Aria Stone" />
+            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              Full real name
+            </label>
+            <input
+              className={field}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              maxLength={60}
+              placeholder="Aria Stone"
+            />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Tech name / handle</label>
+            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              Tech name / handle
+            </label>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">@</span>
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                @
+              </span>
               <input
                 className={field + " pl-6 pr-9"}
                 value={handle}
@@ -219,17 +237,29 @@ function OnboardingPage() {
             {handleStatus === "taken" ? (
               <p className="text-xs text-red-400">That handle is already taken.</p>
             ) : (
-              <p className="text-xs text-muted-foreground">Lowercase letters, numbers, underscore. Unique across The Ledger.</p>
+              <p className="text-xs text-muted-foreground">
+                Lowercase letters, numbers, underscore. Unique across The Ledger.
+              </p>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Date of birth</label>
-            <input type="date" className={field} value={dob} max={minDob} onChange={(e) => setDob(e.target.value)} />
+            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              Date of birth
+            </label>
+            <input
+              type="date"
+              className={field}
+              value={dob}
+              max={minDob}
+              onChange={(e) => setDob(e.target.value)}
+            />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Role type</label>
+            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              Role type
+            </label>
             <div className="grid grid-cols-2 gap-2">
               {ROLE_OPTIONS.map((r) => (
                 <button
@@ -250,13 +280,30 @@ function OnboardingPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">Company / startup name</label>
-            <input className={field} value={companyName} onChange={(e) => setCompanyName(e.target.value)} maxLength={80} placeholder="Nimbus Cloud" />
+            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              Company / startup name
+            </label>
+            <input
+              className={field}
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              maxLength={80}
+              placeholder="Nimbus Cloud"
+            />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wider text-muted-foreground">One-sentence bio</label>
-            <textarea rows={2} className={field + " resize-none"} value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} placeholder="Building the boring infra everyone depends on." />
+            <label className="text-xs uppercase tracking-wider text-muted-foreground">
+              One-sentence bio
+            </label>
+            <textarea
+              rows={2}
+              className={field + " resize-none"}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={200}
+              placeholder="Building the boring infra everyone depends on."
+            />
           </div>
 
           <button

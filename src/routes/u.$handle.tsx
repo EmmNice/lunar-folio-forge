@@ -1,21 +1,41 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Github, Rocket, ShieldCheck, Loader2, Pencil, X, CheckCircle2, ExternalLink, FileCode2, Building2, Users, Heart, FileText, Plus } from "lucide-react";
+import {
+  MessageSquare,
+  Github,
+  Rocket,
+  ShieldCheck,
+  Loader2,
+  Pencil,
+  X,
+  CheckCircle2,
+  ExternalLink,
+  FileCode2,
+  Building2,
+  Users,
+  Heart,
+  FileText,
+  Plus,
+} from "lucide-react";
 import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
-import { type Background } from "@/components/StatusCard";
+import { toBackground, type Background } from "@/components/StatusCard";
 import { PostCard, type FeedPost } from "@/components/PostCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PitchModal, type PitchTarget } from "@/components/PitchModal";
 import { useAuth } from "@/hooks/use-auth";
 import type { RoleType, VerificationTier } from "@/hooks/use-auth";
+import { useCardExport } from "@/hooks/use-card-export";
+import { ROLE_LABEL, ROLE_OPTIONS } from "@/lib/roles";
 import { useServerFn } from "@tanstack/react-start";
 import { startConversation } from "@/lib/messaging.functions";
 import { submitVerificationApplication } from "@/lib/verification.functions";
 import { timeAgo } from "@/lib/time";
 import { AvatarPicker } from "@/components/AvatarPicker";
+
+const PROFILE_TABS = ["posts", "comments", "likes", "edit", "verification"] as const;
 
 export const Route = createFileRoute("/u/$handle")({
   head: ({ params }) => ({
@@ -25,10 +45,8 @@ export const Route = createFileRoute("/u/$handle")({
       { property: "og:title", content: `@${params.handle} on The Ledger` },
     ],
   }),
-  validateSearch: (s: Record<string, unknown>) => ({
-    tab: (["posts", "comments", "likes", "edit", "verification"] as const).includes(s.tab as any)
-      ? (s.tab as "posts" | "comments" | "likes" | "edit" | "verification")
-      : undefined,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: PROFILE_TABS.find((t) => t === search.tab),
   }),
   component: ProfilePage,
 });
@@ -81,20 +99,13 @@ type LikedPostRow = {
   author_verification_tier: VerificationTier;
 };
 
-const ROLE_LABEL: Record<RoleType, string> = {
-  founder: "Startup Founder",
-  developer: "Core Developer",
-  pm: "Technical PM",
-  investor: "VC / Investor",
-};
-
 function tierRingColor(tier?: string | null) {
-  if (tier === "gold")   return "rgba(251,191,36,0.85)";
+  if (tier === "gold") return "rgba(251,191,36,0.85)";
   if (tier === "silver") return "rgba(148,163,184,0.70)";
   return "rgba(255,255,255,0.15)";
 }
 
-// ─── Auto-redirect to the user's real handle ─────────────────────────────────
+// Auto-redirect to the user's real handle
 function RedirectToOwnProfile({ handle }: { handle: string }) {
   const navigate = useNavigate();
   useEffect(() => {
@@ -103,8 +114,9 @@ function RedirectToOwnProfile({ handle }: { handle: string }) {
   return null;
 }
 
-// ─── Main page component ──────────────────────────────────────────────────────
+// Main page component
 function ProfilePage() {
+  const { requestExport, exportSurface } = useCardExport();
   const { handle } = Route.useParams();
   const { user, profile: me, refreshProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -128,45 +140,33 @@ function ProfilePage() {
     meta.name = "robots";
     meta.content = "noindex";
     document.head.appendChild(meta);
-    return () => { document.head.removeChild(meta); };
+    return () => {
+      document.head.removeChild(meta);
+    };
   }, [profile?.hide_from_search]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Base columns — always present regardless of which migrations have run
       const { data: pf, error } = await supabase
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search")
+        .select(
+          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search, pitch_limit, dm_cloaking_enabled",
+        )
         .eq("handle", handle)
         .maybeSingle();
       if (cancelled) return;
-      if (error || !pf) { setProfile(null); return; }
-      const pfAny = pf as any;
-
-      // Optional columns added in later migrations — fail silently if absent
-      let pitch_limit: number | null = null;
-      let dm_cloaking_enabled = false;
-      try {
-        const { data: extra } = await supabase
-          .from("profiles")
-          .select("pitch_limit, dm_cloaking_enabled")
-          .eq("id", pfAny.id)
-          .maybeSingle();
-        if (extra) {
-          pitch_limit = (extra as any).pitch_limit ?? null;
-          dm_cloaking_enabled = (extra as any).dm_cloaking_enabled ?? false;
-        }
-      } catch { /* columns may not exist in older schema — use defaults */ }
-
-      if (cancelled) return;
-      setProfile({ ...(pfAny as ProfileRow), pitch_limit, dm_cloaking_enabled });
+      if (error || !pf) {
+        setProfile(null);
+        return;
+      }
+      setProfile(pf as ProfileRow);
 
       // Posts
       const { data: postsData } = await supabase
         .from("posts")
         .select("id, content, background, comments_enabled, visibility, created_at")
-        .eq("author_id", pfAny.id)
+        .eq("author_id", pf.id)
         .order("created_at", { ascending: false })
         .limit(30);
       if (cancelled) return;
@@ -176,7 +176,7 @@ function ProfilePage() {
       const { data: commentsData } = await supabase
         .from("comments")
         .select("id, content, created_at, post_id")
-        .eq("author_id", pfAny.id)
+        .eq("author_id", pf.id)
         .order("created_at", { ascending: false })
         .limit(30);
       if (cancelled) return;
@@ -186,22 +186,24 @@ function ProfilePage() {
       const { data: likesData } = await supabase
         .from("likes")
         .select("post_id")
-        .eq("user_id", pfAny.id)
+        .eq("user_id", pf.id)
         .limit(30);
       if (cancelled) return;
       if (likesData && likesData.length > 0) {
-        const postIds = likesData.map((l: any) => l.post_id).filter(Boolean);
+        const postIds = likesData.map((l) => l.post_id).filter(Boolean);
         if (postIds.length > 0) {
           const { data: likedPostsRaw } = await supabase
             .from("posts")
-            .select("id, content, background, created_at, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url, verification_tier)")
+            .select(
+              "id, content, background, comments_enabled, visibility, created_at, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url, verification_tier)",
+            )
             .in("id", postIds)
             .order("created_at", { ascending: false });
           if (!cancelled) {
-            const shaped = (likedPostsRaw ?? []).map((p: any) => ({
+            const shaped = (likedPostsRaw ?? []).map((p) => ({
               id: p.id,
               content: p.content,
-              background: p.background,
+              background: toBackground(p.background),
               comments_enabled: p.comments_enabled ?? true,
               visibility: p.visibility ?? "public",
               created_at: p.created_at,
@@ -209,25 +211,33 @@ function ProfilePage() {
               author_display_name: p.profiles?.display_name ?? "Unknown",
               author_handle: p.profiles?.handle ?? "unknown",
               author_avatar_url: p.profiles?.avatar_url ?? null,
-              author_verification_tier: p.profiles?.verification_tier ?? "none",
+              author_verification_tier: (p.profiles?.verification_tier ??
+                "none") as VerificationTier,
             }));
             setLikedPosts(shaped);
           }
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [handle]);
 
   async function message() {
-    if (!user || !me || !profile) { toast.error("Sign in to send a message."); return; }
+    if (!user || !me || !profile) {
+      toast.error("Sign in to send a message.");
+      return;
+    }
     setBusyMsg(true);
     try {
       const res = await start({ data: { recipientId: profile.id } });
       navigate({ to: "/messages/$id", params: { id: res.conversationId } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't start a conversation.");
-    } finally { setBusyMsg(false); }
+    } finally {
+      setBusyMsg(false);
+    }
   }
 
   // Loading / not-found states — wait for BOTH the handle query AND auth to resolve
@@ -258,11 +268,23 @@ function ProfilePage() {
             {[0, 1, 2].map((i) => (
               <div key={i} className="rounded-2xl border border-border/40 bg-card/30 p-5">
                 <div className="flex items-start gap-3">
-                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 60}ms` }} />
+                  <div
+                    className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-secondary/60"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  />
                   <div className="flex-1 space-y-2.5">
-                    <div className="h-3 w-32 animate-pulse rounded-full bg-secondary/60" style={{ animationDelay: `${i * 60 + 30}ms` }} />
-                    <div className="h-3 w-full animate-pulse rounded-full bg-secondary/40" style={{ animationDelay: `${i * 60 + 60}ms` }} />
-                    <div className="h-3 w-4/5 animate-pulse rounded-full bg-secondary/30" style={{ animationDelay: `${i * 60 + 90}ms` }} />
+                    <div
+                      className="h-3 w-32 animate-pulse rounded-full bg-secondary/60"
+                      style={{ animationDelay: `${i * 60 + 30}ms` }}
+                    />
+                    <div
+                      className="h-3 w-full animate-pulse rounded-full bg-secondary/40"
+                      style={{ animationDelay: `${i * 60 + 60}ms` }}
+                    />
+                    <div
+                      className="h-3 w-4/5 animate-pulse rounded-full bg-secondary/30"
+                      style={{ animationDelay: `${i * 60 + 90}ms` }}
+                    />
                   </div>
                 </div>
               </div>
@@ -280,7 +302,9 @@ function ProfilePage() {
         <div className="min-h-screen">
           <AppHeader />
           <div className="mx-auto max-w-5xl px-6 pt-16">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Redirecting…</p>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Redirecting…
+            </p>
             <RedirectToOwnProfile handle={me.handle} />
           </div>
         </div>
@@ -312,7 +336,9 @@ function ProfilePage() {
         <AppHeader />
         <div className="mx-auto max-w-5xl px-6 pt-16">
           <h1 className="text-xl font-semibold">Profile not found</h1>
-          <p className="mt-2 text-sm text-muted-foreground">No one on The Ledger uses the handle @{handle}.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            No one on The Ledger uses the handle @{handle}.
+          </p>
           <Link to="/feed" className="mt-6 inline-block text-sm underline underline-offset-4">
             Back to the feed
           </Link>
@@ -323,7 +349,8 @@ function ProfilePage() {
 
   const isSelf = user?.id === profile.id;
   const isGold = profile.verification_tier === "gold";
-  const viewerIsSilverOrGold = me?.verification_tier === "silver" || me?.verification_tier === "gold";
+  const viewerIsSilverOrGold =
+    me?.verification_tier === "silver" || me?.verification_tier === "gold";
   const dmCloaked = (profile.dm_cloaking_enabled ?? false) && !isSelf && !viewerIsSilverOrGold;
 
   const connectLinks = [
@@ -338,37 +365,37 @@ function ProfilePage() {
     avatar_url: profile.avatar_url,
     verification_tier: profile.verification_tier,
     company_name: profile.company_name,
-    pitch_limit: (profile as any).pitch_limit ?? null,
+    pitch_limit: profile.pitch_limit ?? null,
   };
 
-  // ── SELF VIEW ─────────────────────────────────────────────────────────────
+  // SELF VIEW
   if (isSelf && me) {
-    const activeTab = (tab === "comments" || tab === "likes") ? tab : "posts";
+    const activeTab = tab === "comments" || tab === "likes" ? tab : "posts";
 
     function setTab(t: "posts" | "comments" | "likes") {
       navigate({ to: "/u/$handle", params: { handle }, search: { tab: t } });
     }
 
     const PROFILE_TABS = [
-      { key: "posts" as const,    label: "Posts",    icon: FileText },
+      { key: "posts" as const, label: "Posts", icon: FileText },
       { key: "comments" as const, label: "Comments", icon: MessageSquare },
-      { key: "likes" as const,    label: "Likes",    icon: Heart },
+      { key: "likes" as const, label: "Likes", icon: Heart },
     ];
 
     return (
       <div className="min-h-screen pb-20 sm:pb-0">
         <AppHeader />
         <main className="mx-auto max-w-2xl">
-
-          {/* ── Cover banner ── */}
+          {/* Cover banner */}
           <div
             className="h-28 sm:h-36 w-full"
             style={{
-              background: "linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(251,191,36,0.04) 60%, rgba(255,255,255,0.02) 100%)",
+              background:
+                "linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(251,191,36,0.04) 60%, rgba(255,255,255,0.02) 100%)",
             }}
           />
 
-          {/* ── Profile header ── */}
+          {/* Profile header */}
           <div className="px-4 sm:px-6">
             {/* Avatar + action buttons row */}
             <div className="flex items-end justify-between -mt-10 sm:-mt-12 mb-4">
@@ -382,7 +409,12 @@ function ProfilePage() {
                 }}
               >
                 {me.avatar_url ? (
-                  <img src={me.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  <img
+                    src={me.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
                   <span className="grid h-full w-full place-items-center text-2xl">
                     {me.display_name.charAt(0).toUpperCase()}
@@ -410,17 +442,19 @@ function ProfilePage() {
             </h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
               @{me.handle}
-              {(me as any).role_type ? ` · ${ROLE_LABEL[(me as any).role_type as RoleType]}` : ""}
+              {me.role_type ? ` · ${ROLE_LABEL[me.role_type]}` : ""}
             </p>
-            {(me as any).bio && (
-              <p className="mt-2 max-w-prose text-sm text-foreground/85">{(me as any).bio}</p>
-            )}
+            {me.bio && <p className="mt-2 max-w-prose text-sm text-foreground/85">{me.bio}</p>}
           </div>
 
-          {/* ── Tab bar ── */}
+          {/* Tab bar */}
           <div
             className="sticky top-[57px] z-10 mt-5 flex border-b"
-            style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(11,11,12,0.90)", backdropFilter: "blur(12px)" }}
+            style={{
+              borderColor: "rgba(255,255,255,0.08)",
+              background: "rgba(11,11,12,0.90)",
+              backdropFilter: "blur(12px)",
+            }}
           >
             {PROFILE_TABS.map(({ key, label, icon: Icon }) => (
               <button
@@ -428,7 +462,10 @@ function ProfilePage() {
                 type="button"
                 onClick={() => setTab(key)}
                 className="relative flex flex-1 items-center justify-center gap-1.5 py-3.5 text-sm font-medium transition-colors"
-                style={{ color: activeTab === key ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))" }}
+                style={{
+                  color:
+                    activeTab === key ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                }}
               >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
@@ -442,19 +479,20 @@ function ProfilePage() {
             ))}
           </div>
 
-          {/* ── Tab content ── */}
+          {/* Tab content */}
           <div className="px-4 sm:px-6 py-6 pb-28">
-
             {/* POSTS */}
-            {activeTab === "posts" && (
-              posts.length === 0 ? (
+            {activeTab === "posts" &&
+              (posts.length === 0 ? (
                 <div
                   className="flex flex-col items-center rounded-2xl py-16 text-center"
                   style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
                 >
                   <FileText className="h-8 w-8 text-muted-foreground/40 mb-3" />
                   <p className="text-sm font-medium">No posts yet.</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Head to Studio to write your first card.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Head to Studio to write your first card.
+                  </p>
                   <Link
                     to="/studio"
                     search={{ draft: undefined }}
@@ -487,25 +525,26 @@ function ProfilePage() {
                         key={p.id}
                         post={feedPost}
                         currentUserId={user?.id}
-                        onDownload={() => {}}
+                        onDownload={requestExport}
                         onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
                       />
                     );
                   })}
                 </div>
-              )
-            )}
+              ))}
 
             {/* COMMENTS */}
-            {activeTab === "comments" && (
-              comments.length === 0 ? (
+            {activeTab === "comments" &&
+              (comments.length === 0 ? (
                 <div
                   className="flex flex-col items-center rounded-2xl py-16 text-center"
                   style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
                 >
                   <MessageSquare className="h-8 w-8 text-muted-foreground/40 mb-3" />
                   <p className="text-sm font-medium">No comments yet.</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Jump into the feed and start a conversation.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Jump into the feed and start a conversation.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -513,16 +552,27 @@ function ProfilePage() {
                     <div
                       key={c.id}
                       className="rounded-2xl p-4"
-                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
+                      style={{
+                        background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                      }}
                     >
                       <div className="flex items-start gap-3">
                         {/* Small avatar */}
                         <div
                           className="h-8 w-8 shrink-0 rounded-full grid overflow-hidden text-[11px] font-semibold"
-                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
+                          style={{
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.10)",
+                          }}
                         >
                           {me.avatar_url ? (
-                            <img src={me.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                            <img
+                              src={me.avatar_url}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
                           ) : (
                             <span className="grid h-full w-full place-items-center">
                               {me.display_name.charAt(0).toUpperCase()}
@@ -533,7 +583,9 @@ function ProfilePage() {
                           <div className="flex items-center gap-1.5 mb-1">
                             <span className="text-xs font-semibold">{me.display_name}</span>
                             <VerificationBadge tier={me.verification_tier} size={11} />
-                            <span className="text-[11px] text-muted-foreground">· {timeAgo(c.created_at)}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              · {timeAgo(c.created_at)}
+                            </span>
                           </div>
                           <p className="text-sm text-foreground/85 break-words">{c.content}</p>
                         </div>
@@ -541,19 +593,20 @@ function ProfilePage() {
                     </div>
                   ))}
                 </div>
-              )
-            )}
+              ))}
 
             {/* LIKES */}
-            {activeTab === "likes" && (
-              likedPosts.length === 0 ? (
+            {activeTab === "likes" &&
+              (likedPosts.length === 0 ? (
                 <div
                   className="flex flex-col items-center rounded-2xl py-16 text-center"
                   style={{ border: "1px dashed rgba(255,255,255,0.10)" }}
                 >
                   <Heart className="h-8 w-8 text-muted-foreground/40 mb-3" />
                   <p className="text-sm font-medium">No likes yet.</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Like posts in the feed and they'll appear here.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Like posts in the feed and they'll appear here.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -578,18 +631,16 @@ function ProfilePage() {
                         key={p.id}
                         post={feedPost}
                         currentUserId={user?.id}
-                        onDownload={() => {}}
+                        onDownload={requestExport}
                       />
                     );
                   })}
                 </div>
-              )
-            )}
-
+              ))}
           </div>
         </main>
 
-        {/* ── Floating compose button ── */}
+        {/* Floating compose button */}
         {user && (
           <button
             type="button"
@@ -609,30 +660,49 @@ function ProfilePage() {
           </button>
         )}
 
-        {/* ── Composer modal ── */}
+        {/* Composer modal */}
         {showComposer && (
           <ComposerModal
             onClose={() => setShowComposer(false)}
             onPublished={(post) => {
-              setPosts((prev) => [{
-                id: post.id,
-                content: post.content,
-                background: post.background,
-                created_at: post.created_at,
-              }, ...prev]);
+              setPosts((prev) => [
+                {
+                  id: post.id,
+                  content: post.content,
+                  background: post.background,
+                  comments_enabled: post.comments_enabled ?? true,
+                  visibility: post.visibility ?? "public",
+                  created_at: post.created_at,
+                },
+                ...prev,
+              ]);
             }}
           />
         )}
 
-        {/* ── Edit Profile bottom sheet ── */}
+        {/* Edit Profile bottom sheet */}
         {editOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center" style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}>
+          <div
+            className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center"
+            style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+          >
             <div
               className="w-full sm:max-w-lg sm:rounded-3xl overflow-y-auto max-h-[92vh]"
-              style={{ background: "#0B0B0C", border: "1px solid rgba(255,255,255,0.08)", borderBottom: "none", borderRadius: "24px 24px 0 0" }}
+              style={{
+                background: "#0B0B0C",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderBottom: "none",
+                borderRadius: "24px 24px 0 0",
+              }}
             >
               {/* Header */}
-              <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4" style={{ background: "rgba(11,11,12,0.95)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+              <div
+                className="sticky top-0 z-10 flex items-center justify-between px-5 py-4"
+                style={{
+                  background: "rgba(11,11,12,0.95)",
+                  borderBottom: "1px solid rgba(255,255,255,0.07)",
+                }}
+              >
                 <h2 className="text-base font-semibold">Edit profile</h2>
                 <button
                   type="button"
@@ -646,19 +716,24 @@ function ProfilePage() {
               {/* Edit form */}
               <div className="px-5 py-6">
                 <EditProfileForm
-                  profile={me as any}
+                  profile={me}
                   onSaved={async () => {
                     await refreshProfile();
                     setEditOpen(false);
                   }}
                 />
                 {/* Verification portal link inside edit sheet */}
-                <div className="mt-6 pt-5" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                <div
+                  className="mt-6 pt-5"
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+                >
                   <div className="flex items-center gap-2 mb-3">
                     <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Verification Portal</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Verification Portal
+                    </p>
                   </div>
-                  <VerificationSection profile={me as any} />
+                  <VerificationSection profile={me} />
                 </div>
               </div>
             </div>
@@ -668,7 +743,7 @@ function ProfilePage() {
     );
   }
 
-  // ── PUBLIC PROFILE VIEW ────────────────────────────────────────────────────
+  // PUBLIC PROFILE VIEW
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
@@ -677,10 +752,18 @@ function ProfilePage() {
           {/* Avatar */}
           <div
             className="grid h-20 w-20 shrink-0 overflow-hidden rounded-full text-2xl font-semibold"
-            style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
+            style={{
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(255,255,255,0.05)",
+            }}
           >
             {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             ) : (
               <span className="grid h-full w-full place-items-center">
                 {profile.display_name.charAt(0).toUpperCase()}
@@ -704,7 +787,8 @@ function ProfilePage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {profile.verification_tier !== "none" && !dmCloaked &&
+            {profile.verification_tier !== "none" &&
+              !dmCloaked &&
               connectLinks.map((l) => (
                 <a
                   key={l.label}
@@ -723,7 +807,10 @@ function ProfilePage() {
                 type="button"
                 onClick={() => setShowPitchModal(true)}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-amber-400 transition-colors hover:bg-amber-500/10"
-                style={{ border: "1px solid rgba(251,191,36,0.30)", background: "rgba(251,191,36,0.07)" }}
+                style={{
+                  border: "1px solid rgba(251,191,36,0.30)",
+                  background: "rgba(251,191,36,0.07)",
+                }}
               >
                 <Rocket className="h-4 w-4" /> Pitch
               </button>
@@ -744,7 +831,9 @@ function ProfilePage() {
 
         {/* Cards grid */}
         <section className="mt-10">
-          <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Cards</h2>
+          <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Cards
+          </h2>
           {posts.length === 0 ? (
             <p className="mt-4 text-sm text-muted-foreground">Nothing published yet.</p>
           ) : (
@@ -770,7 +859,7 @@ function ProfilePage() {
                     key={p.id}
                     post={feedPost}
                     currentUserId={user?.id}
-                    onDownload={() => {}}
+                    onDownload={requestExport}
                     onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
                   />
                 );
@@ -787,11 +876,13 @@ function ProfilePage() {
           onClose={() => setShowPitchModal(false)}
         />
       )}
+
+      {exportSurface}
     </div>
   );
 }
 
-// ─── Self Profile Card (read-only → inline edit toggle) ───────────────────────
+/** Owner-facing profile card, with an inline edit toggle. */
 type SelfProfile = {
   id: string;
   handle: string;
@@ -824,10 +915,18 @@ function SelfProfileCard({
         {/* Avatar */}
         <div
           className="grid h-14 w-14 shrink-0 overflow-hidden rounded-full text-xl font-semibold sm:h-16 sm:w-16"
-          style={{ border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.05)" }}
+          style={{
+            border: "1px solid rgba(255,255,255,0.10)",
+            background: "rgba(255,255,255,0.05)",
+          }}
         >
           {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+            <img
+              src={profile.avatar_url}
+              alt=""
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+            />
           ) : (
             <span className="grid h-full w-full place-items-center">
               {profile.display_name.charAt(0).toUpperCase()}
@@ -856,12 +955,21 @@ function SelfProfileCard({
                 type="button"
                 onClick={() => setEditMode((v) => !v)}
                 className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
               >
                 {editMode ? (
-                  <><X className="h-3.5 w-3.5" /><span className="hidden sm:inline">Cancel</span></>
+                  <>
+                    <X className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Cancel</span>
+                  </>
                 ) : (
-                  <><Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit</span></>
+                  <>
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </>
                 )}
               </button>
             </div>
@@ -889,7 +997,7 @@ function SelfProfileCard({
   );
 }
 
-// ─── Inline edit form ─────────────────────────────────────────────────────────
+// Inline edit form
 function EditProfileForm({
   profile,
   onSaved,
@@ -906,30 +1014,42 @@ function EditProfileForm({
   const [websiteUrl, setWebsiteUrl] = useState(profile.portfolio_url ?? "");
   const [busy, setBusy] = useState(false);
 
-  const ROLE_OPTIONS: { value: RoleType | ""; label: string }[] = [
+  const roleOptions: { value: RoleType | ""; label: string }[] = [
     { value: "", label: "Not specified" },
-    { value: "founder", label: "Startup Founder" },
-    { value: "developer", label: "Core Developer" },
-    { value: "pm", label: "Technical PM" },
-    { value: "investor", label: "VC / Investor" },
+    ...ROLE_OPTIONS,
   ];
 
   async function save() {
-    if (!displayName.trim()) { toast.error("Display name is required."); return; }
-    if (githubUrl && !/^https?:\/\//.test(githubUrl.trim())) { toast.error("GitHub URL must start with https://"); return; }
-    if (websiteUrl && !/^https?:\/\//.test(websiteUrl.trim())) { toast.error("Website URL must start with https://"); return; }
+    if (!displayName.trim()) {
+      toast.error("Display name is required.");
+      return;
+    }
+    if (githubUrl && !/^https?:\/\//.test(githubUrl.trim())) {
+      toast.error("GitHub URL must start with https://");
+      return;
+    }
+    if (websiteUrl && !/^https?:\/\//.test(websiteUrl.trim())) {
+      toast.error("Website URL must start with https://");
+      return;
+    }
     setBusy(true);
-    const { error } = await supabase.from("profiles").update({
-      display_name: displayName.trim(),
-      bio: bio.trim() || null,
-      avatar_url: avatarUrl.trim() || null,
-      company_name: companyName.trim() || null,
-      role_type: (roleType || null) as any,
-      github_url: githubUrl.trim() || null,
-      portfolio_url: websiteUrl.trim() || null,
-    }).eq("id", profile.id);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        display_name: displayName.trim(),
+        bio: bio.trim() || null,
+        avatar_url: avatarUrl.trim() || null,
+        company_name: companyName.trim() || null,
+        role_type: roleType || null,
+        github_url: githubUrl.trim() || null,
+        portfolio_url: websiteUrl.trim() || null,
+      })
+      .eq("id", profile.id);
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     await onSaved();
     toast.success("Profile updated.");
   }
@@ -949,23 +1069,45 @@ function EditProfileForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Display Name">
-          <input className="lux-field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} />
+          <input
+            className="lux-field"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            maxLength={60}
+          />
         </Field>
         <Field label="Role Type">
-          <select className="lux-field" value={roleType} onChange={(e) => setRoleType(e.target.value)}>
-            {ROLE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+          <select
+            className="lux-field"
+            value={roleType}
+            onChange={(e) => setRoleType(e.target.value)}
+          >
+            {roleOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </Field>
       </div>
 
       <Field label="Company / Startup">
-        <input className="lux-field" value={companyName} onChange={(e) => setCompanyName(e.target.value)} maxLength={80} />
+        <input
+          className="lux-field"
+          value={companyName}
+          onChange={(e) => setCompanyName(e.target.value)}
+          maxLength={80}
+        />
       </Field>
 
       <Field label="Bio" hint="Max 200 characters.">
-        <textarea rows={3} className="lux-field resize-y" value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} />
+        <textarea
+          rows={3}
+          className="lux-field resize-y"
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          maxLength={200}
+        />
       </Field>
 
       <div
@@ -1005,17 +1147,27 @@ function EditProfileForm({
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</label>
+      <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
-// ─── Verification section ────────────────────────────────────────────────────
+// Verification section
 type VerificationRequestRow = {
   id: string;
   tier: "silver" | "gold";
@@ -1023,7 +1175,7 @@ type VerificationRequestRow = {
   created_at: string;
 };
 
-// ── URL validation helper ─────────────────────────────────────────────────────
+// URL validation helper
 function isValidUrl(value: string): boolean {
   if (!value) return true; // empty = optional, treated as valid (required check is separate)
   try {
@@ -1034,7 +1186,11 @@ function isValidUrl(value: string): boolean {
   }
 }
 
-function VerificationSection({ profile }: { profile: SelfProfile & { verification_tier: VerificationTier } }) {
+function VerificationSection({
+  profile,
+}: {
+  profile: SelfProfile & { verification_tier: VerificationTier };
+}) {
   const { user } = useAuth();
   const doSubmit = useServerFn(submitVerificationApplication);
   const [activeTab, setActiveTab] = useState<"silver" | "gold">("silver");
@@ -1043,23 +1199,23 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
   // Track optimistic pending state so form hides immediately after submit
   const [localPending, setLocalPending] = useState<{ silver?: boolean; gold?: boolean }>({});
 
-  // ── Silver fields ──────────────────────────────────────────────────────────
+  // Silver fields
   const [sGithub, setSGithub] = useState("");
   const [sLiveUrl, setSLiveUrl] = useState("");
   const [sContract, setSContract] = useState("");
   const [sShipDesc, setSShipDesc] = useState("");
 
-  // ── Silver field errors ────────────────────────────────────────────────────
+  // Silver field errors
   const [sGithubErr, setSGithubErr] = useState("");
   const [sLiveUrlErr, setSLiveUrlErr] = useState("");
 
-  // ── Gold fields ────────────────────────────────────────────────────────────
+  // Gold fields
   const [gFundName, setGFundName] = useState("");
   const [gPortfolio, setGPortfolio] = useState("");
   const [gLinkedin, setGLinkedin] = useState("");
   const [gInviteCode, setGInviteCode] = useState("");
 
-  // ── Gold field errors ──────────────────────────────────────────────────────
+  // Gold field errors
   const [gPortfolioErr, setGPortfolioErr] = useState("");
   const [gLinkedinErr, setGLinkedinErr] = useState("");
 
@@ -1075,13 +1231,17 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
     setRequests((data ?? []) as VerificationRequestRow[]);
   }
 
-  useEffect(() => { loadRequests(); }, [user]);
+  useEffect(() => {
+    loadRequests();
+    // Load once per signed-in user; loadRequests is redeclared each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   function latestFor(tier: "silver" | "gold") {
     return requests?.find((r) => r.tier === tier) ?? null;
   }
 
-  // ── Silver validation ──────────────────────────────────────────────────────
+  // Silver validation
   function validateSilver(): boolean {
     let ok = true;
     const g = sGithub.trim();
@@ -1104,7 +1264,7 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
     return ok;
   }
 
-  // ── Gold validation ────────────────────────────────────────────────────────
+  // Gold validation
   function validateGold(): boolean {
     let ok = true;
     const p = gPortfolio.trim();
@@ -1134,21 +1294,22 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
     setLocalPending((p) => ({ ...p, [activeTab]: true }));
     try {
       await doSubmit({
-        data: activeTab === "silver"
-          ? {
-              tier: "silver" as const,
-              github_url: sGithub.trim(),
-              deployed_contract_address: sContract.trim(),
-              live_project_url: sLiveUrl.trim(),
-              recent_ship_desc: sShipDesc.trim(),
-            }
-          : {
-              tier: "gold" as const,
-              fund_or_company_name: gFundName.trim(),
-              portfolio_url: gPortfolio.trim(),
-              linkedin_or_x_url: gLinkedin.trim(),
-              invite_code: gInviteCode.trim(),
-            },
+        data:
+          activeTab === "silver"
+            ? {
+                tier: "silver" as const,
+                github_url: sGithub.trim(),
+                deployed_contract_address: sContract.trim(),
+                live_project_url: sLiveUrl.trim(),
+                recent_ship_desc: sShipDesc.trim(),
+              }
+            : {
+                tier: "gold" as const,
+                fund_or_company_name: gFundName.trim(),
+                portfolio_url: gPortfolio.trim(),
+                linkedin_or_x_url: gLinkedin.trim(),
+                invite_code: gInviteCode.trim(),
+              },
       });
       toast.success("Application submitted — your credentials are now under review.");
       await loadRequests();
@@ -1163,15 +1324,16 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
 
   // Resolved states for each tier
   const silverLatest = latestFor("silver");
-  const goldLatest   = latestFor("gold");
-  const isSilverVerified = profile.verification_tier === "silver" || profile.verification_tier === "gold";
-  const isGoldVerified   = profile.verification_tier === "gold";
+  const goldLatest = latestFor("gold");
+  const isSilverVerified =
+    profile.verification_tier === "silver" || profile.verification_tier === "gold";
+  const isGoldVerified = profile.verification_tier === "gold";
 
-  const activeLatest   = activeTab === "silver" ? silverLatest : goldLatest;
+  const activeLatest = activeTab === "silver" ? silverLatest : goldLatest;
   const activeVerified = activeTab === "silver" ? isSilverVerified : isGoldVerified;
-  const isPending      = activeLatest?.status === "pending" || !!localPending[activeTab];
-  const isRejected     = activeLatest?.status === "rejected";
-  const canApply       = !activeVerified && !isPending;
+  const isPending = activeLatest?.status === "pending" || !!localPending[activeTab];
+  const isRejected = activeLatest?.status === "rejected";
+  const canApply = !activeVerified && !isPending;
 
   // Tier styles
   const silverStyle = {
@@ -1202,15 +1364,17 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
 
   return (
     <div className="space-y-4">
-      {/* ── Tab selector ────────────────────────────────────────────────────── */}
+      {/* Tab selector */}
       <div className="flex gap-1 rounded-xl border border-border/50 bg-secondary/10 p-1">
         <button
           type="button"
           onClick={() => setActiveTab("silver")}
-          className={"flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
+          className={
+            "flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
             (activeTab === "silver"
               ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground/80")}
+              : "text-muted-foreground hover:text-foreground/80")
+          }
         >
           Silver · Builder
           {isSilverVerified && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
@@ -1218,19 +1382,20 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
         <button
           type="button"
           onClick={() => setActiveTab("gold")}
-          className={"flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
+          className={
+            "flex flex-1 items-center justify-center gap-2 rounded-[9px] py-2 text-[13px] font-medium transition-all " +
             (activeTab === "gold"
               ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground/80")}
+              : "text-muted-foreground hover:text-foreground/80")
+          }
         >
           Gold · Investor
           {isGoldVerified && <CheckCircle2 className="h-3 w-3 text-amber-400" />}
         </button>
       </div>
 
-      {/* ── Active track card ───────────────────────────────────────────────── */}
+      {/* Active track card */}
       <div className={`${ts.card} rounded-2xl p-5 space-y-4`}>
-
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -1238,7 +1403,9 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
               {activeTab === "silver" ? "Silver — Recognized Builder" : "Gold — Verified Investor"}
             </p>
             <p className="text-[11px]" style={{ color: ts.subtitle }}>
-              {activeTab === "silver" ? "For active builders who ship" : "For fund managers & angels"}
+              {activeTab === "silver"
+                ? "For active builders who ship"
+                : "For fund managers & angels"}
             </p>
           </div>
           {activeVerified && (
@@ -1248,24 +1415,37 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
           )}
         </div>
 
-        {/* ── Already verified — nothing more to do ───────────────────────── */}
+        {/* Already verified — nothing more to do */}
         {activeVerified && (
-          <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.15)", color: "#4ade80" }}>
-            You already hold {activeTab === "silver" ? "Silver (or higher)" : "Gold"} verification — no action needed.
+          <div
+            className="rounded-xl px-4 py-3 text-sm"
+            style={{
+              background: "rgba(34,197,94,0.06)",
+              border: "1px solid rgba(34,197,94,0.15)",
+              color: "#4ade80",
+            }}
+          >
+            You already hold {activeTab === "silver" ? "Silver (or higher)" : "Gold"} verification —
+            no action needed.
           </div>
         )}
 
-        {/* ── Pending state — form hidden, show waiting message ───────────── */}
+        {/* Pending state — form hidden, show waiting message */}
         {!activeVerified && isPending && (
           <div className="space-y-3">
             <div
               className="rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.20)", color: "#fbbf24" }}
+              style={{
+                background: "rgba(251,191,36,0.06)",
+                border: "1px solid rgba(251,191,36,0.20)",
+                color: "#fbbf24",
+              }}
             >
               <p className="font-medium">⏳ Application under review</p>
               <p className="mt-1 text-xs opacity-80">
-                Your {activeTab === "silver" ? "Silver Builder" : "Gold Investor"} application has been received and is being reviewed by our team.
-                You'll receive a notification here and by email once a decision is made.
+                Your {activeTab === "silver" ? "Silver Builder" : "Gold Investor"} application has
+                been received and is being reviewed by our team. You'll receive a notification here
+                and by email once a decision is made.
               </p>
             </div>
             {activeLatest && (
@@ -1276,7 +1456,7 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
           </div>
         )}
 
-        {/* ── Application form — only shown when user can still apply ─────── */}
+        {/* Application form — only shown when user can still apply */}
         {canApply && (
           <>
             <p className="text-xs" style={{ color: ts.desc }}>
@@ -1296,47 +1476,65 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
               </div>
             )}
 
-            {/* ── Silver form ──────────────────────────────────────────────── */}
+            {/* Silver form */}
             {activeTab === "silver" && (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
                     GitHub Profile URL <span style={{ color: ts.accent }}>*</span>
                   </label>
                   <input
                     className={`lux-field${sGithubErr ? " border-red-500/60 focus:border-red-500" : ""}`}
                     placeholder="https://github.com/yourhandle"
                     value={sGithub}
-                    onChange={(e) => { setSGithub(e.target.value); if (sGithubErr) setSGithubErr(""); }}
+                    onChange={(e) => {
+                      setSGithub(e.target.value);
+                      if (sGithubErr) setSGithubErr("");
+                    }}
                     onBlur={() => {
                       const v = sGithub.trim();
                       if (!v) setSGithubErr("GitHub URL is required.");
-                      else if (!isValidUrl(v)) setSGithubErr("Enter a valid URL starting with https://");
+                      else if (!isValidUrl(v))
+                        setSGithubErr("Enter a valid URL starting with https://");
                       else setSGithubErr("");
                     }}
                   />
                   {sGithubErr && <p className="text-[11px] text-red-400">{sGithubErr}</p>}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
                     Live DApp / Project URL
                   </label>
                   <input
                     className={`lux-field${sLiveUrlErr ? " border-red-500/60 focus:border-red-500" : ""}`}
                     placeholder="https://yourproject.xyz"
                     value={sLiveUrl}
-                    onChange={(e) => { setSLiveUrl(e.target.value); if (sLiveUrlErr) setSLiveUrlErr(""); }}
+                    onChange={(e) => {
+                      setSLiveUrl(e.target.value);
+                      if (sLiveUrlErr) setSLiveUrlErr("");
+                    }}
                     onBlur={() => {
                       const v = sLiveUrl.trim();
-                      if (v && !isValidUrl(v)) setSLiveUrlErr("Enter a valid URL starting with https://");
+                      if (v && !isValidUrl(v))
+                        setSLiveUrlErr("Enter a valid URL starting with https://");
                       else setSLiveUrlErr("");
                     }}
                   />
                   {sLiveUrlErr && <p className="text-[11px] text-red-400">{sLiveUrlErr}</p>}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                    Deployed Contract Address <span className="normal-case opacity-60">(optional)</span>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
+                    Deployed Contract Address{" "}
+                    <span className="normal-case opacity-60">(optional)</span>
                   </label>
                   <input
                     className="lux-field font-mono text-xs"
@@ -1346,9 +1544,14 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                  <label
+                    className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
                     <span>What did you ship this week?</span>
-                    <span style={{ color: sShipDesc.length > 90 ? "#f87171" : ts.subtitle }}>{sShipDesc.length}/100</span>
+                    <span style={{ color: sShipDesc.length > 90 ? "#f87171" : ts.subtitle }}>
+                      {sShipDesc.length}/100
+                    </span>
                   </label>
                   <textarea
                     className="lux-field resize-none"
@@ -1362,11 +1565,14 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
               </div>
             )}
 
-            {/* ── Gold form ────────────────────────────────────────────────── */}
+            {/* Gold form */}
             {activeTab === "gold" && (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
                     Fund or Company Name <span style={{ color: ts.accent }}>*</span>
                   </label>
                   <input
@@ -1377,42 +1583,60 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
                     Portfolio / Fund Website
                   </label>
                   <input
                     className={`lux-field${gPortfolioErr ? " border-red-500/60 focus:border-red-500" : ""}`}
                     placeholder="https://acmeventures.com"
                     value={gPortfolio}
-                    onChange={(e) => { setGPortfolio(e.target.value); if (gPortfolioErr) setGPortfolioErr(""); }}
+                    onChange={(e) => {
+                      setGPortfolio(e.target.value);
+                      if (gPortfolioErr) setGPortfolioErr("");
+                    }}
                     onBlur={() => {
                       const v = gPortfolio.trim();
-                      if (v && !isValidUrl(v)) setGPortfolioErr("Enter a valid URL starting with https://");
+                      if (v && !isValidUrl(v))
+                        setGPortfolioErr("Enter a valid URL starting with https://");
                       else setGPortfolioErr("");
                     }}
                   />
                   {gPortfolioErr && <p className="text-[11px] text-red-400">{gPortfolioErr}</p>}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
                     LinkedIn or X Profile
                   </label>
                   <input
                     className={`lux-field${gLinkedinErr ? " border-red-500/60 focus:border-red-500" : ""}`}
                     placeholder="https://linkedin.com/in/yourname"
                     value={gLinkedin}
-                    onChange={(e) => { setGLinkedin(e.target.value); if (gLinkedinErr) setGLinkedinErr(""); }}
+                    onChange={(e) => {
+                      setGLinkedin(e.target.value);
+                      if (gLinkedinErr) setGLinkedinErr("");
+                    }}
                     onBlur={() => {
                       const v = gLinkedin.trim();
-                      if (v && !isValidUrl(v)) setGLinkedinErr("Enter a valid URL starting with https://");
+                      if (v && !isValidUrl(v))
+                        setGLinkedinErr("Enter a valid URL starting with https://");
                       else setGLinkedinErr("");
                     }}
                   />
                   {gLinkedinErr && <p className="text-[11px] text-red-400">{gLinkedinErr}</p>}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: ts.subtitle }}>
-                    Invite Code <span className="normal-case opacity-60">(optional — speeds up review)</span>
+                  <label
+                    className="text-[11px] font-medium uppercase tracking-wider"
+                    style={{ color: ts.subtitle }}
+                  >
+                    Invite Code{" "}
+                    <span className="normal-case opacity-60">(optional — speeds up review)</span>
                   </label>
                   <input
                     className="lux-field font-mono tracking-widest text-xs"
@@ -1430,14 +1654,28 @@ function VerificationSection({ profile }: { profile: SelfProfile & { verificatio
               onClick={handleSubmit}
               disabled={busy}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-              style={{ border: `1px solid ${ts.btnBorder}`, color: ts.accent, background: ts.btnBg }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = ts.btnHoverBg; e.currentTarget.style.color = ts.accentBright; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = ts.btnBg; e.currentTarget.style.color = ts.accent; }}
+              style={{
+                border: `1px solid ${ts.btnBorder}`,
+                color: ts.accent,
+                background: ts.btnBg,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = ts.btnHoverBg;
+                e.currentTarget.style.color = ts.accentBright;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = ts.btnBg;
+                e.currentTarget.style.color = ts.accent;
+              }}
             >
-              {busy
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <ShieldCheck className="h-4 w-4" />}
-              {isRejected ? "Reapply" : `Apply for ${activeTab === "silver" ? "Silver Builder" : "Gold Investor"}`}
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              {isRejected
+                ? "Reapply"
+                : `Apply for ${activeTab === "silver" ? "Silver Builder" : "Gold Investor"}`}
             </button>
           </>
         )}

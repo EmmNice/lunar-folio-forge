@@ -68,28 +68,31 @@ export type Database = {
           id: string
           user_id: string
           actor_id: string | null
-          type: "like" | "comment" | "repost"
+          type: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected"
           post_id: string | null
           read: boolean
           created_at: string
+          metadata: Json | null
         }
         Insert: {
           id?: string
           user_id: string
           actor_id?: string | null
-          type: "like" | "comment" | "repost"
+          type: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected"
           post_id?: string | null
           read?: boolean
           created_at?: string
+          metadata?: Json | null
         }
         Update: {
           id?: string
           user_id?: string
           actor_id?: string | null
-          type?: "like" | "comment" | "repost"
+          type?: "like" | "comment" | "repost" | "verification_approved" | "verification_rejected"
           post_id?: string | null
           read?: boolean
           created_at?: string
+          metadata?: Json | null
         }
         Relationships: [
           {
@@ -249,6 +252,14 @@ export type Database = {
       verification_requests: {
         Row: {
           created_at: string
+          github_url: string | null
+          deployed_contract_address: string | null
+          live_project_url: string | null
+          recent_ship_desc: string | null
+          fund_or_company_name: string | null
+          portfolio_url: string | null
+          linkedin_or_x_url: string | null
+          invite_code: string | null
           id: string
           link_primary: string
           link_secondary: string | null
@@ -259,6 +270,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          github_url?: string | null
+          deployed_contract_address?: string | null
+          live_project_url?: string | null
+          recent_ship_desc?: string | null
+          fund_or_company_name?: string | null
+          portfolio_url?: string | null
+          linkedin_or_x_url?: string | null
+          invite_code?: string | null
           id?: string
           link_primary: string
           link_secondary?: string | null
@@ -269,6 +288,14 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          github_url?: string | null
+          deployed_contract_address?: string | null
+          live_project_url?: string | null
+          recent_ship_desc?: string | null
+          fund_or_company_name?: string | null
+          portfolio_url?: string | null
+          linkedin_or_x_url?: string | null
+          invite_code?: string | null
           id?: string
           link_primary?: string
           link_secondary?: string | null
@@ -426,6 +453,8 @@ export type Database = {
           date_of_birth: string | null
           display_name: string
           dm_cloaking_enabled: boolean
+          hide_from_search: boolean
+          notification_prefs: Json
           github_url: string | null
           handle: string
           id: string
@@ -449,6 +478,8 @@ export type Database = {
           date_of_birth?: string | null
           display_name: string
           dm_cloaking_enabled?: boolean
+          hide_from_search?: boolean
+          notification_prefs?: Json
           github_url?: string | null
           handle: string
           id: string
@@ -472,6 +503,8 @@ export type Database = {
           date_of_birth?: string | null
           display_name?: string
           dm_cloaking_enabled?: boolean
+          hide_from_search?: boolean
+          notification_prefs?: Json
           github_url?: string | null
           handle?: string
           id?: string
@@ -552,12 +585,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_conversation_slot: {
+        Args: {
+          _daily_limit: number
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      consume_ai_credit: {
+        Args: {
+          _daily_credits: number
+          _user_id: string
+          _window_hours?: number
+        }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      refund_ai_credit: {
+        Args: {
+          _user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

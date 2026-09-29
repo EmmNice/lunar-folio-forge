@@ -35,3 +35,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Agent / tool scratch output — not part of the project
+.agents/
+attached_assets/
+
+# Supabase CLI scratch
+supabase/.temp/

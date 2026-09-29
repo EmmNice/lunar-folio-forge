@@ -16,9 +16,11 @@ CREATE INDEX IF NOT EXISTS notifications_user_created_idx ON public.notification
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users can view own notifications" ON public.notifications;
 CREATE POLICY "users can view own notifications" ON public.notifications
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "users can mark own notifications read" ON public.notifications;
 CREATE POLICY "users can mark own notifications read" ON public.notifications
   FOR UPDATE TO authenticated USING (auth.uid() = user_id);
 
@@ -83,7 +85,10 @@ CREATE TRIGGER trg_notify_repost
   FOR EACH ROW EXECUTE FUNCTION public.notify_on_repost();
 
 -- ── Realtime ──────────────────────────────────────────────────────────────
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+do $$ begin
+  alter publication supabase_realtime add table public.notifications;
+exception when duplicate_object then null;
+end $$;
 
 -- ============================================================
 -- Pitches: accept/decline statuses

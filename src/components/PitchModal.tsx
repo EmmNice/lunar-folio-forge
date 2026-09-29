@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { submitPitch } from "@/lib/pitch.functions";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import type { VerificationTier } from "@/hooks/use-auth";
+import { MAX_PITCH_LENGTH } from "@/lib/limits";
 
 export type PitchTarget = {
   id: string;
@@ -22,8 +23,6 @@ type Props = {
   onClose: () => void;
 };
 
-const MAX_PITCH = 280;
-
 export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
   const send = useServerFn(submitPitch);
   const [companyName, setCompanyName] = useState("");
@@ -31,13 +30,22 @@ export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
   const [deckUrl, setDeckUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const remaining = MAX_PITCH - pitch.length;
+  const remaining = MAX_PITCH_LENGTH - pitch.length;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!companyName.trim()) { toast.error("Company name is required."); return; }
-    if (!pitch.trim()) { toast.error("Your pitch is required."); return; }
-    if (pitch.length > MAX_PITCH) { toast.error(`Pitch must be ${MAX_PITCH} characters or fewer.`); return; }
+    if (!companyName.trim()) {
+      toast.error("Company name is required.");
+      return;
+    }
+    if (!pitch.trim()) {
+      toast.error("Your pitch is required.");
+      return;
+    }
+    if (pitch.length > MAX_PITCH_LENGTH) {
+      toast.error(`Pitch must be ${MAX_PITCH_LENGTH} characters or fewer.`);
+      return;
+    }
     if (deckUrl && !/^https?:\/\//.test(deckUrl.trim())) {
       toast.error("Deck / demo link must be a valid URL starting with https://");
       return;
@@ -45,7 +53,7 @@ export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
 
     setSubmitting(true);
     try {
-      await send({
+      const result = await send({
         data: {
           recipientId: target.id,
           companyName: companyName.trim(),
@@ -53,7 +61,13 @@ export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
           deckUrl: deckUrl.trim() || "",
         },
       });
-      toast.success("Pitch delivered — they'll review it in their inbox.");
+      // The pitch always lands in their in-app inbox; the email is best-effort,
+      // so don't claim it was emailed when it wasn't.
+      toast.success(
+        result.emailed
+          ? "Pitch delivered — they'll review it in their inbox."
+          : "Pitch delivered to their in-app inbox. No email alert was sent.",
+      );
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send pitch.");
@@ -158,7 +172,7 @@ export function PitchModal({ target, senderId: _senderId, onClose }: Props) {
                   className={field + " resize-none leading-relaxed"}
                   value={pitch}
                   onChange={(e) => setPitch(e.target.value)}
-                  maxLength={MAX_PITCH + 20}
+                  maxLength={MAX_PITCH_LENGTH + 20}
                   placeholder="We're building the boring infra everyone depends on. Currently at $X ARR, growing Y% MoM…"
                   required
                 />

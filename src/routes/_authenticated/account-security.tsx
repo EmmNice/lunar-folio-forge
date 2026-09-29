@@ -1,9 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  ArrowLeft, Lock, Github, Loader2, CheckCircle2, Circle,
-} from "lucide-react";
+import { ArrowLeft, Lock, Github, Loader2, CheckCircle2, Circle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -17,25 +15,39 @@ function SecuritySettingsPage() {
   const navigate = useNavigate();
 
   const [showPwForm, setShowPwForm] = useState(false);
-  const [newPw, setNewPw]           = useState("");
-  const [confirmPw, setConfirmPw]   = useState("");
-  const [busy, setBusy]             = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const identities = user?.identities ?? [];
-  const hasGithub  = identities.some((i) => i.provider === "github");
-  const hasGoogle  = identities.some((i) => i.provider === "google");
-  const hasEmail   = identities.some((i) => i.provider === "email");
+  const hasGithub = identities.some((i) => i.provider === "github");
+  const hasGoogle = identities.some((i) => i.provider === "google");
+  const hasEmail = identities.some((i) => i.provider === "email");
 
   async function changePassword() {
-    if (!newPw.trim()) { toast.error("Enter a new password."); return; }
-    if (newPw !== confirmPw) { toast.error("Passwords don't match."); return; }
-    if (newPw.length < 8) { toast.error("Minimum 8 characters."); return; }
+    if (!newPw.trim()) {
+      toast.error("Enter a new password.");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      toast.error("Passwords don't match.");
+      return;
+    }
+    if (newPw.length < 8) {
+      toast.error("Minimum 8 characters.");
+      return;
+    }
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Password updated.");
-    setNewPw(""); setConfirmPw(""); setShowPwForm(false);
+    setNewPw("");
+    setConfirmPw("");
+    setShowPwForm(false);
   }
 
   return (
@@ -87,7 +99,10 @@ function SecuritySettingsPage() {
                   type="button"
                   onClick={() => setShowPwForm((v) => !v)}
                   className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                  }}
                 >
                   {showPwForm ? "Cancel" : "Change"}
                 </button>
@@ -132,12 +147,19 @@ function SecuritySettingsPage() {
             <div className="space-y-3">
               {[
                 { icon: <Github className="h-4 w-4" />, label: "GitHub", connected: hasGithub },
-                { icon: <span className="text-[13px] font-bold leading-none">G</span>, label: "Google", connected: hasGoogle },
+                {
+                  icon: <span className="text-[13px] font-bold leading-none">G</span>,
+                  label: "Google",
+                  connected: hasGoogle,
+                },
               ].map(({ icon, label, connected }) => (
                 <div key={label} className="flex items-center gap-3">
                   <div
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                    }}
                   >
                     {icon}
                   </div>

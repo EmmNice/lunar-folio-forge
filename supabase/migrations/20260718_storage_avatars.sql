@@ -13,11 +13,13 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Anyone can read (public bucket, but policy is belt-and-suspenders)
+DROP POLICY IF EXISTS "Public avatar read" ON storage.objects;
 CREATE POLICY "Public avatar read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'avatars');
 
 -- Authenticated users may upload into their own /<uid>/ folder
+DROP POLICY IF EXISTS "Users upload own avatar" ON storage.objects;
 CREATE POLICY "Users upload own avatar"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -27,6 +29,7 @@ CREATE POLICY "Users upload own avatar"
   );
 
 -- Authenticated users may replace their own files (upsert uses UPDATE)
+DROP POLICY IF EXISTS "Users update own avatar" ON storage.objects;
 CREATE POLICY "Users update own avatar"
   ON storage.objects FOR UPDATE
   TO authenticated
@@ -36,6 +39,7 @@ CREATE POLICY "Users update own avatar"
   );
 
 -- Authenticated users may delete their own files
+DROP POLICY IF EXISTS "Users delete own avatar" ON storage.objects;
 CREATE POLICY "Users delete own avatar"
   ON storage.objects FOR DELETE
   TO authenticated

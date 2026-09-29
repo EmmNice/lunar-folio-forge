@@ -2,9 +2,12 @@
 -- ============================================================
 -- ROLES
 -- ============================================================
-create type public.app_role as enum ('admin', 'moderator', 'user');
+do $$ begin
+  create type public.app_role as enum ('admin', 'moderator', 'user');
+exception when duplicate_object then null;
+end $$;
 
-create table public.user_roles (
+create table if not exists public.user_roles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   role public.app_role not null,
@@ -17,6 +20,7 @@ grant all on public.user_roles to service_role;
 
 alter table public.user_roles enable row level security;
 
+drop policy if exists "users can view own roles" on public.user_roles;
 create policy "users can view own roles" on public.user_roles
 for select to authenticated using (auth.uid() = user_id);
 
@@ -36,7 +40,7 @@ $$;
 -- ============================================================
 -- PROFILES
 -- ============================================================
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   handle text unique not null,
   display_name text not null,
@@ -55,12 +59,15 @@ grant all on public.profiles to service_role;
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "profiles are viewable by everyone" on public.profiles;
 create policy "profiles are viewable by everyone" on public.profiles
 for select to anon, authenticated using (true);
 
+drop policy if exists "users can insert own profile" on public.profiles;
 create policy "users can insert own profile" on public.profiles
 for insert to authenticated with check (auth.uid() = id);
 
+drop policy if exists "users can update own profile" on public.profiles;
 create policy "users can update own profile" on public.profiles
 for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
 
@@ -112,6 +119,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
@@ -127,6 +135,7 @@ begin
 end;
 $$;
 
+drop trigger if exists profiles_touch_updated on public.profiles;
 create trigger profiles_touch_updated
 before update on public.profiles
 for each row execute function public.touch_updated_at();
@@ -134,7 +143,7 @@ for each row execute function public.touch_updated_at();
 -- ============================================================
 -- POSTS
 -- ============================================================
-create table public.posts (
+create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.profiles(id) on delete cascade,
   content text not null,
@@ -145,8 +154,8 @@ create table public.posts (
   constraint background_kind check (background in ('noir', 'cream'))
 );
 
-create index posts_author_created_idx on public.posts(author_id, created_at desc);
-create index posts_created_idx on public.posts(created_at desc);
+create index if not exists posts_author_created_idx on public.posts(author_id, created_at desc);
+create index if not exists posts_created_idx on public.posts(created_at desc);
 
 grant select on public.posts to anon;
 grant select, insert, update, delete on public.posts to authenticated;
@@ -154,22 +163,26 @@ grant all on public.posts to service_role;
 
 alter table public.posts enable row level security;
 
+drop policy if exists "posts are viewable by everyone" on public.posts;
 create policy "posts are viewable by everyone" on public.posts
 for select to anon, authenticated using (true);
 
+drop policy if exists "authenticated users can create posts" on public.posts;
 create policy "authenticated users can create posts" on public.posts
 for insert to authenticated with check (auth.uid() = author_id);
 
+drop policy if exists "users can update own posts" on public.posts;
 create policy "users can update own posts" on public.posts
 for update to authenticated using (auth.uid() = author_id) with check (auth.uid() = author_id);
 
+drop policy if exists "users can delete own posts" on public.posts;
 create policy "users can delete own posts" on public.posts
 for delete to authenticated using (auth.uid() = author_id);
 
 -- ============================================================
 -- FOLLOWS
 -- ============================================================
-create table public.follows (
+create table if not exists public.follows (
   follower_id uuid not null references public.profiles(id) on delete cascade,
   following_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
@@ -177,7 +190,7 @@ create table public.follows (
   constraint no_self_follow check (follower_id <> following_id)
 );
 
-create index follows_following_idx on public.follows(following_id);
+create index if not exists follows_following_idx on public.follows(following_id);
 
 grant select on public.follows to anon;
 grant select, insert, delete on public.follows to authenticated;
@@ -185,19 +198,22 @@ grant all on public.follows to service_role;
 
 alter table public.follows enable row level security;
 
+drop policy if exists "follows are viewable by everyone" on public.follows;
 create policy "follows are viewable by everyone" on public.follows
 for select to anon, authenticated using (true);
 
+drop policy if exists "users can follow" on public.follows;
 create policy "users can follow" on public.follows
 for insert to authenticated with check (auth.uid() = follower_id);
 
+drop policy if exists "users can unfollow" on public.follows;
 create policy "users can unfollow" on public.follows
 for delete to authenticated using (auth.uid() = follower_id);
 
 -- ============================================================
 -- CONVERSATIONS + MESSAGES
 -- ============================================================
-create table public.conversations (
+create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
   user_a uuid not null references public.profiles(id) on delete cascade,
   user_b uuid not null references public.profiles(id) on delete cascade,
@@ -208,20 +224,21 @@ create table public.conversations (
   unique (user_a, user_b)
 );
 
-create index conversations_participants_idx on public.conversations(user_a, user_b);
+create index if not exists conversations_participants_idx on public.conversations(user_a, user_b);
 
 grant select on public.conversations to authenticated;
 grant all on public.conversations to service_role;
 
 alter table public.conversations enable row level security;
 
+drop policy if exists "participants can view conversation" on public.conversations;
 create policy "participants can view conversation" on public.conversations
 for select to authenticated
 using (auth.uid() = user_a or auth.uid() = user_b);
 
 -- Inserts happen via server function using service role; no INSERT policy for regular users.
 
-create table public.messages (
+create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   sender_id uuid not null references public.profiles(id) on delete cascade,
@@ -230,13 +247,14 @@ create table public.messages (
   constraint body_len check (char_length(body) between 1 and 1000)
 );
 
-create index messages_conversation_created_idx on public.messages(conversation_id, created_at);
+create index if not exists messages_conversation_created_idx on public.messages(conversation_id, created_at);
 
 grant select, insert on public.messages to authenticated;
 grant all on public.messages to service_role;
 
 alter table public.messages enable row level security;
 
+drop policy if exists "participants can view messages" on public.messages;
 create policy "participants can view messages" on public.messages
 for select to authenticated
 using (exists (
@@ -245,6 +263,7 @@ using (exists (
     and (auth.uid() = c.user_a or auth.uid() = c.user_b)
 ));
 
+drop policy if exists "participants can send messages" on public.messages;
 create policy "participants can send messages" on public.messages
 for insert to authenticated
 with check (
@@ -269,6 +288,7 @@ begin
 end;
 $$;
 
+drop trigger if exists messages_bump_conversation on public.messages;
 create trigger messages_bump_conversation
 after insert on public.messages
 for each row execute function public.bump_conversation_activity();
@@ -276,7 +296,7 @@ for each row execute function public.bump_conversation_activity();
 -- ============================================================
 -- REPORTS
 -- ============================================================
-create table public.reports (
+create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references public.posts(id) on delete cascade,
   reporter_id uuid not null references public.profiles(id) on delete cascade,
@@ -291,10 +311,12 @@ grant all on public.reports to service_role;
 
 alter table public.reports enable row level security;
 
+drop policy if exists "reporters and admins can view reports" on public.reports;
 create policy "reporters and admins can view reports" on public.reports
 for select to authenticated
 using (auth.uid() = reporter_id or public.has_role(auth.uid(), 'admin'));
 
+drop policy if exists "authenticated users can report" on public.reports;
 create policy "authenticated users can report" on public.reports
 for insert to authenticated
 with check (auth.uid() = reporter_id);
@@ -302,7 +324,7 @@ with check (auth.uid() = reporter_id);
 -- ============================================================
 -- DAILY REQUEST COUNTS
 -- ============================================================
-create table public.daily_request_counts (
+create table if not exists public.daily_request_counts (
   user_id uuid not null references public.profiles(id) on delete cascade,
   day date not null default (now() at time zone 'utc')::date,
   count int not null default 0,
@@ -314,12 +336,22 @@ grant all on public.daily_request_counts to service_role;
 
 alter table public.daily_request_counts enable row level security;
 
+drop policy if exists "users can view own counts" on public.daily_request_counts;
 create policy "users can view own counts" on public.daily_request_counts
 for select to authenticated using (auth.uid() = user_id);
 
 -- ============================================================
 -- REALTIME
 -- ============================================================
-alter publication supabase_realtime add table public.posts;
-alter publication supabase_realtime add table public.messages;
-alter publication supabase_realtime add table public.conversations;
+do $$ begin
+  alter publication supabase_realtime add table public.posts;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.messages;
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.conversations;
+exception when duplicate_object then null;
+end $$;
