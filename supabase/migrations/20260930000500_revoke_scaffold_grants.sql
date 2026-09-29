@@ -1,11 +1,12 @@
 -- Takes back privileges that were never meant to be handed to members.
 --
--- The thirteen tables from the original scaffold were created with a blanket
--- `grant all on <table> to anon, authenticated`. "All" is wider than it reads:
--- alongside SELECT/INSERT/UPDATE/DELETE it includes TRUNCATE, TRIGGER and
--- REFERENCES. Every migration since has used explicit column grants, so the
--- newer tables (follows, blocks, mutes, bookmarks, profile_projects, billing_*)
--- are clean — this is the scaffold's inheritance, still in place.
+-- Thirteen tables hold TRUNCATE, TRIGGER and REFERENCES for anon and/or
+-- authenticated. Not from any statement in these migrations — the scaffold's own
+-- grants are specific (`grant select, insert, update on public.profiles to
+-- authenticated` and so on). They come from Supabase's *default privileges*,
+-- which hand every new table in schema `public` to anon and authenticated as it
+-- is created. So the privileges were never written down anywhere, which is most
+-- of why they survived this long.
 --
 -- TRUNCATE is the one that matters, because **TRUNCATE is not subject to row
 -- level security**. RLS is what makes every other privilege on this list
