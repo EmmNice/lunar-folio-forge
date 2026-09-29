@@ -541,7 +541,7 @@ function AdminPage() {
                       <Github className="h-3.5 w-3.5" style={{ color: "#94a3b8" }} />
                     </div>
                     <h2 className="text-sm font-semibold" style={{ color: "#cbd5e1" }}>
-                      Pending Silver Builders
+                      Pending Silver
                     </h2>
                     <span className="ml-auto text-xs text-muted-foreground">
                       {silverApps.length} pending
@@ -569,7 +569,7 @@ function AdminPage() {
                   )}
                 </div>
 
-                {/* Gold Investor column */}
+                {/* Gold column — founders and backers both land here */}
                 <div>
                   <div className="mb-4 flex items-center gap-2">
                     <div
@@ -579,7 +579,7 @@ function AdminPage() {
                       <Building2 className="h-3.5 w-3.5" style={{ color: "#fbbf24" }} />
                     </div>
                     <h2 className="text-sm font-semibold" style={{ color: "#fde68a" }}>
-                      Pending Gold Investors
+                      Pending Gold
                     </h2>
                     <span className="ml-auto text-xs text-muted-foreground">
                       {goldApps.length} pending

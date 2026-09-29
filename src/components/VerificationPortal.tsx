@@ -931,7 +931,7 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
                   )}
                   {isRejected
                     ? "Reapply"
-                    : `Apply for ${activeTab === "silver" ? "Silver Builder" : "Gold Investor"}`}
+                    : `Apply for ${activeTab === "silver" ? "Silver" : "Gold"}`}
                 </button>
               </>
             )}
