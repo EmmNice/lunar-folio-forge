@@ -9,6 +9,7 @@ import {
   ShieldOff,
   Mail,
   Briefcase,
+  UserPlus,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -32,7 +33,8 @@ type NotificationType =
   | "verification_approved"
   | "verification_rejected"
   | "message"
-  | "pitch";
+  | "pitch"
+  | "follow";
 
 type NotificationRow = {
   id: string;
@@ -53,6 +55,7 @@ const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   verification_rejected: ShieldOff,
   message: Mail,
   pitch: Briefcase,
+  follow: UserPlus,
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -61,6 +64,7 @@ const TYPE_LABEL: Record<string, string> = {
   repost: "re-shipped your post",
   message: "sent you a message",
   pitch: "pitched you",
+  follow: "followed you",
 };
 
 const TYPE_ICON_COLOR: Record<string, string> = {
@@ -71,6 +75,7 @@ const TYPE_ICON_COLOR: Record<string, string> = {
   verification_rejected: "text-red-400",
   message: "text-violet-400",
   pitch: "text-amber-400",
+  follow: "text-sky-400",
 };
 
 function verificationLabel(

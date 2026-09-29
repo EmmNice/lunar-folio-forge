@@ -11,6 +11,8 @@ import {
   Send,
   Trash2,
   Lock,
+  Pencil,
+  CornerDownRight,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,13 +40,22 @@ export type FeedPost = {
   comments_enabled: boolean;
   visibility: string;
   created_at: string;
+  /** Stamped by the posts_touch_edited trigger. Null means never edited. */
+  edited_at?: string | null;
   author: FeedAuthor;
+};
+
+/** Who re-shipped this into the viewer's feed, when the card is a repost. */
+export type RepostAttribution = {
+  handle: string;
+  display_name: string;
 };
 
 type CommentRow = {
   id: string;
   content: string;
   created_at: string;
+  parent_id: string | null;
   author: FeedAuthor;
 };
 
@@ -70,12 +81,17 @@ export function PostCard({
   onDownload,
   currentUserId,
   onDeleted,
+  onEdited,
+  repostedBy,
   stats,
 }: {
   post: FeedPost;
   onDownload: (post: FeedPost) => void;
   currentUserId?: string;
   onDeleted?: (id: string) => void;
+  /** Lets the parent list update its copy after an in-place edit. */
+  onEdited?: (id: string, content: string, editedAt: string | null) => void;
+  repostedBy?: RepostAttribution;
   stats?: PostStats;
 }) {
   const { user, profile, isAdmin } = useAuth();
@@ -99,6 +115,14 @@ export function PostCard({
   const [comments, setComments] = useState<CommentRow[] | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [postingComment, setPostingComment] = useState(false);
+  /** Top-level comment this reply will hang under, or null for a new thread. */
+  const [replyParent, setReplyParent] = useState<CommentRow | null>(null);
+
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState(post.content);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [content, setContent] = useState(post.content);
+  const [editedAt, setEditedAt] = useState<string | null>(post.edited_at ?? null);
 
   const removePostFn = useServerFn(removePost);
 
@@ -114,6 +138,14 @@ export function PostCard({
       : post.author.verification_tier === "silver"
         ? "border-slate-400/25 glow-silver"
         : "border-border/50";
+
+  // Keep the local copy in step when the parent hands down a changed row —
+  // a realtime update, or the same post re-rendered in a different list.
+  useEffect(() => {
+    setContent(post.content);
+    setEditedAt(post.edited_at ?? null);
+    setEditDraft(post.content);
+  }, [post.content, post.edited_at]);
 
   // When the parent supplied stats, adopt them and issue no queries at all.
   useEffect(() => {
@@ -237,7 +269,7 @@ export function PostCard({
     const { data, error } = await supabase
       .from("comments")
       .select(
-        "id, content, created_at, author:profiles!comments_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
+        "id, content, created_at, parent_id, author:profiles!comments_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)",
       )
       .eq("post_id", post.id)
       .order("created_at", { ascending: true });
@@ -250,6 +282,15 @@ export function PostCard({
     if (next && comments === null) await loadComments();
   }
 
+  /**
+   * Post a reply, optionally under another comment.
+   *
+   * The database caps nesting at two levels (guard_comment_depth). Rather than let
+   * a third-level attempt come back as a constraint violation, replying to a reply
+   * attaches to that reply's *parent* and addresses the person by handle — the
+   * conversation stays readable on a phone and the member never meets an error
+   * they could not have predicted.
+   */
   async function submitComment() {
     if (!user || !profile) {
       toast.error("Sign in to comment.");
@@ -257,11 +298,15 @@ export function PostCard({
     }
     const body = commentDraft.trim();
     if (!body) return;
+
+    const parentId = replyParent ? (replyParent.parent_id ?? replyParent.id) : null;
+
     setPostingComment(true);
     const { error } = await supabase.from("comments").insert({
       post_id: post.id,
       author_id: user.id,
       content: body,
+      parent_id: parentId,
     });
     setPostingComment(false);
     if (error) {
@@ -269,8 +314,55 @@ export function PostCard({
       return;
     }
     setCommentDraft("");
+    setReplyParent(null);
     setCommentCount((c) => c + 1);
     await loadComments();
+  }
+
+  /**
+   * Save an edit to your own post.
+   *
+   * Only `content` is sent. `edited_at` is stamped by the posts_touch_edited
+   * trigger rather than written here, so the "edited" mark cannot be avoided by
+   * PATCHing the row directly — and the value is read back rather than guessed at,
+   * since the database clock is the one that decides.
+   */
+  async function savePostEdit() {
+    if (!user) return;
+    const next = editDraft.trim();
+    if (!next) {
+      toast.error("A post can't be empty.");
+      return;
+    }
+    if (next === content) {
+      setEditing(false);
+      return;
+    }
+
+    setSavingEdit(true);
+    const { data, error } = await supabase
+      .from("posts")
+      .update({ content: next })
+      .eq("id", post.id)
+      .eq("author_id", user.id)
+      .select("id, content, edited_at")
+      .maybeSingle();
+    setSavingEdit(false);
+
+    if (error) {
+      toast.error(describeWriteError(error.message, "edit this post"));
+      return;
+    }
+    if (!data) {
+      toast.error("That post is no longer yours to edit.");
+      return;
+    }
+
+    setContent(data.content);
+    setEditedAt(data.edited_at);
+    setEditing(false);
+    onEdited?.(post.id, data.content, data.edited_at);
+    toast.success("Post updated.");
   }
 
   /**
@@ -366,6 +458,37 @@ export function PostCard({
   // Studio card posts (non-noir theme) get an entirely different visual treatment
   const isCardPost = post.background !== "noir";
 
+  /*
+     Re-ship attribution.
+
+     Until now a re-ship only incremented a counter — the post never appeared in
+     anybody's timeline, which made the button close to decorative. Reposts now
+     surface in the Following feed, and this line is what stops that from looking
+     like the reposter wrote it.
+   */
+  const repostBanner = repostedBy ? (
+    <div className="mb-2 flex items-center gap-1.5 text-[12px] text-tertiary">
+      <Repeat2 className="h-3.5 w-3.5 text-emerald-400/70" />
+      <Link
+        to="/u/$handle"
+        params={{ handle: repostedBy.handle }}
+        search={{ tab: undefined }}
+        className="font-medium hover:underline underline-offset-2"
+      >
+        {repostedBy.display_name}
+      </Link>
+      <span>re-shipped</span>
+    </div>
+  ) : null;
+
+  /* "edited" next to the timestamp, so an edit is never silent. */
+  const editedMark = editedAt ? (
+    <>
+      <span className="mx-1.5 opacity-50">·</span>
+      <span title={`Edited ${timeAgo(editedAt)}`}>edited</span>
+    </>
+  ) : null;
+
   /* Shared delete toggle — the author's own post, or an admin removing any post */
   const canDelete = (isSelf || isAdmin) && !!onDeleted;
   const deleteControl = canDelete ? (
@@ -403,6 +526,91 @@ export function PostCard({
       )}
     </div>
   ) : null;
+
+  /*
+     Edit, for your own posts only.
+
+     posts had an UPDATE policy from the first migration and no UI ever used it, so
+     a typo was permanent and the only remedy was to delete and repost — losing the
+     likes and the replies with it.
+   */
+  const editControl =
+    isSelf && !editing ? (
+      <button
+        type="button"
+        onClick={() => {
+          setEditDraft(content);
+          setEditing(true);
+        }}
+        className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+        aria-label="Edit post"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    ) : null;
+
+  const ownerControls =
+    editControl || deleteControl ? (
+      <div className="flex shrink-0 items-center gap-0.5">
+        {editControl}
+        {deleteControl}
+      </div>
+    ) : null;
+
+  /*
+     The post body, or the edit form in its place.
+
+     `tone` lets the Studio-card branch render the textarea against its theme
+     instead of the app surface, so editing a card still looks like that card.
+   */
+  function renderBody(tone: { color: string; surface?: string; border?: string } | null) {
+    if (editing) {
+      return (
+        <div className="mt-1">
+          <textarea
+            value={editDraft}
+            onChange={(e) => setEditDraft(e.target.value)}
+            maxLength={MAX_POST_LENGTH}
+            rows={4}
+            aria-label="Edit your post"
+            className="field w-full resize-y"
+            style={
+              tone?.surface
+                ? { background: tone.surface, color: tone.color, borderColor: tone.border }
+                : undefined
+            }
+          />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[11px] tabular-nums text-tertiary">
+              {editDraft.trim().length}/{MAX_POST_LENGTH}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setEditDraft(content);
+                }}
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={savePostEdit}
+                disabled={savingEdit || !editDraft.trim()}
+                className="btn btn-primary btn-sm"
+              >
+                {savingEdit && <Loader2 className="h-3 w-3 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   /* Shared actions row */
   const actionsRow = (
@@ -516,6 +724,100 @@ export function PostCard({
       </div>
     ) : null;
 
+  /*
+     One comment. `isReply` only changes the indent and avatar size — the depth cap
+     lives in the database (guard_comment_depth), so there is no third level to
+     render and no need for a generic depth parameter here.
+   */
+  function renderComment(c: CommentRow, isReply: boolean) {
+    const mine = c.author.id === user?.id;
+    const avatar = isReply ? "h-6 w-6" : "h-7 w-7";
+
+    return (
+      <div
+        key={c.id}
+        className={isReply ? "flex items-start gap-2 pl-7" : "flex items-start gap-2.5 pl-2"}
+      >
+        <div
+          className={`grid ${avatar} shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold`}
+        >
+          {c.author.avatar_url ? (
+            <img
+              src={c.author.avatar_url}
+              alt=""
+              className="h-full w-full object-cover"
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span className="grid h-full w-full place-items-center">
+              {c.author.display_name.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1 text-xs">
+            <Link
+              to="/u/$handle"
+              params={{ handle: c.author.handle }}
+              search={{ tab: undefined }}
+              className="flex items-center gap-1 font-medium text-foreground hover:underline underline-offset-2"
+            >
+              {c.author.display_name}
+              <VerificationBadge tier={c.author.verification_tier} size={11} />
+            </Link>
+            <span className="text-muted-foreground">@{c.author.handle}</span>
+            <span className="text-muted-foreground">· {timeAgo(c.created_at)}</span>
+          </div>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90">
+            {c.content}
+          </p>
+          {user ? (
+            <button
+              type="button"
+              onClick={() => {
+                setReplyParent(c);
+                setCommentDraft(`@${c.author.handle} `);
+              }}
+              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <CornerDownRight className="h-3 w-3" />
+              Reply
+            </button>
+          ) : null}
+        </div>
+        {mine && (
+          <button
+            type="button"
+            onClick={() => deleteComment(c.id)}
+            disabled={deletingComment === c.id}
+            className="shrink-0 rounded p-1 text-muted-foreground/40 transition-colors hover:text-red-400 disabled:opacity-40"
+            aria-label="Delete your reply"
+          >
+            {deletingComment === c.id ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Trash2 className="h-3 w-3" />
+            )}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  /*
+     Groups the flat comment rows into two levels.
+     One pass, so a long thread does not become quadratic.
+   */
+  const topLevelComments = comments?.filter((c) => !c.parent_id) ?? [];
+  const repliesByParent = new Map<string, CommentRow[]>();
+  for (const c of comments ?? []) {
+    if (!c.parent_id) continue;
+    const bucket = repliesByParent.get(c.parent_id);
+    if (bucket) bucket.push(c);
+    else repliesByParent.set(c.parent_id, [c]);
+  }
+
   /* Shared comments thread */
   const commentsThread = (
     <>
@@ -534,90 +836,71 @@ export function PostCard({
           ) : comments.length === 0 ? (
             <p className="text-xs text-muted-foreground">No replies yet.</p>
           ) : (
-            comments.map((c) => (
-              <div key={c.id} className="flex items-start gap-2.5 pl-2">
-                <div className="grid h-7 w-7 shrink-0 overflow-hidden rounded-full border border-border bg-secondary/50 text-xs font-semibold">
-                  {c.author.avatar_url ? (
-                    <img
-                      src={c.author.avatar_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      crossOrigin="anonymous"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="grid h-full w-full place-items-center">
-                      {c.author.display_name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
+            topLevelComments.map((parent) => {
+              const replies = repliesByParent.get(parent.id);
+              return (
+                <div key={parent.id} className="space-y-2">
+                  {renderComment(parent, false)}
+                  {replies?.map((reply) => renderComment(reply, true))}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1 text-xs">
-                    <Link
-                      to="/u/$handle"
-                      params={{ handle: c.author.handle }}
-                      search={{ tab: undefined }}
-                      className="flex items-center gap-1 font-medium text-foreground hover:underline underline-offset-2"
-                    >
-                      {c.author.display_name}
-                      <VerificationBadge tier={c.author.verification_tier} size={11} />
-                    </Link>
-                    <span className="text-muted-foreground">@{c.author.handle}</span>
-                    <span className="text-muted-foreground">· {timeAgo(c.created_at)}</span>
-                  </div>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90">
-                    {c.content}
-                  </p>
-                </div>
-                {c.author.id === user?.id && (
-                  <button
-                    type="button"
-                    onClick={() => deleteComment(c.id)}
-                    disabled={deletingComment === c.id}
-                    className="shrink-0 rounded p-1 text-muted-foreground/40 transition-colors hover:text-red-400 disabled:opacity-40"
-                    aria-label="Delete your reply"
-                  >
-                    {deletingComment === c.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </button>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
 
           {user ? (
-            <div className="flex w-full items-center gap-2 px-2 pt-1">
-              <input
-                value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  // Shift+Enter has to stay free for a line break, which the old
-                  // unconditional handler made impossible.
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submitComment();
-                  }
-                }}
-                maxLength={MAX_POST_LENGTH}
-                placeholder="Reply…"
-                className="field min-w-0 flex-1 !rounded-full"
-              />
-              <button
-                type="button"
-                onClick={submitComment}
-                disabled={postingComment || !commentDraft.trim()}
-                className="btn-icon shrink-0 !rounded-full"
-                aria-label="Send reply"
-              >
-                {postingComment ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </button>
+            <div className="px-2 pt-1">
+              {/* Says who is being answered, and offers a way out of it. Without
+                  this the box looks identical whether the reply joins a thread or
+                  starts one. */}
+              {replyParent ? (
+                <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-tertiary">
+                  <CornerDownRight className="h-3 w-3" />
+                  <span>
+                    Replying to{" "}
+                    <span className="font-medium text-secondary">@{replyParent.author.handle}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyParent(null);
+                      setCommentDraft("");
+                    }}
+                    className="ml-1 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+              <div className="flex w-full items-center gap-2">
+                <input
+                  value={commentDraft}
+                  onChange={(e) => setCommentDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Shift+Enter has to stay free for a line break, which the old
+                    // unconditional handler made impossible.
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      submitComment();
+                    }
+                  }}
+                  maxLength={MAX_POST_LENGTH}
+                  placeholder={replyParent ? "Write a reply…" : "Reply…"}
+                  className="field min-w-0 flex-1 !rounded-full"
+                />
+                <button
+                  type="button"
+                  onClick={submitComment}
+                  disabled={postingComment || !commentDraft.trim()}
+                  className="btn-icon shrink-0 !rounded-full"
+                  aria-label="Send reply"
+                >
+                  {postingComment ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
@@ -632,6 +915,8 @@ export function PostCard({
 
     return (
       <article className={`rounded-2xl border bg-card/50 overflow-hidden ${tierBorder}`}>
+        {repostedBy && <div className="px-4 pt-3 sm:px-5">{repostBanner}</div>}
+
         {/* Author header — same layout as regular posts */}
         <div className="flex items-start gap-3 px-4 pt-4 pb-0 sm:px-5">
           {/* Avatar */}
@@ -696,9 +981,10 @@ export function PostCard({
                   @{post.author.handle}
                   <span className="mx-1.5 opacity-50">·</span>
                   {timeAgo(post.created_at)}
+                  {editedMark}
                 </p>
               </div>
-              {deleteControl}
+              {ownerControls}
             </div>
           </div>
         </div>
@@ -714,12 +1000,16 @@ export function PostCard({
               border: `1px solid ${theme.border}`,
             }}
           >
-            <p
-              className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.6] tracking-[-0.01em]"
-              style={{ color: theme.body }}
-            >
-              {post.content}
-            </p>
+            {editing ? (
+              renderBody({ color: theme.body, surface: "rgba(0,0,0,0.06)", border: theme.border })
+            ) : (
+              <p
+                className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.6] tracking-[-0.01em]"
+                style={{ color: theme.body }}
+              >
+                {content}
+              </p>
+            )}
           </div>
         </div>
 
@@ -754,6 +1044,8 @@ export function PostCard({
       )}
 
       <div className="px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
+        {repostBanner}
+
         {/* Visibility pill */}
         {(isVerifiedOnly || isWhisper) && (
           <div className="mb-3 flex items-center gap-1.5">
@@ -815,15 +1107,20 @@ export function PostCard({
                   @{post.author.handle}
                   <span className="mx-1.5 opacity-50">·</span>
                   {timeAgo(post.created_at)}
+                  {editedMark}
                 </p>
               </div>
-              {deleteControl}
+              {ownerControls}
             </div>
 
             {/* Content */}
-            <p className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground/95 tracking-[-0.01em]">
-              {post.content}
-            </p>
+            {editing ? (
+              renderBody(null)
+            ) : (
+              <p className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground/95 tracking-[-0.01em]">
+                {content}
+              </p>
+            )}
 
             {actionsRow}
             {reportForm}

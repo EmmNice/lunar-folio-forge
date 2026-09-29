@@ -17,6 +17,12 @@ import {
   Heart,
   FileText,
   Plus,
+  UserPlus,
+  UserCheck,
+  MoreHorizontal,
+  Ban,
+  VolumeX,
+  Volume2,
 } from "lucide-react";
 import { ComposerModal } from "@/components/ComposerModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +38,18 @@ import { ROLE_LABEL, ROLE_OPTIONS } from "@/lib/roles";
 import { useServerFn } from "@tanstack/react-start";
 import { startConversation } from "@/lib/messaging.functions";
 import { submitVerificationApplication } from "@/lib/verification.functions";
+import { blockMember, unblockMember } from "@/lib/social.functions";
+import {
+  fetchFollowCounts,
+  fetchRelationship,
+  followMember,
+  muteMember,
+  unfollowMember,
+  unmuteMember,
+  type FollowCounts,
+  type Relationship,
+} from "@/lib/social";
+import { describeWriteError } from "@/lib/db-errors";
 import { timeAgo } from "@/lib/time";
 import { AvatarPicker } from "@/components/AvatarPicker";
 
@@ -76,6 +94,7 @@ type PostRow = {
   comments_enabled: boolean;
   visibility: string;
   created_at: string;
+  edited_at: string | null;
 };
 
 type CommentRow = {
@@ -92,6 +111,7 @@ type LikedPostRow = {
   comments_enabled: boolean;
   visibility: string;
   created_at: string;
+  edited_at: string | null;
   author_id: string;
   author_display_name: string;
   author_handle: string;
@@ -103,6 +123,32 @@ function tierRingColor(tier?: string | null) {
   if (tier === "gold") return "rgba(251,191,36,0.85)";
   if (tier === "silver") return "rgba(148,163,184,0.70)";
   return "rgba(255,255,255,0.15)";
+}
+
+/**
+ * Follower / following totals.
+ *
+ * Shown on both the owner's and the visitor's view of a profile, because a count
+ * that appears only to strangers is an odd thing to hide from the person it
+ * describes. Renders a placeholder dash until the counts arrive rather than a
+ * zero, so the numbers never appear to drop from 0 to their real value.
+ */
+function FollowCounts({ counts }: { counts: FollowCounts | null }) {
+  const cell = (value: number | null, label: string) => (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="text-[13px] font-semibold tabular-nums text-foreground">
+        {value === null ? "—" : value.toLocaleString()}
+      </span>
+      <span className="text-[12px] text-tertiary">{label}</span>
+    </span>
+  );
+
+  return (
+    <div className="mt-3 flex items-center gap-4">
+      {cell(counts?.followers ?? null, counts?.followers === 1 ? "follower" : "followers")}
+      {cell(counts?.following ?? null, "following")}
+    </div>
+  );
 }
 
 // Main page component
@@ -122,6 +168,15 @@ function ProfilePage() {
   const [showComposer, setShowComposer] = useState(false);
   const [busyMsg, setBusyMsg] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
+
+  const [counts, setCounts] = useState<FollowCounts | null>(null);
+  const [rel, setRel] = useState<Relationship | null>(null);
+  const [busyFollow, setBusyFollow] = useState(false);
+  const [busySafety, setBusySafety] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const block = useServerFn(blockMember);
+  const unblock = useServerFn(unblockMember);
 
   // Inject <meta name="robots" content="noindex"> when the viewed profile
   // has opted out of search-engine indexing.
@@ -156,7 +211,7 @@ function ProfilePage() {
       // Posts
       const { data: postsData } = await supabase
         .from("posts")
-        .select("id, content, background, comments_enabled, visibility, created_at")
+        .select("id, content, background, comments_enabled, visibility, created_at, edited_at")
         .eq("author_id", pf.id)
         .order("created_at", { ascending: false })
         .limit(30);
@@ -186,7 +241,7 @@ function ProfilePage() {
           const { data: likedPostsRaw } = await supabase
             .from("posts")
             .select(
-              "id, content, background, comments_enabled, visibility, created_at, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url, verification_tier)",
+              "id, content, background, comments_enabled, visibility, created_at, edited_at, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url, verification_tier)",
             )
             .in("id", postIds)
             .order("created_at", { ascending: false });
@@ -198,6 +253,7 @@ function ProfilePage() {
               comments_enabled: p.comments_enabled ?? true,
               visibility: p.visibility ?? "public",
               created_at: p.created_at,
+              edited_at: p.edited_at,
               author_id: p.author_id,
               author_display_name: p.profiles?.display_name ?? "Unknown",
               author_handle: p.profiles?.handle ?? "unknown",
@@ -214,6 +270,115 @@ function ProfilePage() {
       cancelled = true;
     };
   }, [handle]);
+
+  /*
+    Follow counts, and how the viewer stands towards this profile.
+
+    Separate from the main profile effect because it depends on the viewer as well
+    as the handle: signing in on an already-open profile page has to refresh the
+    Follow button, which would not happen if this were folded into the fetch keyed
+    on `handle` alone.
+  */
+  useEffect(() => {
+    const profileId = profile?.id;
+    if (!profileId) return;
+
+    let cancelled = false;
+    (async () => {
+      const [nextCounts, nextRel] = await Promise.all([
+        fetchFollowCounts(profileId),
+        user && user.id !== profileId
+          ? fetchRelationship(user.id, profileId)
+          : Promise.resolve(null),
+      ]);
+      if (cancelled) return;
+      setCounts(nextCounts);
+      setRel(nextRel);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, user]);
+
+  async function toggleFollow() {
+    if (!user || !profile) {
+      toast.error("Sign in to follow builders.");
+      return;
+    }
+    const wasFollowing = rel?.following ?? false;
+    setBusyFollow(true);
+
+    const error = wasFollowing
+      ? await unfollowMember(user.id, profile.id)
+      : await followMember(user.id, profile.id);
+
+    setBusyFollow(false);
+
+    if (error) {
+      toast.error(describeWriteError(error, wasFollowing ? "unfollow" : "follow builders"));
+      return;
+    }
+
+    setRel((prev) => ({ ...(prev ?? { blocked: false, muted: false }), following: !wasFollowing }));
+    // Adjust the visible count rather than refetching — one fewer round trip, and
+    // the number the viewer just changed is the one they are looking at.
+    setCounts((prev) =>
+      prev ? { ...prev, followers: Math.max(0, prev.followers + (wasFollowing ? -1 : 1)) } : prev,
+    );
+  }
+
+  async function toggleMute() {
+    if (!user || !profile) return;
+    const wasMuted = rel?.muted ?? false;
+    setBusySafety(true);
+    const error = wasMuted
+      ? await unmuteMember(user.id, profile.id)
+      : await muteMember(user.id, profile.id);
+    setBusySafety(false);
+    setMenuOpen(false);
+
+    if (error) {
+      toast.error(describeWriteError(error, "do that"));
+      return;
+    }
+    setRel((prev) => ({ ...(prev ?? { following: false, blocked: false }), muted: !wasMuted }));
+    toast.success(
+      wasMuted
+        ? `@${profile.handle} is no longer muted.`
+        : `Muted @${profile.handle}. Their posts won't appear in your feed.`,
+    );
+  }
+
+  async function toggleBlock() {
+    if (!user || !profile) return;
+    const wasBlocked = rel?.blocked ?? false;
+    setBusySafety(true);
+    try {
+      if (wasBlocked) {
+        await unblock({ data: { targetId: profile.id } });
+      } else {
+        await block({ data: { targetId: profile.id } });
+      }
+      // Blocking severs the follow in both directions, so the button and the
+      // follower count both have to come back down with it.
+      setRel((prev) => ({
+        following: wasBlocked ? (prev?.following ?? false) : false,
+        muted: prev?.muted ?? false,
+        blocked: !wasBlocked,
+      }));
+      setCounts(await fetchFollowCounts(profile.id));
+      toast.success(
+        wasBlocked
+          ? `Unblocked @${profile.handle}.`
+          : `Blocked @${profile.handle}. You won't see each other's posts.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update that.");
+    } finally {
+      setBusySafety(false);
+      setMenuOpen(false);
+    }
+  }
 
   async function message() {
     if (!user || !me || !profile) {
@@ -438,6 +603,7 @@ function ProfilePage() {
               {me.role_type ? ` · ${ROLE_LABEL[me.role_type]}` : ""}
             </p>
             {me.bio && <p className="mt-2 max-w-prose text-sm text-foreground/85">{me.bio}</p>}
+            <FollowCounts counts={counts} />
           </div>
 
           {/* Tab bar */}
@@ -504,6 +670,7 @@ function ProfilePage() {
                       comments_enabled: p.comments_enabled,
                       visibility: p.visibility,
                       created_at: p.created_at,
+                      edited_at: p.edited_at,
                       author: {
                         id: profile.id,
                         handle: profile.handle,
@@ -519,6 +686,13 @@ function ProfilePage() {
                         currentUserId={user?.id}
                         onDownload={requestExport}
                         onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                        onEdited={(id, content, editedAt) =>
+                          setPosts((prev) =>
+                            prev.map((x) =>
+                              x.id === id ? { ...x, content, edited_at: editedAt } : x,
+                            ),
+                          )
+                        }
                       />
                     );
                   })}
@@ -610,6 +784,7 @@ function ProfilePage() {
                       comments_enabled: p.comments_enabled,
                       visibility: p.visibility,
                       created_at: p.created_at,
+                      edited_at: p.edited_at,
                       author: {
                         id: p.author_id,
                         handle: p.author_handle,
@@ -665,6 +840,8 @@ function ProfilePage() {
                   comments_enabled: post.comments_enabled ?? true,
                   visibility: post.visibility ?? "public",
                   created_at: post.created_at,
+                  // Brand new, so it cannot have been edited yet.
+                  edited_at: null,
                 },
                 ...prev,
               ]);
@@ -796,9 +973,34 @@ function ProfilePage() {
             {profile.bio && (
               <p className="mt-2 max-w-prose text-sm text-foreground/90">{profile.bio}</p>
             )}
+            <FollowCounts counts={counts} />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              Follow, first in the row because it is the action a visitor is most
+              likely to want. Hidden once blocked: following someone you have
+              blocked is a contradiction, and the INSERT policy would refuse it
+              anyway — better not to offer it than to offer it and fail.
+            */}
+            {user && me && !rel?.blocked && (
+              <button
+                type="button"
+                onClick={toggleFollow}
+                disabled={busyFollow}
+                aria-pressed={rel?.following ?? false}
+                className={rel?.following ? "btn btn-outline btn-sm" : "btn btn-primary btn-sm"}
+              >
+                {busyFollow ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : rel?.following ? (
+                  <UserCheck className="h-4 w-4" />
+                ) : (
+                  <UserPlus className="h-4 w-4" />
+                )}
+                {rel?.following ? "Following" : "Follow"}
+              </button>
+            )}
             {profile.verification_tier !== "none" &&
               !dmCloaked &&
               connectLinks.map((l) => (
@@ -838,8 +1040,121 @@ function ProfilePage() {
                 <MessageSquare className="h-4 w-4" /> Message
               </button>
             )}
+
+            {/*
+              Mute and block, behind an overflow menu.
+
+              Kept out of the primary row deliberately: these are rare, weighty
+              actions, and a Block button sitting next to Follow invites misclicks.
+              The two do different things and the copy has to say so — a mute
+              quiets the feed, a block removes you from each other entirely.
+            */}
+            {user && me && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  aria-label="More actions"
+                  className="btn btn-outline btn-sm !px-2.5"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+
+                {menuOpen && (
+                  <>
+                    {/* Click-away layer, so the menu closes without a document
+                        listener that would also swallow the toggle's own click. */}
+                    <button
+                      type="button"
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      onClick={() => setMenuOpen(false)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div
+                      role="menu"
+                      className="absolute right-0 z-50 mt-1 w-60 overflow-hidden rounded-xl p-1 shadow-2xl"
+                      style={{
+                        background: "var(--surface-1, #141416)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={toggleMute}
+                        disabled={busySafety}
+                        className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-2)] disabled:opacity-50"
+                      >
+                        {rel?.muted ? (
+                          <Volume2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <VolumeX className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span>
+                          <span className="block text-[13px] font-medium">
+                            {rel?.muted ? "Unmute" : "Mute"} @{profile.handle}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] leading-snug text-tertiary">
+                            {rel?.muted
+                              ? "Their posts return to your feed."
+                              : "Hides their posts from your feed. They aren't told."}
+                          </span>
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={toggleBlock}
+                        disabled={busySafety}
+                        className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-2)] disabled:opacity-50"
+                      >
+                        <Ban className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                        <span>
+                          <span className="block text-[13px] font-medium text-red-400">
+                            {rel?.blocked ? "Unblock" : "Block"} @{profile.handle}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] leading-snug text-tertiary">
+                            {rel?.blocked
+                              ? "You'll be able to see each other again. Follows aren't restored."
+                              : "Hides both of you from each other and breaks any follow between you."}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </header>
+
+        {/*
+          Said out loud, because the consequence is otherwise indistinguishable
+          from an empty profile: once blocked, can_view_post() hides their posts, so
+          the timeline below is legitimately empty rather than broken.
+        */}
+        {rel?.blocked && (
+          <div
+            className="mt-6 flex items-start gap-3 rounded-xl p-4"
+            style={{
+              border: "1px solid rgba(248,113,113,0.25)",
+              background: "rgba(248,113,113,0.06)",
+            }}
+          >
+            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <div className="text-xs leading-relaxed">
+              <p className="font-semibold text-red-300">You've blocked @{profile.handle}</p>
+              <p className="mt-1 text-muted-foreground">
+                Neither of you can see the other's posts, reply, or send messages. Unblock from the
+                menu above to undo this.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Cards grid */}
         <section className="mt-10">
@@ -858,6 +1173,7 @@ function ProfilePage() {
                   comments_enabled: p.comments_enabled,
                   visibility: p.visibility,
                   created_at: p.created_at,
+                  edited_at: p.edited_at,
                   author: {
                     id: profile.id,
                     handle: profile.handle,
@@ -873,6 +1189,11 @@ function ProfilePage() {
                     currentUserId={user?.id}
                     onDownload={requestExport}
                     onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                    onEdited={(id, content, editedAt) =>
+                      setPosts((prev) =>
+                        prev.map((x) => (x.id === id ? { ...x, content, edited_at: editedAt } : x)),
+                      )
+                    }
                   />
                 );
               })}

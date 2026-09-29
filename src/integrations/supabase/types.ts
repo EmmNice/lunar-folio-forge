@@ -52,12 +52,146 @@ export type Database = {
           },
         ]
       }
+      billing_customers: {
+        Row: {
+          created_at: string
+          stripe_customer_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          stripe_customer_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          stripe_customer_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_customers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_events: {
+        Row: {
+          id: string
+          payload: Json | null
+          received_at: string
+          type: string
+        }
+        Insert: {
+          id: string
+          payload?: Json | null
+          received_at?: string
+          type: string
+        }
+        Update: {
+          id?: string
+          payload?: Json | null
+          received_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      billing_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          price_id: string | null
+          quantity: number
+          status: string
+          trial_end: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id: string
+          price_id?: string | null
+          quantity?: number
+          status: string
+          trial_end?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          price_id?: string | null
+          quantity?: number
+          status?: string
+          trial_end?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           author_id: string
           content: string
           created_at: string
           id: string
+          parent_id: string | null
           post_id: string
         }
         Insert: {
@@ -65,6 +199,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           post_id: string
         }
         Update: {
@@ -72,6 +207,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           post_id?: string
         }
         Relationships: [
@@ -80,6 +216,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
             referencedColumns: ["id"]
           },
           {
@@ -166,6 +309,39 @@ export type Database = {
           },
         ]
       }
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       likes: {
         Row: {
           created_at: string
@@ -232,6 +408,39 @@ export type Database = {
           {
             foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mutes: {
+        Row: {
+          created_at: string
+          muted_id: string
+          muter_id: string
+        }
+        Insert: {
+          created_at?: string
+          muted_id: string
+          muter_id: string
+        }
+        Update: {
+          created_at?: string
+          muted_id?: string
+          muter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mutes_muted_id_fkey"
+            columns: ["muted_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mutes_muter_id_fkey"
+            columns: ["muter_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -358,8 +567,10 @@ export type Database = {
           comments_enabled: boolean
           content: string
           created_at: string
+          edited_at: string | null
           id: string
           image_url: string | null
+          search_vector: unknown
           visibility: string
         }
         Insert: {
@@ -368,8 +579,10 @@ export type Database = {
           comments_enabled?: boolean
           content: string
           created_at?: string
+          edited_at?: string | null
           id?: string
           image_url?: string | null
+          search_vector?: unknown
           visibility?: string
         }
         Update: {
@@ -378,8 +591,10 @@ export type Database = {
           comments_enabled?: boolean
           content?: string
           created_at?: string
+          edited_at?: string | null
           id?: string
           image_url?: string | null
+          search_vector?: unknown
           visibility?: string
         }
         Relationships: [
@@ -415,6 +630,7 @@ export type Database = {
           pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
+          search_vector: unknown
           startup_url: string | null
           subscription_status: string
           traction_url: string | null
@@ -443,6 +659,7 @@ export type Database = {
           pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
+          search_vector?: unknown
           startup_url?: string | null
           subscription_status?: string
           traction_url?: string | null
@@ -471,6 +688,7 @@ export type Database = {
           pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
+          search_vector?: unknown
           startup_url?: string | null
           subscription_status?: string
           traction_url?: string | null
@@ -672,6 +890,7 @@ export type Database = {
     }
     Functions: {
       actor_is_active: { Args: never; Returns: boolean }
+      blocked_pair: { Args: { _a: string; _b: string }; Returns: boolean }
       can_publish_to: { Args: { _visibility: string }; Returns: boolean }
       can_view_post: {
         Args: { _author_id: string; _visibility: string }
@@ -725,6 +944,7 @@ export type Database = {
           pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
+          search_vector: unknown
           startup_url: string | null
           subscription_status: string
           traction_url: string | null
@@ -746,8 +966,25 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_blocked_with: { Args: { _other: string }; Returns: boolean }
       post_accepts_comments: { Args: { _post_id: string }; Returns: boolean }
       refund_ai_credit: { Args: { _user_id: string }; Returns: undefined }
+      search_profiles: {
+        Args: { _limit?: number; _query: string }
+        Returns: {
+          avatar_url: string
+          bio: string
+          company_name: string
+          display_name: string
+          handle: string
+          id: string
+          role_type: string
+          verification_tier: string
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_subscription_status: { Args: { _user_id: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "super_admin"
