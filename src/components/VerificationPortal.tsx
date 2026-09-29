@@ -38,19 +38,12 @@ const CHOICES = [
       "A developer, a startup team, a designer, an indie hacker. You write code or ship product.",
   },
   {
-    key: "founder",
+    key: "gold",
     tier: "gold" as const,
-    track: "founder" as const,
-    title: "I've launched, and people use it",
+    track: null,
+    title: "I've launched, or I invest",
     blurb:
-      "Your product is live and has real users and real transactions — not an idea, a waitlist or a landing page.",
-  },
-  {
-    key: "backer",
-    tier: "gold" as const,
-    track: "backer" as const,
-    title: "I invest",
-    blurb: "A fund, an angel, or a company that writes cheques into startups.",
+      "Your product is live with real users and real transactions — or you back the people whose are. Founders and investors are both Gold.",
   },
 ] as const;
 
@@ -741,9 +734,62 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
                   </div>
                 )}
 
-                {/* Gold form. Which track was already chosen on the opening screen. */}
+                {/* Gold form */}
                 {activeTab === "gold" && (
                   <div className="space-y-4">
+                    {/*
+                      Founders and investors are one tier, so the opening question
+                      offers one Gold. They still have to say which they are, because
+                      the evidence required is completely different — a LinkedIn
+                      profile is not proof that a product has users — so the split
+                      happens here, inside Gold, rather than as a third badge.
+                    */}
+                    <div className="space-y-2">
+                      <p
+                        className="text-[11px] font-medium tracking-wider uppercase"
+                        style={{ color: ts.subtitle }}
+                      >
+                        Which one? <span style={{ color: ts.accent }}>*</span>
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {(
+                          [
+                            {
+                              key: "founder" as const,
+                              label: "Founder / operator",
+                              desc: "I've launched something people use",
+                            },
+                            {
+                              key: "backer" as const,
+                              label: "Investor / backer",
+                              desc: "I fund startups",
+                            },
+                          ] satisfies { key: GoldTrack; label: string; desc: string }[]
+                        ).map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setGTrack(opt.key)}
+                            className="rounded-xl p-3 text-left transition-colors"
+                            style={{
+                              border: `1px solid ${gTrack === opt.key ? ts.btnBorder : "rgba(255,255,255,0.07)"}`,
+                              background: gTrack === opt.key ? ts.btnBg : "transparent",
+                            }}
+                          >
+                            <span
+                              className="block text-[13px] font-semibold"
+                              style={{ color: gTrack === opt.key ? ts.accent : undefined }}
+                            >
+                              {opt.label}
+                            </span>
+                            <span className="mt-0.5 block text-[11px]" style={{ color: ts.desc }}>
+                              {opt.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {gTrack === "founder" && (
                       <div className="space-y-3">
                         <p className="text-[11px] leading-relaxed" style={{ color: ts.desc }}>

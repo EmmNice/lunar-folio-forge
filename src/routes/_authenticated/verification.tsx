@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { VerificationSection } from "@/components/VerificationPortal";
@@ -24,6 +24,8 @@ export const Route = createFileRoute("/_authenticated/verification")({
 function VerificationPage() {
   const { profile, loading } = useAuth();
   const { fee } = Route.useSearch();
+  const navigate = useNavigate();
+  const router = useRouter();
 
   /*
     Stripe's redirect is a hint, not proof. Payment is recorded by the webhook, so
@@ -66,14 +68,33 @@ function VerificationPage() {
         }}
       >
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3.5 sm:px-6">
-          <Link
-            to="/settings"
+          {/*
+            Goes back where you came from, rather than always to /settings.
+
+            This page is reached from a profile far more often than from settings —
+            the "Get verified" button lives next to Edit profile — so a hardcoded
+            settings link sent people somewhere they had never been. Falls back to
+            the member's own profile when there is no history to go back to, which
+            is the case on a cold load of a shared link.
+          */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) router.history.back();
+              else if (profile)
+                navigate({
+                  to: "/u/$handle",
+                  params: { handle: profile.handle },
+                  search: { tab: undefined },
+                });
+              else navigate({ to: "/feed" });
+            }}
             className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
             style={{ background: "rgba(255,255,255,0.06)" }}
-            aria-label="Back to settings"
+            aria-label="Go back"
           >
             <ArrowLeft className="h-4 w-4" />
-          </Link>
+          </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-[15px] font-semibold text-foreground">Verification</h1>
             <p className="truncate text-[11px] text-muted-foreground">
