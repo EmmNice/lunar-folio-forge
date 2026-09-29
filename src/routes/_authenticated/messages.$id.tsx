@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
+import { VerificationBadge } from "@/components/VerificationBadge";
+import type { VerificationTier } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { describeWriteError } from "@/lib/db-errors";
@@ -13,7 +15,13 @@ export const Route = createFileRoute("/_authenticated/messages/$id")({
   component: ThreadPage,
 });
 
-type Profile = { id: string; handle: string; display_name: string; avatar_url: string | null };
+type Profile = {
+  id: string;
+  handle: string;
+  display_name: string;
+  avatar_url: string | null;
+  verification_tier: VerificationTier;
+};
 type Message = { id: string; sender_id: string; body: string; created_at: string };
 
 function ThreadPage() {
@@ -32,7 +40,7 @@ function ThreadPage() {
       const { data: conv } = await supabase
         .from("conversations")
         .select(
-          "user_a, user_b, a:profiles!conversations_user_a_fkey(id, handle, display_name, avatar_url), b:profiles!conversations_user_b_fkey(id, handle, display_name, avatar_url)",
+          "user_a, user_b, a:profiles!conversations_user_a_fkey(id, handle, display_name, avatar_url, verification_tier), b:profiles!conversations_user_b_fkey(id, handle, display_name, avatar_url, verification_tier)",
         )
         .eq("id", id)
         .maybeSingle();
@@ -114,7 +122,9 @@ function ThreadPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pt-6 pb-6 sm:px-6">
+      {/* pb-mobile-nav, like every other authenticated page: without it the last
+          messages in the thread hide behind the fixed bottom navigation too. */}
+      <main className="pb-mobile-nav mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pt-6 sm:px-6">
         <div className="mb-4 flex items-center gap-3 border-b border-border/60 pb-4">
           <Link to="/messages" className="text-xs text-muted-foreground hover:text-foreground">
             ← Inbox
@@ -141,6 +151,7 @@ function ThreadPage() {
                 )}
               </div>
               <span className="truncate">{other.display_name}</span>
+              <VerificationBadge tier={other.verification_tier} size={13} />
               <span className="text-muted-foreground">@{other.handle}</span>
             </Link>
           ) : null}
@@ -175,7 +186,21 @@ function ThreadPage() {
             e.preventDefault();
             send();
           }}
-          className="sticky bottom-0 flex items-end gap-2 border-t border-border/60 bg-background/80 pt-3 backdrop-blur"
+          /*
+            Offset above the mobile navigation, not flush to the viewport bottom.
+
+            MobileNav is `fixed bottom-0` and this was `sticky bottom-0`, so on a
+            phone the entire composer sat underneath it — there was no visible way
+            to type a message, which is most of what this screen is for. The
+            desktop breakpoint has no bottom nav, so the offset is dropped there.
+          */
+          className="sticky bottom-[var(--composer-offset)] flex items-end gap-2 border-t border-border/60 bg-background/80 pt-3 pb-3 backdrop-blur sm:bottom-0 sm:pb-0"
+          style={
+            {
+              "--composer-offset":
+                "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))",
+            } as React.CSSProperties
+          }
         >
           <textarea
             rows={2}

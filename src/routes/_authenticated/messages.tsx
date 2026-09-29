@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { VerificationBadge } from "@/components/VerificationBadge";
+import type { VerificationTier } from "@/hooks/use-auth";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,13 +15,23 @@ export const Route = createFileRoute("/_authenticated/messages")({
   component: MessagesIndex,
 });
 
+type Participant = {
+  id: string;
+  handle: string;
+  display_name: string;
+  avatar_url: string | null;
+  verification_tier: VerificationTier;
+};
+
 type ConversationRow = {
   id: string;
   user_a: string;
   user_b: string;
   last_message_at: string;
-  a: { id: string; handle: string; display_name: string; avatar_url: string | null } | null;
-  b: { id: string; handle: string; display_name: string; avatar_url: string | null } | null;
+  /* verification_tier is selected so the badge can render here too: a verified
+     member showed as verified everywhere except their own messages. */
+  a: Participant | null;
+  b: Participant | null;
 };
 
 function MessagesIndex() {
@@ -36,7 +48,7 @@ function MessagesIndex() {
       const { data, error } = await supabase
         .from("conversations")
         .select(
-          "id, user_a, user_b, last_message_at, a:profiles!conversations_user_a_fkey(id, handle, display_name, avatar_url), b:profiles!conversations_user_b_fkey(id, handle, display_name, avatar_url)",
+          "id, user_a, user_b, last_message_at, a:profiles!conversations_user_a_fkey(id, handle, display_name, avatar_url, verification_tier), b:profiles!conversations_user_b_fkey(id, handle, display_name, avatar_url, verification_tier)",
         )
         .order("last_message_at", { ascending: false });
       if (error) {
@@ -113,7 +125,8 @@ function MessagesIndex() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
-                          {other.display_name}{" "}
+                          {other.display_name}
+                          <VerificationBadge tier={other.verification_tier} size={13} />{" "}
                           <span className="text-muted-foreground">@{other.handle}</span>
                         </p>
                         {unread && (
