@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets a run be triggered by hand from the Actions tab, which is useful when a
+  # deployment misbehaves and you want to confirm the tree itself is sound.
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's result irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Types, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # The build is a test in its own right here: this app server-renders, and
+      # several modules are server-only by convention rather than by extension.
+      # A stray top-level import of client.server.ts or billing.server.ts from a
+      # route is the kind of mistake that only the bundler catches.
+      - name: Build
+        run: npm run build
+        env:
+          # Placeholders. The build must not need real credentials — if it ever
+          # does, that means a secret is being baked into the bundle, which is the
+          # thing these values exist to catch.
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+
+      # Cheap, specific, and guards a property that is easy to break by accident:
+      # the service-role key and the Stripe secret are read through unprefixed env
+      # vars precisely so Vite cannot inline them. A single VITE_ rename would
+      # silently ship one to every browser.
+      - name: Assert no server secrets in the client bundle
+        run: |
+          set -euo pipefail
+          if grep -rlE 'sb_secret_[A-Za-z0-9]|sk_live_[A-Za-z0-9]|whsec_[A-Za-z0-9]' .output/public/ 2>/dev/null; then
+            echo "::error::A credential-shaped string reached the client bundle."
+            exit 1
+          fi
+          echo "No credential-shaped strings in .output/public."
+
+  migrations:
+    name: Migration & RLS assertions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # A throwaway Postgres for scripts/validate-migrations.sh. Fresh per run, so
+    # the migrations are always applied to an empty database in order — the same
+    # thing that happens to a new Supabase project.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      # The real point of this job. Most of the ~130 assertions are negative:
+      # that `authenticated` cannot write privileged columns, cannot read another
+      # member's private data, cannot execute service-role functions, and that
+      # blocks are enforced in RLS rather than in the UI. Those properties are
+      # invisible to typecheck and easy for a later migration to undo.
+      - name: Apply migrations and assert the security model
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ledger
+        run: ./scripts/validate-migrations.sh
