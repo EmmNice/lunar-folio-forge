@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   ShieldCheck,
+  ShieldAlert,
   ShieldOff,
   Loader2,
   Users,
@@ -124,12 +125,27 @@ type ApplicationRow = {
   invite_code: string | null;
   link_primary: string | null;
   link_secondary: string | null;
+  /* Proof of ownership (20260930000300 / 20260930000400). proof_verified_at is the
+     single most important field on this row: it is the difference between evidence
+     and a claim, so the card leads with it rather than listing it among the links. */
+  proof_verified_at: string | null;
+  proof_method: string | null;
+  proof_detail: string | null;
+  proof_checked_at: string | null;
+  proof_attempts: number | null;
   profiles: {
     id: string;
     handle: string;
     display_name: string;
     avatar_url: string | null;
     company_name: string | null;
+    /* Applicant context. A day-old account with no profile applying for Gold is
+       the shape most fraud takes, and the reviewer could not see it before. */
+    created_at: string | null;
+    skills: string[] | null;
+    role_type: string | null;
+    bio: string | null;
+    location: string | null;
   } | null;
 };
 
@@ -294,10 +310,10 @@ function AdminPage() {
     }
   }
 
-  async function review(appId: string, action: "approve" | "reject") {
+  async function review(appId: string, action: "approve" | "reject", manualProof?: boolean) {
     setReviewBusy((b) => ({ ...b, [appId]: true }));
     try {
-      const result = await doReview({ data: { applicationId: appId, action } });
+      const result = await doReview({ data: { applicationId: appId, action, manualProof } });
       const outcome = action === "approve" ? "Application approved" : "Application rejected";
       toast.success(
         result.emailed
@@ -525,7 +541,7 @@ function AdminPage() {
                           key={app.id}
                           app={app}
                           busy={!!reviewBusy[app.id]}
-                          onApprove={() => review(app.id, "approve")}
+                          onApprove={(manualProof) => review(app.id, "approve", manualProof)}
                           onReject={() => review(app.id, "reject")}
                         />
                       ))}
@@ -561,7 +577,7 @@ function AdminPage() {
                           key={app.id}
                           app={app}
                           busy={!!reviewBusy[app.id]}
-                          onApprove={() => review(app.id, "approve")}
+                          onApprove={(manualProof) => review(app.id, "approve", manualProof)}
                           onReject={() => review(app.id, "reject")}
                         />
                       ))}
@@ -769,6 +785,142 @@ function AdminPage() {
   );
 }
 
+/**
+ * States the proof result in one line the reviewer cannot skim past.
+ *
+ * Three states, not two. "Nobody has checked yet" and "we checked and the code
+ * was not there" both leave proof_verified_at NULL but mean opposite things about
+ * the applicant: the first is our queue being slow, the second is the applicant
+ * not having done the one thing that proves the account is theirs.
+ */
+function ProofVerdict({ app }: { app: ApplicationRow }) {
+  const proven = Boolean(app.proof_verified_at);
+  const checked = Boolean(app.proof_checked_at);
+
+  const tone = proven
+    ? { bg: "rgba(34,197,94,0.07)", border: "rgba(34,197,94,0.22)", ink: "#4ade80" }
+    : checked
+      ? { bg: "rgba(248,113,113,0.07)", border: "rgba(248,113,113,0.22)", ink: "#f87171" }
+      : { bg: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.08)", ink: "#9ca3af" };
+
+  const METHOD_LABEL: Record<string, string> = {
+    github_bio: "found in the GitHub bio",
+    github_website: "found on the website listed on their GitHub",
+    domain_page: "found on the claimed page",
+    manual: "vouched for manually by an admin",
+  };
+
+  return (
+    <div
+      className="space-y-1 rounded-xl px-3 py-2.5"
+      style={{ background: tone.bg, border: `1px solid ${tone.border}` }}
+    >
+      <p className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: tone.ink }}>
+        {proven ? (
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+        )}
+        {proven
+          ? "Ownership proven"
+          : checked
+            ? "Ownership NOT proven"
+            : "Ownership not checked yet"}
+        {proven && app.proof_method && (
+          <span className="font-normal opacity-75">
+            · {METHOD_LABEL[app.proof_method] ?? app.proof_method}
+          </span>
+        )}
+      </p>
+      {app.proof_detail && (
+        <p className="text-[11px] break-words text-muted-foreground">{app.proof_detail}</p>
+      )}
+      {!proven && (app.proof_attempts ?? 0) > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          {app.proof_attempts} automated {app.proof_attempts === 1 ? "attempt" : "attempts"}, none
+          successful.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What each tier is supposed to require, rendered against what was actually supplied.
+ *
+ * Silver and Gold were reviewed through an identical card, which meant the
+ * standard for each was whatever the reviewer remembered it to be. These are the
+ * same rules the database now enforces (vr_silver_needs_github,
+ * vr_gold_needs_a_link in 20260930000300), restated where the decision is made —
+ * the ticks are computed from the row, so this cannot drift into decoration.
+ */
+function TierChecklist({ tier, app }: { tier: "silver" | "gold"; app: ApplicationRow }) {
+  const items: { label: string; met: boolean; hint?: string }[] =
+    tier === "silver"
+      ? [
+          {
+            label: "GitHub profile supplied",
+            met: Boolean(app.github_url ?? app.link_primary),
+          },
+          {
+            label: "Evidence of something shipped",
+            met: Boolean(app.live_project_url ?? app.deployed_contract_address),
+            hint: "a live URL or a deployed contract address",
+          },
+          {
+            label: "Describes recent work",
+            met: Boolean(app.recent_ship_desc),
+          },
+          {
+            label: "Controls the GitHub account",
+            met: Boolean(app.proof_verified_at),
+            hint: "the only item a reviewer cannot establish by eye",
+          },
+        ]
+      : [
+          {
+            label: "Fund or company named",
+            met: Boolean(app.fund_or_company_name),
+          },
+          {
+            label: "Checkable web presence",
+            met: Boolean(app.portfolio_url ?? app.linkedin_or_x_url),
+            hint: "a name alone is not evidence",
+          },
+          {
+            label: "Controls that web presence",
+            met: Boolean(app.proof_verified_at),
+            hint: "Gold can pitch and read Whisper — this is the one that matters",
+          },
+          {
+            label: "Vouched for by an existing Gold member",
+            met: Boolean(app.invite_code),
+            hint: "optional, but it shortens the review",
+          },
+        ];
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        {tier === "silver" ? "Silver — builder criteria" : "Gold — investor criteria"}
+      </p>
+      {items.map((item) => (
+        <div key={item.label} className="flex items-start gap-1.5 text-[11px]">
+          {item.met ? (
+            <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
+          ) : (
+            <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/50" />
+          )}
+          <span className={item.met ? "text-foreground/80" : "text-muted-foreground"}>
+            {item.label}
+            {item.hint && <span className="opacity-60"> — {item.hint}</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Application review card
 /**
  * One open report, with the reported content and the decisions available.
@@ -922,11 +1074,26 @@ function ApplicationCard({
 }: {
   app: ApplicationRow;
   busy: boolean;
-  onApprove: () => void;
+  onApprove: (manualProof: boolean) => void;
   onReject: () => void;
 }) {
   const isSilver = app.tier === "silver";
   const profile = app.profiles;
+
+  /*
+    Approving an unproven application requires ticking a box first.
+
+    The two tiers are not the same decision. Silver says "this person ships code";
+    Gold unlocks the pitch inbox and the Whisper audience, so a fraudulent Gold is
+    the expensive mistake. Either way, the automated check either confirmed
+    ownership or it did not, and an approve button that looks identical in both
+    cases invites the reviewer to stop reading. When the proof is missing they have
+    to say, on the record, that they established it another way — which is what
+    proof_method 'manual' means.
+  */
+  const proven = Boolean(app.proof_verified_at);
+  const [manualOverride, setManualOverride] = useState(false);
+  const canApprove = proven || manualOverride;
 
   const linkRows: { label: string; value: string | null; icon?: React.ReactNode }[] = isSilver
     ? [
@@ -991,9 +1158,25 @@ function ApplicationCard({
             {profile?.display_name ?? "Unknown"}
           </p>
           <p className="text-xs text-muted-foreground">
-            @{profile?.handle ?? "—"} · {timeAgo(app.created_at)}
+            @{profile?.handle ?? "—"} · applied {timeAgo(app.created_at)}
           </p>
         </div>
+      </div>
+
+      {/* Proof of ownership — the first thing the reviewer should read. */}
+      <ProofVerdict app={app} />
+
+      {/* Who is asking. A brand-new empty account applying for Gold is the pattern
+          worth noticing, and it was invisible on this card before. */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        {profile?.created_at && <span>Joined {timeAgo(profile.created_at)}</span>}
+        {profile?.role_type && <span>· {profile.role_type.replace(/_/g, " ")}</span>}
+        {profile?.location && <span>· {profile.location}</span>}
+        {profile?.company_name && <span>· {profile.company_name}</span>}
+        {profile?.skills && profile.skills.length > 0 && (
+          <span>· {profile.skills.slice(0, 6).join(", ")}</span>
+        )}
+        {!profile?.bio && <span className="text-amber-400/80">· no bio written</span>}
       </div>
 
       {/* Link rows */}
@@ -1020,6 +1203,29 @@ function ApplicationCard({
           ))}
       </div>
 
+      {/* What this tier actually requires, so the bar is the same every time and
+          does not drift with whoever happens to be reviewing. */}
+      <TierChecklist tier={app.tier} app={app} />
+
+      {/* Approving without proof is a deliberate act, not a default. */}
+      {!proven && (
+        <label
+          className="flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2 text-[11px] text-amber-200/90"
+          style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.20)" }}
+        >
+          <input
+            type="checkbox"
+            checked={manualOverride}
+            onChange={(e) => setManualOverride(e.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-amber-400"
+          />
+          <span>
+            Ownership is unproven. I have confirmed it another way and accept this on the record —
+            it will be logged against my account as a manual vouch.
+          </span>
+        </label>
+      )}
+
       {/* Action buttons */}
       <div className="flex gap-2">
         {busy ? (
@@ -1030,8 +1236,10 @@ function ApplicationCard({
           <>
             <button
               type="button"
-              onClick={onApprove}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-400/10"
+              onClick={() => onApprove(!proven && manualOverride)}
+              disabled={!canApprove}
+              title={canApprove ? undefined : "Confirm ownership above before approving"}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
               style={{ border: "1px solid rgba(52,211,153,0.30)" }}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />

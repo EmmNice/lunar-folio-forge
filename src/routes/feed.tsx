@@ -34,9 +34,10 @@ export const Route = createFileRoute("/feed")({
 });
 
 /**
- * Signal and Beat are two cuts of the same global timeline, split by post shape.
- * Following is a different axis — a narrower audience, not a different kind of
- * post — and it is deliberately an *additional* lens rather than the default.
+ * Signal and Beat are two cuts of the same global timeline, split by who wrote
+ * the post. Following is a different axis — a narrower audience, not a different
+ * kind of author — and it is deliberately an *additional* lens rather than the
+ * default.
  *
  * The Ledger's premise is one chronological feed where a first post is as visible
  * as a thousandth; making Following the landing tab would quietly turn it into a
@@ -44,8 +45,59 @@ export const Route = createFileRoute("/feed")({
  */
 type FeedTab = "signal" | "beat" | "following";
 
+/** The two author-tier feeds. Following is paged separately. */
+type TierTab = "signal" | "beat";
+
+/**
+ * Which authors each tab carries.
+ *
+ * This is the split the tabs were built for: Signal is the verified room, Beat is
+ * where everyone else is heard. Silver sits in both on purpose — a verified
+ * builder is still part of the day-to-day — and Gold appears only in Signal, so
+ * the loudest accounts cannot crowd out an unverified author's first post.
+ *
+ * It is a filter on the *author's* tier, never the viewer's. An unverified or
+ * signed-out reader sees both tabs in full; `can_view_post()` has no author-tier
+ * rule and this must not become one.
+ */
+const TAB_AUTHOR_TIERS: Record<TierTab, VerificationTier[]> = {
+  signal: ["silver", "gold"],
+  beat: ["none", "silver"],
+};
+
 const POST_SELECT =
   "id, content, background, comments_enabled, visibility, created_at, edited_at, author:profiles!posts_author_id_fkey(id, handle, display_name, avatar_url, verification_tier)";
+
+/**
+ * Same columns, but the author embed is an inner join so PostgREST will accept a
+ * filter on `author.verification_tier` and apply it in the database.
+ *
+ * The tier split used to be done in JS over a page of the global timeline. That
+ * is fine for a split by post shape, which was what this code drifted into, but
+ * wrong for a split by author: with verified accounts rare, twenty global rows
+ * can easily contain none of them, and Signal would render empty next to a
+ * "Load more" button that had to be pressed dozens of times to find anything.
+ * Filtering server-side means one page of Signal is one page of Signal.
+ */
+const TIER_POST_SELECT = POST_SELECT.replace(
+  "author:profiles!posts_author_id_fkey(",
+  "author:profiles!posts_author_id_fkey!inner(",
+);
+
+/**
+ * One tier tab's list, with the cursor it pages from.
+ *
+ * `posts === null` means "not loaded yet" and is what the skeleton renders on;
+ * an empty array means the query came back with nothing, which is a real and
+ * different state (a quiet Signal tab on a young platform).
+ */
+type TierFeedState = {
+  posts: FeedPost[] | null;
+  oldest: string | null;
+  hasMore: boolean;
+};
+
+const EMPTY_TIER_FEED: TierFeedState = { posts: null, oldest: null, hasMore: false };
 
 /**
  * A repost, with the post it points at and who re-shipped it.
@@ -89,12 +141,18 @@ function FeedPage() {
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<FeedTab>("signal");
-  // The two tabs split one global timeline by post background, not by tier.
-  // Signal was verified-only until 2026-07-20 (6b5085f), when it was opened to
-  // all tiers and re-cut as text-posts-vs-Studio-cards; the tab copy below was
-  // updated to match, but these comments were left behind.
-  const [beatPosts, setBeatPosts] = useState<FeedPost[] | null>(null); // Beat: Studio cards
-  const [signalPosts, setSignalPosts] = useState<FeedPost[] | null>(null); // Signal: text posts
+  /*
+    One independently-paged list per tier tab.
+
+    Both used to be carved out of a single shared page by post background, which
+    silently replaced the author-tier split the tabs were named for (6b5085f,
+    2026-07-20). They are two different queries now, so each needs its own cursor
+    and its own end-of-list flag: Signal and Beat run out at different depths.
+  */
+  const [feeds, setFeeds] = useState<Record<TierTab, TierFeedState>>({
+    signal: EMPTY_TIER_FEED,
+    beat: EMPTY_TIER_FEED,
+  });
   const [followingItems, setFollowingItems] = useState<TimelineItem[] | null>(null);
   const [followingIds, setFollowingIds] = useState<string[] | null>(null);
   /**
@@ -129,9 +187,7 @@ function FeedPage() {
   const [headerHidden, setHeaderHidden] = useState(false);
   const [stats, setStats] = useState<Map<string, PostStats>>(new Map());
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [oldestLoaded, setOldestLoaded] = useState<string | null>(null);
   const { requestExport, exportSurface } = useCardExport();
 
   // Redirect unonboarded users
@@ -185,6 +241,24 @@ function FeedPage() {
     const muted = mutedIdsRef.current;
     if (muted.size === 0) return posts;
     return posts.filter((p) => !muted.has(p.author.id));
+  }
+
+  /**
+   * Applies one transform to whichever tier lists are loaded.
+   *
+   * Edits, deletes and mutes are not tab-specific, and a silver author's post is
+   * genuinely in both lists, so every one of these has to touch both or the same
+   * post shows two different versions of itself depending on the tab.
+   */
+  function patchTierFeeds(fn: (posts: FeedPost[]) => FeedPost[]) {
+    setFeeds((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next) as TierTab[]) {
+        const current = next[key];
+        if (current.posts) next[key] = { ...current, posts: fn(current.posts) };
+      }
+      return next;
+    });
   }
 
   /**
@@ -256,10 +330,11 @@ function FeedPage() {
    * in the posts SELECT policy (20260929000200), which is why there is no filter
    * left in this function: what comes back is already what the viewer may see.
    */
-  async function loadPage(opts: { before?: string; append: boolean }) {
+  async function loadPage(which: TierTab, opts: { before?: string; append: boolean }) {
     let query = supabase
       .from("posts")
-      .select(POST_SELECT)
+      .select(TIER_POST_SELECT)
+      .in("author.verification_tier", TAB_AUTHOR_TIERS[which])
       .order("created_at", { ascending: false })
       .limit(FEED_PAGE_SIZE);
     if (opts.before) query = query.lt("created_at", opts.before);
@@ -269,44 +344,60 @@ function FeedPage() {
     if (error) {
       setFeedError("Couldn't load the feed. Check your connection and try again.");
       if (!opts.append) {
-        setSignalPosts([]);
-        setBeatPosts([]);
+        setFeeds((prev) => ({ ...prev, [which]: { posts: [], oldest: null, hasMore: false } }));
       }
       return;
     }
 
     setFeedError(null);
-    const page = normalisePosts((data ?? []) as RawFeedRow[]);
-    setHasMore(page.length === FEED_PAGE_SIZE);
-    if (page.length > 0) setOldestLoaded(page[page.length - 1].created_at);
+    // The double cast is the price of filtering on an embedded column: the
+    // generated types do not model `author.verification_tier` as a filterable
+    // key, so supabase-js widens the row type it hands back.
+    const page = normalisePosts((data ?? []) as unknown as RawFeedRow[]);
 
     const pageStats = await fetchStats(
       page.map((p) => p.id),
       user?.id,
     );
     setStats((prev) => {
-      const next = new Map(opts.append ? prev : []);
+      /*
+        Stats are keyed by post id and shared across tabs, so this merges rather
+        than replaces even on a first page: clearing it would wipe the counts of
+        the *other* tab, which is loaded in parallel and would lose its like and
+        comment numbers the moment this query returned.
+      */
+      const next = new Map(prev);
       pageStats.forEach((value, key) => next.set(key, value));
       return next;
     });
 
     const visible = withoutMuted(page);
-    const signal = visible.filter((p) => !p.background || p.background === "noir");
-    const beat = visible.filter((p) => p.background && p.background !== "noir");
 
-    if (opts.append) {
-      setSignalPosts((prev) => [...(prev ?? []), ...signal]);
-      setBeatPosts((prev) => [...(prev ?? []), ...beat]);
-    } else {
-      setSignalPosts(signal);
-      setBeatPosts(beat);
-    }
+    setFeeds((prev) => {
+      const current = prev[which];
+      return {
+        ...prev,
+        [which]: {
+          posts: opts.append ? [...(current.posts ?? []), ...visible] : visible,
+          /*
+            The cursor advances on the raw page, not the muted-filtered one. Using
+            the last *visible* row would re-request everything a muted author wrote
+            after it on the next press, and could stall paging entirely on a page
+            where every row was muted.
+          */
+          oldest: page.length > 0 ? page[page.length - 1].created_at : current.oldest,
+          hasMore: page.length === FEED_PAGE_SIZE,
+        },
+      };
+    });
   }
 
   async function loadMore() {
-    if (loadingMore || !hasMore || !oldestLoaded) return;
+    if (tab === "following") return;
+    const current = feeds[tab];
+    if (loadingMore || !current.hasMore || !current.oldest) return;
     setLoadingMore(true);
-    await loadPage({ before: oldestLoaded, append: true });
+    await loadPage(tab, { before: current.oldest, append: true });
     setLoadingMore(false);
   }
 
@@ -475,8 +566,7 @@ function FeedPage() {
   */
   useEffect(() => {
     if (mutedIds.size === 0) return;
-    setSignalPosts((prev) => (prev ? prev.filter((p) => !mutedIds.has(p.author.id)) : prev));
-    setBeatPosts((prev) => (prev ? prev.filter((p) => !mutedIds.has(p.author.id)) : prev));
+    patchTierFeeds((posts) => posts.filter((p) => !mutedIds.has(p.author.id)));
     setFollowingItems((prev) =>
       prev ? prev.filter((i) => !mutedIds.has(i.post.author.id)) : prev,
     );
@@ -491,7 +581,10 @@ function FeedPage() {
   }, [tab, user, followingIds, followingItems]);
 
   useEffect(() => {
-    loadPage({ append: false });
+    // Both tier tabs are loaded up front, in parallel, so switching between them
+    // never waits on the network.
+    loadPage("signal", { append: false });
+    loadPage("beat", { append: false });
 
     // Realtime used to refetch the entire feed on every INSERT from anyone, so one
     // person posting made every open browser re-download the whole timeline.
@@ -517,11 +610,21 @@ function FeedPage() {
           // A muted author's post still arrives over the wire — the mute is a
           // display rule, so it has to be applied here too.
           if (mutedIdsRef.current.has(fresh.author.id)) return;
-          const isCard = fresh.background && fresh.background !== "noir";
-          const setter = isCard ? setBeatPosts : setSignalPosts;
-          setter((prev) => {
-            if (prev?.some((p) => p.id === fresh.id)) return prev;
-            return prev ? [fresh, ...prev] : [fresh];
+
+          // Routed by the author's tier, the same rule the queries use. A silver
+          // author lands in both tabs; gold only in Signal, unverified only in Beat.
+          setFeeds((prev) => {
+            const next = { ...prev };
+            for (const key of Object.keys(next) as TierTab[]) {
+              if (!TAB_AUTHOR_TIERS[key].includes(fresh.author.verification_tier)) continue;
+              const current = next[key];
+              // A tab that has not loaded yet is left alone: seeding it here would
+              // turn its skeleton into a one-post feed with no cursor to page from.
+              if (current.posts === null) continue;
+              if (current.posts.some((p) => p.id === fresh.id)) continue;
+              next[key] = { ...current, posts: [fresh, ...current.posts] };
+            }
+            return next;
           });
 
           // Same post, second home: the Following tab keeps its own list, so a
@@ -542,8 +645,7 @@ function FeedPage() {
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, (payload) => {
         const id = (payload.old as { id?: string }).id;
         if (!id) return;
-        setSignalPosts((prev) => prev?.filter((p) => p.id !== id) ?? null);
-        setBeatPosts((prev) => prev?.filter((p) => p.id !== id) ?? null);
+        patchTierFeeds((posts) => posts.filter((p) => p.id !== id));
         setFollowingItems((prev) => prev?.filter((i) => i.post.id !== id) ?? null);
       })
       .subscribe();
@@ -554,26 +656,32 @@ function FeedPage() {
   }, [user?.id]);
 
   /*
-    Signal and Beat are both pre-loaded at mount from one query, so switching
-    between them is instant. Following is fetched on first open instead: it is a
-    different query against a list the viewer may not even have, and paying for it
-    on every feed visit would slow the common case down for the rarer one.
+    Signal and Beat are both pre-loaded at mount, so switching between them is
+    instant. Following is fetched on first open instead: it is a different query
+    against a list the viewer may not even have, and paying for it on every feed
+    visit would slow the common case down for the rarer one.
   */
   const displayedItems: TimelineItem[] =
     tab === "following"
       ? (followingItems ?? [])
-      : (tab === "signal" ? (signalPosts ?? []) : (beatPosts ?? [])).map((post) => ({
+      : (feeds[tab].posts ?? []).map((post) => ({
           key: `post:${post.id}`,
           post,
           timelineAt: post.created_at,
         }));
 
-  const feedLoading =
-    tab === "following"
-      ? followingItems === null
-      : tab === "signal"
-        ? signalPosts === null
-        : beatPosts === null;
+  const feedLoading = tab === "following" ? followingItems === null : feeds[tab].posts === null;
+
+  /**
+   * Whether a post by *this* viewer would appear in the given tab.
+   *
+   * Used by the empty states and the composer hint. Reading a tab is never
+   * restricted; this is only about where your own writing shows up.
+   */
+  function viewerPostsLandIn(which: TierTab): boolean {
+    if (!profile) return false;
+    return TAB_AUTHOR_TIERS[which].includes(profile.verification_tier);
+  }
 
   // Following is meaningless without an account to follow from.
   const visibleTabs: FeedTab[] = user ? ["signal", "beat", "following"] : ["signal", "beat"];
@@ -582,12 +690,12 @@ function FeedPage() {
     signal: {
       label: "Signal",
       icon: Rss,
-      blurb: "All builders, all tiers — the live pulse of everything being shipped.",
+      blurb: "Verified builders only — silver and gold, vouched for and on the record.",
     },
     beat: {
       label: "Beat",
       icon: Sparkles,
-      blurb: "Studio cards — crafted status posts from every builder on the platform.",
+      blurb: "Where everyone else is shipping. Open to all, gold kept out so it stays that way.",
     },
     following: {
       label: "Following",
@@ -599,16 +707,14 @@ function FeedPage() {
   /** Replaces one post in whichever list holds it, after an in-place edit. */
   function applyEdit(id: string, content: string, editedAt: string | null) {
     const patch = (p: FeedPost) => (p.id === id ? { ...p, content, edited_at: editedAt } : p);
-    setSignalPosts((prev) => prev?.map(patch) ?? null);
-    setBeatPosts((prev) => prev?.map(patch) ?? null);
+    patchTierFeeds((posts) => posts.map(patch));
     setFollowingItems(
       (prev) => prev?.map((i) => (i.post.id === id ? { ...i, post: patch(i.post) } : i)) ?? null,
     );
   }
 
   function removePostFromLists(id: string) {
-    setBeatPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
-    setSignalPosts((prev) => prev?.filter((x) => x.id !== id) ?? null);
+    patchTierFeeds((posts) => posts.filter((x) => x.id !== id));
     setFollowingItems((prev) => prev?.filter((i) => i.post.id !== id) ?? null);
   }
 
@@ -691,7 +797,18 @@ function FeedPage() {
         {/* Feed load failures used to be a toast that vanished, leaving an empty page */}
         {feedError && (
           <div className="mb-5">
-            <ErrorState message={feedError} onRetry={() => loadPage({ append: false })} />
+            <ErrorState
+              message={feedError}
+              onRetry={() => {
+                // Retries whichever feed the reader is actually looking at. Following
+                // pages from its own query and its own cursor.
+                if (tab === "following") {
+                  if (followingIds) loadFollowingPage(followingIds, { append: false });
+                  return;
+                }
+                loadPage(tab, { append: false });
+              }}
+            />
           </div>
         )}
 
@@ -729,16 +846,24 @@ function FeedPage() {
               }
             />
           ) : (
+            /* The empty state has to account for the tier split, or it lies. An
+               unverified reader offered "write the first post" on an empty Signal
+               would post, watch Signal stay empty, and reasonably call it broken —
+               their post went to Beat, because that is what these tabs mean. */
             <EmptyState
               icon={tab === "signal" ? Rss : Sparkles}
-              title={tab === "signal" ? "No posts yet" : "No studio cards yet"}
+              title={tab === "signal" ? "Nothing on Signal yet" : "Nothing on Beat yet"}
               description={
                 tab === "signal"
-                  ? "Signal carries every text post on the platform. Be the first to ship something worth reading."
-                  : "Cards crafted in the Studio land here. Make one and it appears instantly."
+                  ? viewerPostsLandIn("signal")
+                    ? "Signal carries posts from verified builders. Be the first to ship something worth reading."
+                    : "Signal carries posts from verified builders only — silver and gold. You can read every word of it; getting a badge is what puts your own posts here."
+                  : viewerPostsLandIn("beat")
+                    ? "Beat is the open floor — every builder without a gold badge posts here. Be the first."
+                    : "Beat is where unverified and silver builders post. Your gold posts go to Signal."
               }
               action={
-                user ? (
+                user && viewerPostsLandIn(tab as TierTab) ? (
                   <button
                     type="button"
                     onClick={() => setShowModal(true)}
@@ -746,6 +871,15 @@ function FeedPage() {
                   >
                     Write the first post
                   </button>
+                ) : user && profile && tab === "signal" ? (
+                  <Link
+                    to="/u/$handle"
+                    params={{ handle: profile.handle }}
+                    search={{ tab: undefined }}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Apply for verification
+                  </Link>
                 ) : undefined
               }
             />
@@ -803,7 +937,7 @@ function FeedPage() {
               way to reach anything older — once the platform passed 200 posts,
               earlier ones became permanently unreachable.
             */}
-            {(tab === "following" ? followingHasMore : hasMore) && (
+            {(tab === "following" ? followingHasMore : feeds[tab].hasMore) && (
               <button
                 type="button"
                 onClick={tab === "following" ? loadMoreFollowing : loadMore}
@@ -856,13 +990,22 @@ function FeedPage() {
         <ComposerModal
           onClose={() => setShowModal(false)}
           onPublished={(post) => {
-            // Signal = noir/text posts; Beat = studio card posts (non-noir)
-            const isCardPost = post.background && post.background !== "noir";
-            if (isCardPost) {
-              setBeatPosts((prev) => (prev ? [post, ...prev] : [post]));
-            } else {
-              setSignalPosts((prev) => (prev ? [post, ...prev] : [post]));
-            }
+            /*
+              Placed by the author's tier, exactly as the queries and the realtime
+              handler do it. The realtime INSERT will arrive for this post too, and
+              both paths skip a post already in the list, so it lands once.
+            */
+            setFeeds((prev) => {
+              const next = { ...prev };
+              for (const key of Object.keys(next) as TierTab[]) {
+                if (!TAB_AUTHOR_TIERS[key].includes(post.author.verification_tier)) continue;
+                const current = next[key];
+                if (current.posts === null) continue;
+                if (current.posts.some((p) => p.id === post.id)) continue;
+                next[key] = { ...current, posts: [post, ...current.posts] };
+              }
+              return next;
+            });
           }}
         />
       )}

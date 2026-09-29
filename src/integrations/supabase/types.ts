@@ -712,6 +712,7 @@ export type Database = {
           subscription_status: string
           traction_url: string | null
           updated_at: string
+          verification_proof_code: string
           verification_tier: string
         }
         Insert: {
@@ -744,6 +745,7 @@ export type Database = {
           subscription_status?: string
           traction_url?: string | null
           updated_at?: string
+          verification_proof_code?: string
           verification_tier?: string
         }
         Update: {
@@ -776,6 +778,7 @@ export type Database = {
           subscription_status?: string
           traction_url?: string | null
           updated_at?: string
+          verification_proof_code?: string
           verification_tier?: string
         }
         Relationships: []
@@ -905,6 +908,11 @@ export type Database = {
           linkedin_or_x_url: string | null
           live_project_url: string | null
           portfolio_url: string | null
+          proof_attempts: number
+          proof_checked_at: string | null
+          proof_detail: string | null
+          proof_method: string | null
+          proof_verified_at: string | null
           recent_ship_desc: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -924,6 +932,11 @@ export type Database = {
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
           portfolio_url?: string | null
+          proof_attempts?: number
+          proof_checked_at?: string | null
+          proof_detail?: string | null
+          proof_method?: string | null
+          proof_verified_at?: string | null
           recent_ship_desc?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -943,6 +956,11 @@ export type Database = {
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
           portfolio_url?: string | null
+          proof_attempts?: number
+          proof_checked_at?: string | null
+          proof_detail?: string | null
+          proof_method?: string | null
+          proof_verified_at?: string | null
           recent_ship_desc?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1035,6 +1053,7 @@ export type Database = {
           subscription_status: string
           traction_url: string | null
           updated_at: string
+          verification_proof_code: string
           verification_tier: string
         }
         SetofOptions: {
@@ -1065,6 +1084,7 @@ export type Database = {
           handle: string
           id: string
           role_type: string
+          verification_proof_code: string
           verification_tier: string
         }[]
       }
