@@ -33,6 +33,8 @@ ones, so both pairs need to be set.
 | `VITE_ADMIN_DOMAIN` | Hostname allowed to reach `/admin`. See below.                                                                                      |
 | `VITE_TERMS_URL`    | Link target for the terms in the sign-in consent line. Rendered as plain text when unset.                                           |
 
+| `VITE_AUTH_PROVIDERS` | Comma-separated OAuth providers to show, e.g. `github,google`. Each must be enabled in Supabase first. Empty means email-only. |
+
 ### Admin domain gating
 
 `/admin` is restricted to a single hostname.
@@ -93,6 +95,42 @@ sync — whichever builder is active needs every one declared.
 >
 > The corollary: never put a secret in a `VITE_` variable. Anything prefixed
 > `VITE_` is readable by every visitor.
+
+## Supabase Auth configuration
+
+These live in the Supabase dashboard rather than environment variables, and the
+app misbehaves if they are wrong:
+
+- **Authentication → URL Configuration → Site URL** must be the full origin
+  _including the scheme_, e.g. `https://your-app.up.railway.app`. A value missing
+  `https://` breaks email confirmation and OAuth redirects.
+- **Redirect URLs** must include the production origin. The app redirects to
+  `<origin>/feed` after sign-in, so add `https://your-app.up.railway.app/**`.
+- **Authentication → Providers**: enable only providers you hold real client
+  credentials for, then list those same providers in `VITE_AUTH_PROVIDERS` so the
+  sign-in card offers them. The two must agree, or users get buttons that only
+  produce an error.
+- **Password minimum length** should match the client, which enforces 8.
+
+## Service role key
+
+`SUPABASE_SERVICE_ROLE_KEY` must authenticate against **both** PostgREST and the
+GoTrue admin API — the server functions call `auth.admin.getUserById` to resolve
+recipient email addresses.
+
+On this project the new-format `sb_secret_…` keys are rejected with HTTP 401 by
+both services, even when freshly created, so the legacy `service_role` JWT is
+configured instead. Re-test a new-format key after Supabase migrates this project
+to asymmetric JWT signing keys. Both of these must return 200:
+
+```sh
+curl -o /dev/null -w '%{http_code}\n' \
+  "https://<ref>.supabase.co/rest/v1/profiles?select=id&limit=1" -H "apikey: <key>"
+
+curl -o /dev/null -w '%{http_code}\n' \
+  "https://<ref>.supabase.co/auth/v1/admin/users?per_page=1" \
+  -H "apikey: <key>" -H "Authorization: Bearer <key>"
+```
 
 ## Database
 

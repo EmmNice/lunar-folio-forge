@@ -22,6 +22,20 @@ import { LedgerMark } from "@/components/AppHeader";
 // somewhere that isn't the terms.
 const TERMS_URL = import.meta.env.VITE_TERMS_URL as string | undefined;
 
+// Which OAuth providers to offer, comma separated, e.g. "github,google,twitter".
+//
+// A provider has to be enabled in Supabase (Authentication -> Providers) before
+// it belongs here: listing one that is not configured renders a button that can
+// only ever produce an error toast. Defaults to none, so the card shows email
+// sign-in only until real OAuth credentials exist.
+const ENABLED_OAUTH_PROVIDERS = new Set(
+  ((import.meta.env.VITE_AUTH_PROVIDERS as string | undefined) ?? "")
+    .split(",")
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean),
+);
+const HAS_OAUTH = ENABLED_OAUTH_PROVIDERS.size > 0;
+
 export const Route = createFileRoute("/")({
   ssr: false, // auth is client-only; disable SSR to prevent hydration mismatches
   head: () => ({
@@ -430,66 +444,74 @@ function Landing() {
       );
     }
 
-    /* Default: social-first */
+    /* Default: OAuth when configured, otherwise email-only */
     return (
       <div className="space-y-2.5">
         {/* GitHub */}
-        <button
-          type="button"
-          onClick={() => signInWithProvider("github")}
-          disabled={submitting !== null}
-          className={providerBtnCls}
-        >
-          {submitting === "github" ? (
-            <Loader2 className="h-5 w-5 animate-spin shrink-0" />
-          ) : (
-            <GitHubIcon className="h-5 w-5 shrink-0" />
-          )}
-          <span className="flex-1 text-left">Continue with GitHub</span>
-          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-            Builders
-          </span>
-        </button>
+        {ENABLED_OAUTH_PROVIDERS.has("github") && (
+          <button
+            type="button"
+            onClick={() => signInWithProvider("github")}
+            disabled={submitting !== null}
+            className={providerBtnCls}
+          >
+            {submitting === "github" ? (
+              <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+            ) : (
+              <GitHubIcon className="h-5 w-5 shrink-0" />
+            )}
+            <span className="flex-1 text-left">Continue with GitHub</span>
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+              Builders
+            </span>
+          </button>
+        )}
 
         {/* Google */}
-        <button
-          type="button"
-          onClick={() => signInWithProvider("google")}
-          disabled={submitting !== null}
-          className={providerBtnCls}
-        >
-          {submitting === "google" ? (
-            <Loader2 className="h-5 w-5 animate-spin shrink-0" />
-          ) : (
-            <GoogleIcon className="h-5 w-5 shrink-0" />
-          )}
-          <span className="flex-1 text-left">Continue with Google</span>
-        </button>
+        {ENABLED_OAUTH_PROVIDERS.has("google") && (
+          <button
+            type="button"
+            onClick={() => signInWithProvider("google")}
+            disabled={submitting !== null}
+            className={providerBtnCls}
+          >
+            {submitting === "google" ? (
+              <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+            ) : (
+              <GoogleIcon className="h-5 w-5 shrink-0" />
+            )}
+            <span className="flex-1 text-left">Continue with Google</span>
+          </button>
+        )}
 
         {/* X / Twitter */}
-        <button
-          type="button"
-          onClick={() => signInWithProvider("twitter")}
-          disabled={submitting !== null}
-          className={providerBtnCls}
-        >
-          {submitting === "twitter" ? (
-            <Loader2 className="h-5 w-5 animate-spin shrink-0" />
-          ) : (
-            <XIcon className="h-5 w-5 shrink-0" />
-          )}
-          <span className="flex-1 text-left">Continue with X</span>
-          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-400">
-            Web3
-          </span>
-        </button>
+        {ENABLED_OAUTH_PROVIDERS.has("twitter") && (
+          <button
+            type="button"
+            onClick={() => signInWithProvider("twitter")}
+            disabled={submitting !== null}
+            className={providerBtnCls}
+          >
+            {submitting === "twitter" ? (
+              <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+            ) : (
+              <XIcon className="h-5 w-5 shrink-0" />
+            )}
+            <span className="flex-1 text-left">Continue with X</span>
+            <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-400">
+              Web3
+            </span>
+          </button>
+        )}
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 py-1">
-          <div className="h-px flex-1 bg-border/60" />
-          <span className="text-[11px] text-muted-foreground">or</span>
-          <div className="h-px flex-1 bg-border/60" />
-        </div>
+        {/* Divider — only meaningful when OAuth buttons are shown above */}
+        {HAS_OAUTH && (
+          <div className="flex items-center gap-3 py-1">
+            <div className="h-px flex-1 bg-border/60" />
+            <span className="text-[11px] text-muted-foreground">or</span>
+            <div className="h-px flex-1 bg-border/60" />
+          </div>
+        )}
 
         {/* Email options */}
         <div className="grid grid-cols-2 gap-2">
