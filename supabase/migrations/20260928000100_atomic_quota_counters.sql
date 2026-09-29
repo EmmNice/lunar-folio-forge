@@ -54,7 +54,10 @@ begin
 end;
 $$;
 
-revoke all on function public.consume_ai_credit(uuid, integer, integer) from public, anon;
+-- Hosted Supabase grants EXECUTE on new public functions to anon AND
+-- authenticated by default, and `public` does not imply those roles, so both
+-- are named explicitly. See 20260928000400.
+revoke all on function public.consume_ai_credit(uuid, integer, integer) from public, anon, authenticated;
 grant execute on function public.consume_ai_credit(uuid, integer, integer) to service_role;
 
 -- New-conversation quota.
@@ -86,7 +89,10 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_conversation_slot(uuid, integer) from public, anon;
+-- Hosted Supabase grants EXECUTE on new public functions to anon AND
+-- authenticated by default, and `public` does not imply those roles, so both
+-- are named explicitly. See 20260928000400.
+revoke all on function public.claim_conversation_slot(uuid, integer) from public, anon, authenticated;
 grant execute on function public.claim_conversation_slot(uuid, integer) to service_role;
 
 -- Hand a credit back when the AI call that reserved it failed. Floors at zero so
@@ -103,5 +109,8 @@ as $$
   where id = _user_id;
 $$;
 
-revoke all on function public.refund_ai_credit(uuid) from public, anon;
+-- Hosted Supabase grants EXECUTE on new public functions to anon AND
+-- authenticated by default, and `public` does not imply those roles, so both
+-- are named explicitly. See 20260928000400.
+revoke all on function public.refund_ai_credit(uuid) from public, anon, authenticated;
 grant execute on function public.refund_ai_credit(uuid) to service_role;
