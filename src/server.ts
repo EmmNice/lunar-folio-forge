@@ -86,7 +86,19 @@ function contentSecurityPolicy(): string {
     }
   }
 
-  const connectSrc = ["'self'", ...supabaseOrigins].join(" ");
+  // The card exporter has to fetch() the Google Fonts stylesheet to inline the
+  // webfont into the PNG. Reading it via CSSOM is blocked by the same-origin
+  // policy, so html-to-image falls back to fetching the text -- and connect-src
+  // was refusing that, which meant every export logged a CSP violation and the
+  // saved card rendered in a fallback system font instead of Inter. These are the
+  // same two origins style-src and font-src already trust to render the page, so
+  // naming them here grants nothing new.
+  const connectSrc = [
+    "'self'",
+    ...supabaseOrigins,
+    "https://fonts.googleapis.com",
+    "https://fonts.gstatic.com",
+  ].join(" ");
 
   cachedCsp = [
     "default-src 'self'",
