@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { parseNotificationPrefs, type NotificationPrefs } from "@/lib/notification-prefs";
@@ -180,7 +180,45 @@ export type AuthState = {
   refreshProfile: () => Promise<void>;
 };
 
+/**
+ * Resolves the session once and shares it.
+ *
+ * This was a plain hook, and that was the single largest performance problem in the
+ * app. Every component calling `useAuth()` got its own state, its own effect and
+ * its own `onAuthStateChange` subscription — so each one independently fetched the
+ * profile. A cold feed load measured on the deployed site made **33 API requests to
+ * render 3 posts**, of which 9 were `current_profile` and 9 were `user_roles`:
+ * eighteen requests for one answer that does not vary.
+ *
+ * The visible symptom was exactly what it sounds like. Nine components each waiting
+ * on their own round trip, each re-rendering as it landed, is a page that assembles
+ * itself in pieces instead of appearing — the header, the composer, the nav and the
+ * cards all arriving separately.
+ *
+ * `useAuth()` keeps its signature, so no call site changed. It reads this context
+ * instead of doing the work.
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const value = useAuthState();
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+const AuthContext = createContext<AuthState | null>(null);
+
 export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  /*
+    Falling back to a standalone resolution would hide a missing provider behind a
+    silent extra request per component — which is the bug this context exists to
+    remove. Better to fail where the mistake is.
+  */
+  if (!ctx) {
+    throw new Error("useAuth() requires <AuthProvider>. It is mounted in __root.tsx.");
+  }
+  return ctx;
+}
+
+function useAuthState(): AuthState {
   const [state, setState] = useState<Omit<AuthState, "refreshProfile">>({
     loading: true,
     session: null,

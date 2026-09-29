@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { supabase } from "@/integrations/supabase/client";
+import { AuthProvider } from "@/hooks/use-auth";
 import { initBrowserMonitoring } from "@/lib/monitoring.browser";
 import { reportError, setMonitoringUser } from "@/lib/monitoring";
 import { resetPerUserState } from "@/lib/session-reset";
@@ -180,7 +181,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      {/* One session resolution for the whole tree. Before this every component
+          calling useAuth() fetched the profile itself — 18 redundant requests on a
+          cold feed load, which is why the page assembled itself in pieces. */}
+      <AuthProvider>
+        <Outlet />
+      </AuthProvider>
       <Toaster
         theme="dark"
         position="top-center"
