@@ -198,6 +198,25 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
   /** One scale factor, so the export and the on-screen preview stay in proportion. */
   const px = (exportPx: number, previewEm: string) => (exportMode ? exportPx : previewEm);
 
+  /*
+    Body type scales to the length of the post.
+
+    A fixed size cannot serve both ends of a 280-character range on a 9:16 canvas:
+    set it for a paragraph and a three-word post is a whisper in an empty frame; set
+    it for the three words and anything real overflows. Short posts get to be a
+    statement, long ones stay comfortable. The thresholds are eyeballed against the
+    280-character cap rather than computed, which is the honest way to describe them.
+  */
+  const length = (content || "").trim().length;
+  const bodySize =
+    length <= 70
+      ? px(96, "2.5em")
+      : length <= 140
+        ? px(76, "2em")
+        : length <= 210
+          ? px(62, "1.65em")
+          : px(52, "1.4em");
+
   const styles: React.CSSProperties = exportMode
     ? { width: 1080, height: 1920, padding: "150px 104px 128px" }
     : { aspectRatio: "1080 / 1920", width: "100%", padding: "8.5% 6.5% 7%" };
@@ -345,36 +364,32 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
 
       {/* ── The post ─────────────────────────────────────────────────────── */}
       {/*
-        flex: 1 with the text centred, replacing a three-block space-between layout
-        plus a maxHeight:60% clamp that silently cut long posts mid-word. Content is
-        capped at 280 characters upstream, so given this much room it always fits —
-        the clamp was guarding against a case that cannot happen and disfiguring the
-        one that does.
+        The body sits directly under the identity block, and the slack goes to the
+        bottom instead of being split around the text.
+
+        Centring it in a flex:1 row looked right in the abstract and awful in
+        practice: a two-word post ended up as one small line marooned between two
+        huge voids, with the identity crammed at the top and the footer stranded at
+        the bottom. Weight belongs in the upper two thirds where the eye starts, and
+        space at the bottom reads as margin rather than as something missing.
       */}
       <div
         style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          paddingTop: px(56, "1.6em"),
-          paddingBottom: px(56, "1.6em"),
-          minHeight: 0,
+          marginTop: px(72, "2em"),
+          fontSize: bodySize,
+          lineHeight: 1.32,
+          color: t.body,
+          fontWeight: 600,
+          letterSpacing: "-0.028em",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
         }}
       >
-        <div
-          style={{
-            fontSize: px(52, "1.4em"),
-            lineHeight: 1.38,
-            color: t.body,
-            fontWeight: 500,
-            letterSpacing: "-0.022em",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {content || "Write something worth reading."}
-        </div>
+        {content || "Write something worth reading."}
       </div>
+
+      {/* Absorbs the remaining height so the footer stays pinned. */}
+      <div style={{ flex: 1, minHeight: px(40, "1em") }} />
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <div
