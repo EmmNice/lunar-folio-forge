@@ -89,7 +89,13 @@ export const listMembers = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(error.message);
-    return data ?? [];
+
+    // Which members hold a role, so the panel can hide the moderation controls
+    // that setAccountStatus would refuse anyway.
+    const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id");
+    const admins = new Set((roles ?? []).map((r) => r.user_id));
+
+    return (data ?? []).map((member) => ({ ...member, is_admin: admins.has(member.id) }));
   });
 
 /**

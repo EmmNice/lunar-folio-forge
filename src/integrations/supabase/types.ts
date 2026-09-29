@@ -483,7 +483,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          post_id: string
+          post_id: string | null
           reason: string | null
           reporter_id: string
           resolution_note: string | null
@@ -494,7 +494,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          post_id: string
+          post_id?: string | null
           reason?: string | null
           reporter_id: string
           resolution_note?: string | null
@@ -505,7 +505,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          post_id?: string
+          post_id?: string | null
           reason?: string | null
           reporter_id?: string
           resolution_note?: string | null
