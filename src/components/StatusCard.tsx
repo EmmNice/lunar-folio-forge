@@ -131,22 +131,15 @@ export const THEMES: Record<Background, ThemeConfig> = {
  * Light themes get darker inks: the same yellow that reads as gold on near-black is
  * nearly invisible on cream.
  */
-const TIER_STYLE: Record<
-  "silver" | "gold",
-  { label: string; ink: string; inkLight: string; wash: string; edge: string }
-> = {
+const TIER_STYLE: Record<"silver" | "gold", { ink: string; inkLight: string; edge: string }> = {
   gold: {
-    label: "Gold Verified",
     ink: "#facc15",
     inkLight: "#8a6d0b",
-    wash: "rgba(250,204,21,0.12)",
     edge: "rgba(250,204,21,0.38)",
   },
   silver: {
-    label: "Silver Verified",
     ink: "#cbd5e1",
     inkLight: "#55606e",
-    wash: "rgba(203,213,225,0.12)",
     edge: "rgba(203,213,225,0.30)",
   },
 };
@@ -229,13 +222,27 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
       style={{
         ...styles,
         backgroundColor: t.bg,
-        backgroundImage: t.bgGradient
-          ? `${t.bgGradient}, radial-gradient(${t.dot} 1px, transparent 1px)`
-          : `radial-gradient(${t.dot} 1px, transparent 1px)`,
-        backgroundSize: t.bgGradient
-          ? `100% 100%, ${exportMode ? "44px 44px" : "22px 22px"}`
-          : exportMode
-            ? "44px 44px"
+        /*
+          The dot texture is dropped from the export.
+
+          It is barely visible at 6-7% alpha, and it is high-frequency noise across
+          the whole frame — which is the worst possible input for the JPEG pass every
+          messaging app applies on the way out. The encoder spends its bit budget
+          describing a dither pattern nobody can see, and pays for it with blocking
+          and mosquito noise around the text, which everybody can. Sharing the card
+          through WhatsApp is the main thing it is for, so the export keeps the smooth
+          gradient and loses the speckle. On screen, where nothing is re-encoded, the
+          texture stays.
+        */
+        backgroundImage: exportMode
+          ? (t.bgGradient ?? "none")
+          : t.bgGradient
+            ? `${t.bgGradient}, radial-gradient(${t.dot} 1px, transparent 1px)`
+            : `radial-gradient(${t.dot} 1px, transparent 1px)`,
+        backgroundSize: exportMode
+          ? "100% 100%"
+          : t.bgGradient
+            ? `100% 100%, 22px 22px`
             : "22px 22px",
         color: t.fg,
         fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -321,32 +328,12 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
           </div>
 
           {/*
-            The tier said in words, not only as a tick.
-            A tick is recognisable once you already know the platform; the words are
-            what make the badge mean something to someone seeing The Ledger for the
-            first time in a screenshot on another network.
+            No text pill here. It was added on the reasoning that spelling out the
+            tier would mean more to someone meeting the platform in a screenshot —
+            and in place it just crowded the name with shouty uppercase. The tick
+            beside the name, the ring on the avatar and the hairline along the top
+            edge already say verified three times over.
           */}
-          {tierStyle ? (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                alignSelf: "flex-start",
-                gap: px(10, "0.3em"),
-                padding: exportMode ? "10px 22px" : "0.28em 0.7em",
-                borderRadius: "9999px",
-                backgroundColor: tierStyle.wash,
-                border: `1px solid ${tierStyle.edge}`,
-                fontSize: px(26, "0.72em"),
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: tierInk,
-              }}
-            >
-              {tierStyle.label}
-            </div>
-          ) : null}
 
           {title ? (
             <div

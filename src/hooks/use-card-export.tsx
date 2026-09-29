@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toBlob } from "html-to-image";
+import { toBlob, toCanvas } from "html-to-image";
 import { toast } from "sonner";
 import { BACKGROUND_BASE_COLORS, StatusCard } from "@/components/StatusCard";
 import type { FeedPost } from "@/components/PostCard";
@@ -14,20 +14,24 @@ const EXPORT_WIDTH = 1080;
 const EXPORT_HEIGHT = 1920;
 
 /**
- * Supersampling factor for the PNG.
+ * How much bigger than the output the card is rasterised before downscaling.
  *
- * At 1 the file came out exactly 1080x1920 — a fine size, and still visibly soft,
- * because every glyph edge and the avatar ring were sampled once per output pixel.
- * At 2 the card rasterises at 2160x3840 and downscales beautifully on any phone,
- * which is what makes text look printed rather than rendered.
+ * The card is drawn at 2x and then resampled down to exactly 1080x1920, rather than
+ * being exported at 2160x3840. That is deliberate, and it is the opposite of what I
+ * did first.
  *
- * The cost is real and worth stating: the canvas is 2160 * 3840 * 4 bytes, about
- * 33 MB, held while encoding. Desktop and current phones handle that without
- * noticing; an older device can fail to allocate it. `renderCard` falls back to 1
- * in that case rather than returning nothing, so the worst outcome is the file we
- * used to produce.
+ * Shipping the full 2160x3840 file made WhatsApp *worse*, not better. WhatsApp will
+ * not send an image that size as-is: it downscales with a fast filter and then
+ * re-encodes to JPEG, so the picture is degraded twice, and it compresses larger
+ * files harder. Handing it a file already at Status/Story dimensions means it has no
+ * reason to resample at all — one JPEG pass instead of a resize plus a JPEG pass.
+ *
+ * Supersampling is what keeps the result sharp anyway: every glyph edge, the avatar
+ * ring and the badge are computed from four samples per output pixel and averaged
+ * with a proper filter, which is materially crisper than rasterising straight to
+ * 1080x1920. Same dimensions as before, visibly better pixels.
  */
-const EXPORT_PIXEL_RATIO = 2;
+const EXPORT_SUPERSAMPLE = 2;
 
 const FALLBACK_BACKGROUND = "#0b0b0c";
 
@@ -41,24 +45,40 @@ const FALLBACK_BACKGROUND = "#0b0b0c";
  * compare two files side by side.
  */
 async function renderCard(node: HTMLElement, backgroundColor: string): Promise<Blob | null> {
-  const attempt = (pixelRatio: number) =>
-    toBlob(node, {
-      pixelRatio,
-      cacheBust: true,
-      backgroundColor,
-      width: EXPORT_WIDTH,
-      height: EXPORT_HEIGHT,
-    });
+  const options = { cacheBust: true, backgroundColor, width: EXPORT_WIDTH, height: EXPORT_HEIGHT };
 
   try {
-    const hi = await attempt(EXPORT_PIXEL_RATIO);
-    if (hi) return hi;
-    console.warn("[card] High-resolution render returned nothing; retrying at 1x.");
+    // Rasterise large...
+    const big = await toCanvas(node, { ...options, pixelRatio: EXPORT_SUPERSAMPLE });
+
+    // ...then resample down to the exact output size with a quality filter.
+    const out = document.createElement("canvas");
+    out.width = EXPORT_WIDTH;
+    out.height = EXPORT_HEIGHT;
+    const ctx = out.getContext("2d");
+    if (!ctx) throw new Error("no 2d context");
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    // The background is painted first so any transparent edge resolves against the
+    // card colour rather than against black once a messaging app flattens it.
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+    ctx.drawImage(big, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      out.toBlob((b) => resolve(b), "image/png"),
+    );
+    if (blob) return blob;
+    console.warn("[card] Downscale produced no blob; falling back to a direct render.");
   } catch (error) {
-    console.warn("[card] High-resolution render failed; retrying at 1x.", error);
+    // A supersampled canvas is 2160 * 3840 * 4 bytes, about 33 MB. Older devices can
+    // fail to allocate it. Falling back to a direct 1x render keeps the download
+    // working rather than turning a memory limit into "couldn't save the card".
+    console.warn("[card] Supersampled render failed; falling back to a direct render.", error);
   }
 
-  return attempt(1);
+  return toBlob(node, { ...options, pixelRatio: 1 });
 }
 
 /**
