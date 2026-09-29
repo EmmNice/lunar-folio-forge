@@ -11,6 +11,7 @@ import {
   Inbox,
   CreditCard,
   AtSign,
+  BadgeCheck,
   Trash2,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -28,6 +29,18 @@ const SETTINGS_NAV = [
     desc: "Your @handle and profile address",
     icon: AtSign,
     to: "/account-username",
+  },
+  /*
+    First in the list after identity, because this was the hardest thing on the
+    platform to find. The portal lived inside the Edit-profile sheet, below the
+    Save button of a form about your bio, and that was the only route to it — so
+    "where do I apply for verification?" had no answer.
+  */
+  {
+    label: "Verification",
+    desc: "Apply for a Silver or Gold badge",
+    icon: BadgeCheck,
+    to: "/verification",
   },
   {
     label: "Security & Auth",

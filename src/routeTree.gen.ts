@@ -15,6 +15,7 @@ import { Route as FeedRouteImport } from './routes/feed'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UHandleRouteImport } from './routes/u.$handle'
+import { Route as AuthenticatedVerificationRouteImport } from './routes/_authenticated/verification'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedPulseRouteImport } from './routes/_authenticated/pulse'
@@ -59,6 +60,12 @@ const UHandleRoute = UHandleRouteImport.update({
   path: '/u/$handle',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedVerificationRoute =
+  AuthenticatedVerificationRouteImport.update({
+    id: '/verification',
+    path: '/verification',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -154,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/pulse': typeof AuthenticatedPulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/verification': typeof AuthenticatedVerificationRoute
   '/u/$handle': typeof UHandleRoute
   '/messages/$id': typeof AuthenticatedMessagesIdRoute
 }
@@ -175,6 +183,7 @@ export interface FileRoutesByTo {
   '/pulse': typeof AuthenticatedPulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/verification': typeof AuthenticatedVerificationRoute
   '/u/$handle': typeof UHandleRoute
   '/messages/$id': typeof AuthenticatedMessagesIdRoute
 }
@@ -198,6 +207,7 @@ export interface FileRoutesById {
   '/_authenticated/pulse': typeof AuthenticatedPulseRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
+  '/_authenticated/verification': typeof AuthenticatedVerificationRoute
   '/u/$handle': typeof UHandleRoute
   '/_authenticated/messages/$id': typeof AuthenticatedMessagesIdRoute
 }
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/pulse'
     | '/settings'
     | '/studio'
+    | '/verification'
     | '/u/$handle'
     | '/messages/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/pulse'
     | '/settings'
     | '/studio'
+    | '/verification'
     | '/u/$handle'
     | '/messages/$id'
   id:
@@ -264,6 +276,7 @@ export interface FileRouteTypes {
     | '/_authenticated/pulse'
     | '/_authenticated/settings'
     | '/_authenticated/studio'
+    | '/_authenticated/verification'
     | '/u/$handle'
     | '/_authenticated/messages/$id'
   fileRoutesById: FileRoutesById
@@ -320,6 +333,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/u/$handle'
       preLoaderRoute: typeof UHandleRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/verification': {
+      id: '/_authenticated/verification'
+      path: '/verification'
+      fullPath: '/verification'
+      preLoaderRoute: typeof AuthenticatedVerificationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/studio': {
       id: '/_authenticated/studio'
@@ -449,6 +469,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPulseRoute: typeof AuthenticatedPulseRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
+  AuthenticatedVerificationRoute: typeof AuthenticatedVerificationRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -466,6 +487,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPulseRoute: AuthenticatedPulseRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
+  AuthenticatedVerificationRoute: AuthenticatedVerificationRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
