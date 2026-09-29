@@ -17,6 +17,7 @@ import type { VerificationTier } from "@/hooks/use-auth";
 import { useCardExport } from "@/hooks/use-card-export";
 import { FEED_PAGE_SIZE } from "@/lib/limits";
 import { fetchFollowingIds, fetchMutedIds } from "@/lib/social";
+import { ACTION_INK, ACTION_SURFACE, tierVisual } from "@/lib/tier-style";
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
@@ -749,7 +750,10 @@ function FeedPage() {
               >
                 <span
                   className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full text-[13px] font-bold"
-                  style={{ background: "rgba(251,191,36,0.16)", color: "var(--gold)" }}
+                  style={{
+                    background: tierVisual(profile.verification_tier).fill,
+                    color: tierVisual(profile.verification_tier).ink,
+                  }}
                 >
                   {profile.avatar_url ? (
                     <img
@@ -823,9 +827,11 @@ function FeedPage() {
             bottom: "calc(env(safe-area-inset-bottom) + var(--mobile-nav-height) + 1rem)",
             width: "58px",
             height: "58px",
-            background: "#FBBF24",
-            color: "#0B0B0C",
-            boxShadow: "0 8px 32px rgba(251,191,36,0.35), 0 2px 8px rgba(0,0,0,0.40)",
+            /* Neutral, not amber. A core action should not borrow the badge's
+               colour to look important, nor change colour per viewer. */
+            background: ACTION_SURFACE,
+            color: ACTION_INK,
+            boxShadow: "0 8px 28px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.40)",
             opacity: fabVisible ? 1 : 0,
             transform: fabVisible ? "scale(1)" : "scale(0.75)",
             pointerEvents: fabVisible ? "auto" : "none",

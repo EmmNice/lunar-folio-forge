@@ -56,6 +56,7 @@ import {
 import { describeWriteError } from "@/lib/db-errors";
 import { timeAgo } from "@/lib/time";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { tierVisual } from "@/lib/tier-style";
 import { SkillsInput } from "@/components/SkillsInput";
 import { FollowList } from "@/components/FollowList";
 import { SavedPosts } from "@/components/SavedPosts";
@@ -147,12 +148,6 @@ type LikedPostRow = {
   author_avatar_url: string | null;
   author_verification_tier: VerificationTier;
 };
-
-function tierRingColor(tier?: string | null) {
-  if (tier === "gold") return "rgba(251,191,36,0.85)";
-  if (tier === "silver") return "rgba(148,163,184,0.70)";
-  return "rgba(255,255,255,0.15)";
-}
 
 /**
  * Follower / following totals.
@@ -616,10 +611,9 @@ function ProfilePage() {
           {/* Cover banner */}
           <div
             className="h-28 sm:h-36 w-full"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(251,191,36,0.04) 60%, rgba(255,255,255,0.02) 100%)",
-            }}
+            /* Was amber for everybody. Your own profile telling you that you are
+               gold-tier when you are not is the most misleading place to do it. */
+            style={{ background: tierVisual(me.verification_tier).cover }}
           />
 
           {/* Profile header */}
@@ -632,7 +626,7 @@ function ProfilePage() {
                 style={{
                   border: "4px solid var(--bg-base)",
                   background: "rgba(255,255,255,0.06)",
-                  boxShadow: `0 0 0 2px ${tierRingColor(me.verification_tier)}`,
+                  boxShadow: `0 0 0 2px ${tierVisual(me.verification_tier).ring}`,
                 }}
               >
                 {me.avatar_url ? (
@@ -710,7 +704,7 @@ function ProfilePage() {
                 {activeTab === key && (
                   <span
                     className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-12 rounded-full"
-                    style={{ background: "#FBBF24" }}
+                    style={{ background: "var(--foreground)" }}
                   />
                 )}
               </button>
@@ -1029,12 +1023,7 @@ function ProfilePage() {
       <div
         className="h-24 w-full sm:h-28"
         style={{
-          background:
-            profile.verification_tier === "gold"
-              ? "linear-gradient(135deg, rgba(251,191,36,0.16) 0%, rgba(251,191,36,0.03) 60%, rgba(255,255,255,0.015) 100%)"
-              : profile.verification_tier === "silver"
-                ? "linear-gradient(135deg, rgba(203,213,225,0.12) 0%, rgba(203,213,225,0.02) 60%, rgba(255,255,255,0.015) 100%)"
-                : "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%)",
+          background: tierVisual(profile.verification_tier).cover,
         }}
       />
 
@@ -1046,7 +1035,7 @@ function ProfilePage() {
             style={{
               border: "4px solid var(--bg-base)",
               background: "rgba(255,255,255,0.05)",
-              boxShadow: `0 0 0 2px ${tierRingColor(profile.verification_tier)}`,
+              boxShadow: `0 0 0 2px ${tierVisual(profile.verification_tier).ring}`,
             }}
           >
             {profile.avatar_url ? (
