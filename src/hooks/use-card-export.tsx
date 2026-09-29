@@ -4,9 +4,62 @@ import { toast } from "sonner";
 import { BACKGROUND_BASE_COLORS, StatusCard } from "@/components/StatusCard";
 import type { FeedPost } from "@/components/PostCard";
 
+/**
+ * Card geometry, in CSS pixels. 9:16, which is what every story surface expects.
+ *
+ * The exported file is this multiplied by EXPORT_PIXEL_RATIO, so the layout is
+ * authored once at a comfortable size and rasterised at a much higher one.
+ */
 const EXPORT_WIDTH = 1080;
 const EXPORT_HEIGHT = 1920;
+
+/**
+ * Supersampling factor for the PNG.
+ *
+ * At 1 the file came out exactly 1080x1920 — a fine size, and still visibly soft,
+ * because every glyph edge and the avatar ring were sampled once per output pixel.
+ * At 2 the card rasterises at 2160x3840 and downscales beautifully on any phone,
+ * which is what makes text look printed rather than rendered.
+ *
+ * The cost is real and worth stating: the canvas is 2160 * 3840 * 4 bytes, about
+ * 33 MB, held while encoding. Desktop and current phones handle that without
+ * noticing; an older device can fail to allocate it. `renderCard` falls back to 1
+ * in that case rather than returning nothing, so the worst outcome is the file we
+ * used to produce.
+ */
+const EXPORT_PIXEL_RATIO = 2;
+
 const FALLBACK_BACKGROUND = "#0b0b0c";
+
+/**
+ * Rasterises the card, dropping to a lower resolution rather than failing.
+ *
+ * A 33 MB canvas is not guaranteed on every device. Rather than let an allocation
+ * failure surface as "couldn't save the card" — which tells the member nothing and
+ * loses work they asked to keep — this retries at 1x. A slightly softer card is a
+ * far better outcome than none, and the only way to know the difference is to
+ * compare two files side by side.
+ */
+async function renderCard(node: HTMLElement, backgroundColor: string): Promise<Blob | null> {
+  const attempt = (pixelRatio: number) =>
+    toBlob(node, {
+      pixelRatio,
+      cacheBust: true,
+      backgroundColor,
+      width: EXPORT_WIDTH,
+      height: EXPORT_HEIGHT,
+    });
+
+  try {
+    const hi = await attempt(EXPORT_PIXEL_RATIO);
+    if (hi) return hi;
+    console.warn("[card] High-resolution render returned nothing; retrying at 1x.");
+  } catch (error) {
+    console.warn("[card] High-resolution render failed; retrying at 1x.", error);
+  }
+
+  return attempt(1);
+}
 
 /**
  * Saves the PNG as a normal file download.
@@ -81,14 +134,29 @@ export function useCardExport() {
         const node = exportRef.current;
         if (!node) throw new Error("Could not render the card.");
 
-        const blob = await toBlob(node, {
-          pixelRatio: 1,
-          cacheBust: true,
-          backgroundColor: BACKGROUND_BASE_COLORS[next.background] ?? FALLBACK_BACKGROUND,
-          width: EXPORT_WIDTH,
-          height: EXPORT_HEIGHT,
-        });
-        if (!blob) throw new Error("Could not render the card.");
+        /*
+          Wait for Inter before rasterising.
+
+          html-to-image draws whatever the browser has resolved at the moment of
+          capture. If the webfont has not finished loading, the card is rendered in
+          the system fallback — same layout, wrong typeface, and the result looks
+          cheap in a way that is hard to name and impossible to miss. This is the
+          single biggest quality difference in the output and it costs nothing on a
+          warm page, because the font is already in use on screen.
+        */
+        if (typeof document !== "undefined" && document.fonts?.ready) {
+          try {
+            await document.fonts.ready;
+          } catch {
+            // A font-loading failure is not a reason to refuse the download.
+          }
+        }
+
+        const blob = await renderCard(
+          node,
+          BACKGROUND_BASE_COLORS[next.background] ?? FALLBACK_BACKGROUND,
+        );
+        if (!blob) throw new Error("The card couldn't be rendered. Try again.");
 
         const file = new File([blob], `the-ledger-${next.author.handle}.png`, {
           type: "image/png",

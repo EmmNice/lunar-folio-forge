@@ -1,5 +1,4 @@
 import { forwardRef } from "react";
-import { Github, Linkedin, Twitter } from "lucide-react";
 import { VerificationBadge, type VerificationTier } from "@/components/VerificationBadge";
 
 export type Background = "noir" | "cream" | "gradient" | "gold" | "steel" | "emerald" | "midnight";
@@ -45,6 +44,8 @@ type ThemeConfig = {
   muted: string;
   border: string;
   avatarBg: string;
+  /** True for themes with a light background, where tier colours need darkening. */
+  light?: boolean;
 };
 
 export const THEMES: Record<Background, ThemeConfig> = {
@@ -65,6 +66,7 @@ export const THEMES: Record<Background, ThemeConfig> = {
     muted: "#6b6357",
     border: "#d9d1bf",
     avatarBg: "#ecead9",
+    light: true,
   },
   gradient: {
     bg: "#0d0a1a",
@@ -118,6 +120,61 @@ export const THEMES: Record<Background, ThemeConfig> = {
   },
 };
 
+/**
+ * Tier presentation on the card.
+ *
+ * A verified card has to *look* verified at thumbnail size, on someone else's
+ * timeline, with no context. A 14px tick beside a name does not survive that —
+ * which is the whole problem with treating the badge as an afterthought on an asset
+ * whose only job is to travel.
+ *
+ * Light themes get darker inks: the same yellow that reads as gold on near-black is
+ * nearly invisible on cream.
+ */
+const TIER_STYLE: Record<
+  "silver" | "gold",
+  { label: string; ink: string; inkLight: string; wash: string; edge: string }
+> = {
+  gold: {
+    label: "Gold Verified",
+    ink: "#facc15",
+    inkLight: "#8a6d0b",
+    wash: "rgba(250,204,21,0.12)",
+    edge: "rgba(250,204,21,0.38)",
+  },
+  silver: {
+    label: "Silver Verified",
+    ink: "#cbd5e1",
+    inkLight: "#55606e",
+    wash: "rgba(203,213,225,0.12)",
+    edge: "rgba(203,213,225,0.30)",
+  },
+};
+
+/**
+ * The Ledger mark — three ascending bars, the last one gold.
+ *
+ * Inlined rather than imported from AppHeader because that copy hardcodes the
+ * app's own palette, and this one has to sit on seven different card themes. Same
+ * geometry, theme-aware fill.
+ */
+function CardMark({ size, ink }: { size: number; ink: string }) {
+  return (
+    <svg
+      width={size}
+      height={(size / 22) * 18}
+      viewBox="0 0 22 18"
+      fill="none"
+      aria-hidden="true"
+      style={{ display: "block", flexShrink: 0 }}
+    >
+      <rect x="0" y="9" width="5" height="9" rx="1.5" fill={ink} />
+      <rect x="8.5" y="4.5" width="5" height="13.5" rx="1.5" fill={ink} />
+      <rect x="17" y="0" width="5" height="18" rx="1.5" fill="#FBBF24" />
+    </svg>
+  );
+}
+
 export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function StatusCard(
   {
     name,
@@ -133,9 +190,17 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
   ref,
 ) {
   const t = THEMES[background];
+  const tier =
+    verificationTier === "gold" || verificationTier === "silver" ? verificationTier : null;
+  const tierStyle = tier ? TIER_STYLE[tier] : null;
+  const tierInk = tierStyle ? (t.light ? tierStyle.inkLight : tierStyle.ink) : t.muted;
+
+  /** One scale factor, so the export and the on-screen preview stay in proportion. */
+  const px = (exportPx: number, previewEm: string) => (exportMode ? exportPx : previewEm);
+
   const styles: React.CSSProperties = exportMode
-    ? { width: 1080, height: 1920, padding: "160px 110px" }
-    : { aspectRatio: "1080 / 1920", width: "100%", padding: "9% 7%" };
+    ? { width: 1080, height: 1920, padding: "150px 104px 128px" }
+    : { aspectRatio: "1080 / 1920", width: "100%", padding: "8.5% 6.5% 7%" };
 
   const initial = (name.trim() || "•").charAt(0).toUpperCase();
 
@@ -157,29 +222,50 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
         fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
         boxSizing: "border-box",
         overflow: "hidden",
         borderRadius: exportMode ? 0 : 20,
         position: "relative",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: exportMode ? 28 : "1.2em" }}>
+      {/*
+        A hairline of the tier colour across the top edge.
+        This is the part that reads at thumbnail size — before the name is legible,
+        before the badge is, the card is already visibly a verified one.
+      */}
+      {tierStyle ? (
         <div
           style={{
-            width: exportMode ? 120 : "3.5em",
-            height: exportMode ? 120 : "3.5em",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: exportMode ? 8 : 3,
+            background: `linear-gradient(90deg, transparent 0%, ${tierStyle.edge} 18%, ${tierInk} 50%, ${tierStyle.edge} 82%, transparent 100%)`,
+          }}
+        />
+      ) : null}
+
+      {/* ── Identity ─────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: px(30, "1.15em") }}>
+        <div
+          style={{
+            width: px(124, "3.5em"),
+            height: px(124, "3.5em"),
             borderRadius: "9999px",
-            border: `1px solid ${t.border}`,
+            /* Verified avatars get a ring in the tier colour rather than the
+               generic border — the same signal the app itself uses. */
+            border: `${exportMode ? (tier ? 4 : 1) : tier ? 2 : 1}px solid ${tier ? tierInk : t.border}`,
             backgroundColor: t.avatarBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontWeight: 600,
-            fontSize: exportMode ? 48 : "1.6em",
+            fontSize: px(50, "1.6em"),
             color: t.fg,
             letterSpacing: "-0.02em",
             overflow: "hidden",
+            flexShrink: 0,
           }}
         >
           {avatarUrl ? (
@@ -193,30 +279,60 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
             initial
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: exportMode ? 10 : "0.35em" }}>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: px(14, "0.4em") }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: exportMode ? 14 : "0.28em",
-              fontSize: exportMode ? 64 : "2em",
+              gap: px(14, "0.28em"),
+              fontSize: px(66, "2em"),
               fontWeight: 700,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.1,
+              letterSpacing: "-0.035em",
+              lineHeight: 1.08,
               color: t.fg,
             }}
           >
             <span>{name || "Your Name"}</span>
             <VerificationBadge
               tier={verificationTier}
-              size={exportMode ? 44 : 18}
+              size={exportMode ? 46 : 18}
               exportMode={exportMode}
             />
           </div>
+
+          {/*
+            The tier said in words, not only as a tick.
+            A tick is recognisable once you already know the platform; the words are
+            what make the badge mean something to someone seeing The Ledger for the
+            first time in a screenshot on another network.
+          */}
+          {tierStyle ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                alignSelf: "flex-start",
+                gap: px(10, "0.3em"),
+                padding: exportMode ? "10px 22px" : "0.28em 0.7em",
+                borderRadius: "9999px",
+                backgroundColor: tierStyle.wash,
+                border: `1px solid ${tierStyle.edge}`,
+                fontSize: px(26, "0.72em"),
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: tierInk,
+              }}
+            >
+              {tierStyle.label}
+            </div>
+          ) : null}
+
           {title ? (
             <div
               style={{
-                fontSize: exportMode ? 32 : "1em",
+                fontSize: px(32, "1em"),
                 color: t.muted,
                 letterSpacing: "-0.01em",
               }}
@@ -227,66 +343,96 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
         </div>
       </div>
 
+      {/* ── The post ─────────────────────────────────────────────────────── */}
+      {/*
+        flex: 1 with the text centred, replacing a three-block space-between layout
+        plus a maxHeight:60% clamp that silently cut long posts mid-word. Content is
+        capped at 280 characters upstream, so given this much room it always fits —
+        the clamp was guarding against a case that cannot happen and disfiguring the
+        one that does.
+      */}
       <div
         style={{
-          fontSize: exportMode ? 44 : "1.35em",
-          lineHeight: 1.4,
-          color: t.body,
-          fontWeight: 500,
-          letterSpacing: "-0.02em",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          maxHeight: "60%",
-          overflow: "hidden",
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          paddingTop: px(56, "1.6em"),
+          paddingBottom: px(56, "1.6em"),
+          minHeight: 0,
         }}
       >
-        {content || "Write something worth reading."}
+        <div
+          style={{
+            fontSize: px(52, "1.4em"),
+            lineHeight: 1.38,
+            color: t.body,
+            fontWeight: 500,
+            letterSpacing: "-0.022em",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {content || "Write something worth reading."}
+        </div>
       </div>
 
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingTop: exportMode ? 40 : "1.2em",
+          gap: px(24, "1em"),
+          paddingTop: px(40, "1.2em"),
           borderTop: `1px solid ${t.border}`,
+          flexShrink: 0,
         }}
       >
         <div
           style={{
-            fontSize: exportMode ? 26 : "0.85em",
-            color: t.muted,
-            letterSpacing: "0.02em",
+            fontSize: px(30, "0.9em"),
+            color: t.fg,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            opacity: 0.9,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
           {handle ? (handle.startsWith("@") ? handle : `@${handle}`) : ""}
         </div>
-        <div style={{ display: "flex", gap: exportMode ? 28 : "0.9em", color: t.muted }}>
-          <Github size={exportMode ? 36 : 18} strokeWidth={1.75} />
-          <Linkedin size={exportMode ? 36 : 18} strokeWidth={1.75} />
-          <Twitter size={exportMode ? 36 : 18} strokeWidth={1.75} />
-        </div>
-      </div>
 
-      {watermark ? (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: exportMode ? 48 : "1.4em",
-            textAlign: "center",
-            fontSize: exportMode ? 22 : "0.65em",
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            color: t.muted,
-            opacity: 0.55,
-            pointerEvents: "none",
-          }}
-        >
-          via The Ledger
-        </div>
-      ) : null}
+        {/*
+          The brand lockup replaces three social icons that were drawn on every card
+          whether or not the member had any of those accounts — decoration shaped
+          like information, and the one detail that made the card look generated
+          rather than published. This says where the card came from, which is the
+          only thing the footer was ever for.
+        */}
+        {watermark ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: px(12, "0.42em"),
+              flexShrink: 0,
+            }}
+          >
+            <CardMark size={exportMode ? 30 : 14} ink={t.fg} />
+            <span
+              style={{
+                fontSize: px(26, "0.8em"),
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                color: t.muted,
+              }}
+            >
+              The Ledger
+            </span>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 });
