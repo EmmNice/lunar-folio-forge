@@ -683,6 +683,30 @@ function FeedPage() {
     return TAB_AUTHOR_TIERS[which].includes(profile.verification_tier);
   }
 
+  /**
+   * Copy for an empty tier tab.
+   *
+   * Three cases, not two. Having no profile is not the same as having a profile
+   * whose posts go elsewhere, and collapsing them told a signed-out visitor "your
+   * gold posts go to Signal" — which was observed on the deployed site, and is
+   * wrong twice over: they have no posts and no badge.
+   */
+  function emptyTabDescription(which: TierTab): string {
+    if (!profile) {
+      return which === "signal"
+        ? "Signal carries posts from verified builders — silver and gold. Anyone can read it; nobody has posted yet."
+        : "Beat is the open floor, where every builder without a gold badge posts. Nothing here yet.";
+    }
+    if (viewerPostsLandIn(which)) {
+      return which === "signal"
+        ? "Signal carries posts from verified builders. Be the first to ship something worth reading."
+        : "Beat is the open floor — every builder without a gold badge posts here. Be the first.";
+    }
+    return which === "signal"
+      ? "Signal carries posts from verified builders only — silver and gold. You can read every word of it; earning a badge is what puts your own posts here."
+      : "Beat is where unverified and silver builders post. Your gold posts go to Signal instead.";
+  }
+
   // Following is meaningless without an account to follow from.
   const visibleTabs: FeedTab[] = user ? ["signal", "beat", "following"] : ["signal", "beat"];
 
@@ -853,15 +877,7 @@ function FeedPage() {
             <EmptyState
               icon={tab === "signal" ? Rss : Sparkles}
               title={tab === "signal" ? "Nothing on Signal yet" : "Nothing on Beat yet"}
-              description={
-                tab === "signal"
-                  ? viewerPostsLandIn("signal")
-                    ? "Signal carries posts from verified builders. Be the first to ship something worth reading."
-                    : "Signal carries posts from verified builders only — silver and gold. You can read every word of it; getting a badge is what puts your own posts here."
-                  : viewerPostsLandIn("beat")
-                    ? "Beat is the open floor — every builder without a gold badge posts here. Be the first."
-                    : "Beat is where unverified and silver builders post. Your gold posts go to Signal."
-              }
+              description={emptyTabDescription(tab as TierTab)}
               action={
                 user && viewerPostsLandIn(tab as TierTab) ? (
                   <button
