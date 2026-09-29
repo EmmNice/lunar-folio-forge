@@ -191,7 +191,7 @@ export function ProfileDrawer({
                 <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
                   {item.label}
                 </p>
-                <p className="text-[11px] text-muted-foreground/60 leading-snug">{item.desc}</p>
+                <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
             </button>
@@ -217,7 +217,7 @@ export function ProfileDrawer({
                   <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
                     {item.label}
                   </p>
-                  <p className="text-[11px] text-muted-foreground/60 leading-snug">{item.desc}</p>
+                  <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
               </button>

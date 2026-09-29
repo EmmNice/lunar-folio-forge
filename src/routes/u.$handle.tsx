@@ -237,7 +237,7 @@ function ProfilePage() {
     return (
       <div className="min-h-screen">
         <AppHeader />
-        <div className="mx-auto max-w-5xl px-4 pt-10 pb-24 sm:px-6">
+        <div className="mx-auto max-w-5xl px-4 pt-10 pb-mobile-nav sm:px-6">
           {/* Profile header skeleton */}
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
             <div className="h-20 w-20 shrink-0 animate-pulse rounded-full bg-secondary/60 sm:h-24 sm:w-24" />
@@ -376,9 +376,9 @@ function ProfilePage() {
     ];
 
     return (
-      <div className="min-h-screen pb-20 sm:pb-0">
+      <div className="min-h-screen">
         <AppHeader />
-        <main className="mx-auto max-w-2xl">
+        <main className="mx-auto max-w-2xl pb-mobile-nav">
           {/* Cover banner */}
           <div
             className="h-28 sm:h-36 w-full"
@@ -396,7 +396,7 @@ function ProfilePage() {
               <div
                 className="h-20 w-20 sm:h-24 sm:w-24 rounded-full overflow-hidden shrink-0 text-2xl font-semibold grid"
                 style={{
-                  border: "4px solid hsl(var(--background))",
+                  border: "4px solid var(--bg-base)",
                   background: "rgba(255,255,255,0.06)",
                   boxShadow: `0 0 0 2px ${tierRingColor(me.verification_tier)}`,
                 }}
@@ -456,8 +456,7 @@ function ProfilePage() {
                 onClick={() => setTab(key)}
                 className="relative flex flex-1 items-center justify-center gap-1.5 py-3.5 text-sm font-medium transition-colors"
                 style={{
-                  color:
-                    activeTab === key ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                  color: activeTab === key ? "var(--foreground)" : "var(--text-secondary)",
                 }}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -740,7 +739,7 @@ function ProfilePage() {
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       <AppHeader />
-      <main className="mx-auto max-w-5xl px-4 pt-10 pb-24 sm:px-6">
+      <main className="mx-auto max-w-5xl px-4 pt-10 pb-mobile-nav sm:px-6">
         <header className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
           {/* Avatar */}
           <div

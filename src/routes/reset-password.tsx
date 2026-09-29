@@ -132,7 +132,7 @@ function ResetPasswordPage() {
   }
 
   const inputCls =
-    "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none ring-offset-background focus-visible:ring-1 focus-visible:ring-ring transition-colors";
+    "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-tertiary outline-none ring-offset-background focus-visible:ring-1 focus-visible:ring-ring transition-colors";
 
   return (
     <div

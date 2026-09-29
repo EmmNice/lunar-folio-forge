@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Settings as SettingsIcon, MessageSquare, Bell, Rss, PenSquare, Zap } from "lucide-react";
+import { MessageSquare, Bell, Rss, PenSquare, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,203 +20,55 @@ export function LedgerMark({ className }: { className?: string }) {
 /** Tier-colored avatar ring */
 function tierRingColor(tier?: string | null) {
   if (tier === "gold") return "rgba(251,191,36,0.80)";
-  if (tier === "silver") return "rgba(148,163,184,0.65)";
-  return "rgba(255,255,255,0.13)";
+  if (tier === "silver") return "rgba(203,213,225,0.65)";
+  return "rgba(255,255,255,0.14)";
 }
 
-const DESKTOP_NAV = [
+const PRIMARY_NAV = [
   { to: "/feed" as const, label: "Explore", icon: Rss },
   { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
-  { to: "/studio" as const, label: "Workspace", icon: PenSquare },
+  { to: "/studio" as const, label: "Studio", icon: PenSquare },
 ] as const;
 
 const BOTTOM_TABS = [
   { to: "/feed" as const, label: "Feed", icon: Rss },
   { to: "/studio" as const, label: "Studio", icon: PenSquare },
   { to: "/pulse" as const, label: "Pulse", icon: Zap },
-  { to: "/messages" as const, label: "Messages", icon: MessageSquare },
+  { to: "/messages" as const, label: "Inbox", icon: MessageSquare },
   { to: "/notifications" as const, label: "Alerts", icon: Bell },
 ] as const;
 
 /**
- * Top application header.
- * Layout: [Avatar + Settings] | [Logo — center] | [Desktop nav or Sign in]
+ * Unread notification count, live.
  *
- * controlled — when true, the outer container owns sticky/hide behaviour.
+ * Was duplicated inside MobileNav only, which meant desktop had no unread
+ * indicator at all — a member on a laptop had no way to know a message or a
+ * verification decision had arrived without opening the page. Now one hook feeds
+ * both the header and the tab bar.
  */
-export function AppHeader({ controlled = false }: { controlled?: boolean } = {}) {
-  const { user, profile, loading } = useAuth();
-  const [hidden, setHidden] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  useEffect(() => {
-    if (controlled) return;
-    let lastY = window.scrollY;
-    function onScroll() {
-      const y = window.scrollY;
-      if (y > lastY && y > 64) setHidden(true);
-      else if (y < lastY) setHidden(false);
-      lastY = y;
-    }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [controlled]);
-
-  return (
-    <>
-      <header
-        className={controlled ? "" : "sticky top-0 z-40 border-b backdrop-blur-md"}
-        style={
-          controlled
-            ? {}
-            : {
-                background: "rgba(11,11,12,0.90)",
-                borderColor: "rgba(255,255,255,0.06)",
-                transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                transform: hidden ? "translateY(-100%)" : "translateY(0)",
-              }
-        }
-      >
-        {/* Three-column grid: left | center | right */}
-        <div className="mx-auto grid h-14 max-w-6xl grid-cols-3 items-center px-4 sm:px-6">
-          {/* LEFT: avatar → profile + settings */}
-          <div className="flex items-center gap-1.5">
-            {loading ? (
-              <span className="h-8 w-20 animate-pulse rounded-full bg-white/5" />
-            ) : user ? (
-              <>
-                {/* Avatar — always tappable once user is logged in; opens profile drawer */}
-                <button
-                  type="button"
-                  aria-label="Open profile menu"
-                  onClick={() => setDrawerOpen(true)}
-                  className="group flex items-center gap-2 rounded-full outline-none"
-                >
-                  <span
-                    className="relative flex h-9 w-9 shrink-0 overflow-hidden rounded-full transition-opacity group-hover:opacity-75"
-                    style={{
-                      boxShadow: `0 0 0 2px ${tierRingColor(profile?.verification_tier)}, 0 0 0 3.5px rgba(11,11,12,0.90)`,
-                      background: profile?.avatar_url ? "transparent" : "rgba(251,191,36,0.18)",
-                    }}
-                  >
-                    {profile?.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span
-                        className="grid h-full w-full place-items-center text-[13px] font-bold"
-                        style={{ color: "#FBBF24" }}
-                      >
-                        {profile?.display_name?.charAt(0).toUpperCase() ?? "?"}
-                      </span>
-                    )}
-                  </span>
-
-                  {/* @handle + badge — desktop only */}
-                  {profile && (
-                    <span className="hidden items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline-flex">
-                      @{profile.handle}
-                      <VerificationBadge tier={profile.verification_tier} size={11} />
-                    </span>
-                  )}
-                </button>
-
-                {/* Settings moved to profile drawer — no gear in header */}
-              </>
-            ) : null}
-          </div>
-
-          {/* CENTER: brand mark */}
-          <div className="flex justify-center">
-            <Link
-              to={user ? "/feed" : "/"}
-              className="group flex items-center gap-2 transition-opacity hover:opacity-75"
-            >
-              <LedgerMark className="h-[18px] w-auto" />
-              <span className="text-[13px] font-semibold tracking-[-0.02em]">The Ledger</span>
-            </Link>
-          </div>
-
-          {/* RIGHT: desktop nav (auth) / sign-in (guest) */}
-          <div className="flex items-center justify-end">
-            {loading ? null : user ? (
-              <nav className="hidden items-center gap-0.5 sm:flex">
-                {DESKTOP_NAV.map((t) => (
-                  <Link
-                    key={t.to}
-                    to={t.to}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-                    activeProps={{
-                      className:
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] text-foreground font-medium",
-                      style: { background: "rgba(255,255,255,0.06)" },
-                    }}
-                  >
-                    <t.icon className="h-[13px] w-[13px]" />
-                    {t.label}
-                  </Link>
-                ))}
-              </nav>
-            ) : (
-              <Link
-                to="/"
-                className="rounded-lg px-3.5 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
-                style={{ background: "#F5F5F6" }}
-              >
-                Sign in
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {!controlled && <MobileNav />}
-
-      {/* Profile slide-in drawer — triggered by avatar tap */}
-      <ProfileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
-    </>
-  );
-}
-
-/**
- * Five-tab mobile bottom bar.
- * Exported separately so pages that use a CSS-transform ancestor can render
- * it outside that ancestor (position:fixed is relative to the nearest
- * transformed parent otherwise).
- *
- * Fetches its own unread notification count so it works whether rendered
- * by AppHeader or a page directly.
- */
-export function MobileNav() {
+function useUnreadCount(): number {
   const { user } = useAuth();
-  const { location } = useRouterState();
-  const pathname = location.pathname;
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [count, setCount] = useState(0);
 
   useEffect(() => {
     if (!user) {
-      setUnreadCount(0);
+      setCount(0);
       return;
     }
     let cancelled = false;
 
     async function fetchUnread() {
-      const { count } = await supabase
+      const { count: n } = await supabase
         .from("notifications")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user!.id)
         .eq("read", false);
-      if (!cancelled) setUnreadCount(count ?? 0);
+      if (!cancelled) setCount(n ?? 0);
     }
-
     fetchUnread();
 
     const channel = supabase
-      .channel(`mobile-notif:${user.id}`)
+      .channel(`notif-count:${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -225,7 +77,7 @@ export function MobileNav() {
           table: "notifications",
           filter: `user_id=eq.${user.id}`,
         },
-        () => setUnreadCount((n) => n + 1),
+        () => setCount((n) => n + 1),
       )
       .on(
         "postgres_changes",
@@ -245,66 +97,261 @@ export function MobileNav() {
     };
   }, [user]);
 
+  return count;
+}
+
+function Avatar({
+  url,
+  initial,
+  tier,
+  size = 36,
+}: {
+  url: string | null | undefined;
+  initial: string;
+  tier?: string | null;
+  size?: number;
+}) {
+  return (
+    <span
+      className="relative flex shrink-0 overflow-hidden rounded-full"
+      style={{
+        width: size,
+        height: size,
+        boxShadow: `0 0 0 2px ${tierRingColor(tier)}`,
+        background: url ? "transparent" : "rgba(251,191,36,0.16)",
+      }}
+    >
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+      ) : (
+        <span
+          className="grid h-full w-full place-items-center text-[13px] font-bold"
+          style={{ color: "var(--gold)" }}
+        >
+          {initial}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Top application header.
+ *
+ * The brand used to sit centred with the avatar on the left and the nav squeezed
+ * into the right third at 12px — a phone layout stretched across a desktop. Brand
+ * and navigation now start at the left where they are scanned first, and the right
+ * side holds the things that change: inbox, alerts, you.
+ *
+ * `controlled` — when true, the outer container owns sticky/hide behaviour.
+ */
+export function AppHeader({ controlled = false }: { controlled?: boolean } = {}) {
+  const { user, profile, loading } = useAuth();
+  const [hidden, setHidden] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const unread = useUnreadCount();
+
+  useEffect(() => {
+    if (controlled) return;
+    let lastY = window.scrollY;
+    function onScroll() {
+      const y = window.scrollY;
+      if (y > lastY && y > 64) setHidden(true);
+      else if (y < lastY) setHidden(false);
+      lastY = y;
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [controlled]);
+
+  const initial = profile?.display_name?.charAt(0).toUpperCase() ?? "?";
+
+  return (
+    <>
+      <header
+        className={controlled ? "" : "sticky top-0 z-40 border-b glass"}
+        style={
+          controlled
+            ? {}
+            : {
+                borderColor: "var(--border)",
+                transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                transform: hidden ? "translateY(-100%)" : "translateY(0)",
+              }
+        }
+      >
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
+          {/* Brand */}
+          <Link
+            to={user ? "/feed" : "/"}
+            className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
+          >
+            <LedgerMark className="h-[18px] w-auto" />
+            <span className="text-[15px] font-semibold tracking-tight">The Ledger</span>
+          </Link>
+
+          {/* Primary nav — desktop */}
+          {user ? (
+            <nav className="ml-4 hidden items-center gap-1 sm:flex">
+              {PRIMARY_NAV.map((t) => (
+                <Link
+                  key={t.to}
+                  to={t.to}
+                  className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-[var(--surface-2)] hover:text-foreground"
+                  activeProps={{
+                    className:
+                      "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-medium text-foreground bg-[var(--surface-2)]",
+                  }}
+                >
+                  <t.icon className="h-4 w-4" />
+                  {t.label}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
+
+          <div className="ml-auto flex items-center gap-1">
+            {loading ? (
+              <span className="skeleton h-9 w-9 rounded-full" />
+            ) : user ? (
+              <>
+                {/* Inbox and alerts: desktop only — the tab bar covers them on phones. */}
+                <Link
+                  to="/messages"
+                  aria-label="Inbox"
+                  className="btn-icon hidden sm:inline-flex"
+                  activeProps={{
+                    style: { background: "var(--surface-2)", color: "var(--foreground)" },
+                  }}
+                >
+                  <MessageSquare className="h-[18px] w-[18px]" />
+                </Link>
+                <Link
+                  to="/notifications"
+                  aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+                  className="btn-icon relative hidden sm:inline-flex"
+                  activeProps={{
+                    style: { background: "var(--surface-2)", color: "var(--foreground)" },
+                  }}
+                >
+                  <Bell className="h-[18px] w-[18px]" />
+                  {unread > 0 ? (
+                    <span className="badge-count absolute -right-0.5 -top-0.5">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  ) : null}
+                </Link>
+
+                <button
+                  type="button"
+                  aria-label="Open profile menu"
+                  onClick={() => setDrawerOpen(true)}
+                  className="ml-1 flex items-center gap-2 rounded-full transition-opacity hover:opacity-80"
+                >
+                  <Avatar
+                    url={profile?.avatar_url}
+                    initial={initial}
+                    tier={profile?.verification_tier}
+                  />
+                  {profile ? (
+                    <span className="hidden items-center gap-1 pr-1 text-[13px] font-medium text-secondary lg:inline-flex">
+                      @{profile.handle}
+                      <VerificationBadge tier={profile.verification_tier} size={11} />
+                    </span>
+                  ) : null}
+                </button>
+              </>
+            ) : (
+              <Link to="/" className="btn btn-primary btn-sm">
+                Sign in
+              </Link>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {!controlled && <MobileNav />}
+
+      <ProfileDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+    </>
+  );
+}
+
+/**
+ * Five-tab mobile bottom bar.
+ *
+ * Exported separately so pages with a CSS-transformed ancestor can render it
+ * outside that ancestor — `position: fixed` resolves against the nearest
+ * transformed parent otherwise, and the bar ends up scrolling with the page.
+ */
+export function MobileNav() {
+  const { user } = useAuth();
+  const { location } = useRouterState();
+  const pathname = location.pathname;
+  const unread = useUnreadCount();
+
+  if (!user) return null;
+
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t glass sm:hidden"
       style={{
-        background: "rgba(11,11,12,0.94)",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
-        backdropFilter: "blur(24px)",
+        borderColor: "var(--border)",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
+      aria-label="Primary"
     >
       {BOTTOM_TABS.map((t) => {
         const isActive =
           pathname === t.to ||
           (t.to !== "/feed" && pathname.startsWith(t.to + "/")) ||
           (t.to === "/feed" && pathname.startsWith("/feed"));
-        const showBadge = t.to === "/notifications" && unreadCount > 0;
+        const badge = t.to === "/notifications" ? unread : 0;
 
         return (
           <Link
             key={t.to}
             to={t.to}
-            className="relative flex flex-1 flex-col items-center justify-center gap-[3px] py-2.5"
+            aria-current={isActive ? "page" : undefined}
+            /* min-h keeps every tab at a comfortable thumb target. */
+            className="relative flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1"
             style={{ WebkitTapHighlightColor: "transparent" }}
           >
-            {/* Amber top bar — active indicator */}
             {isActive && (
               <span
-                className="absolute inset-x-[22%] top-0 h-[2px] rounded-b-full"
-                style={{ background: "rgba(251,191,36,0.85)" }}
+                className="absolute inset-x-[26%] top-0 h-[2px] rounded-b-full"
+                style={{ background: "var(--gold)" }}
               />
             )}
 
-            {/* Icon */}
             <span className="relative">
               <t.icon
-                className="h-[19px] w-[19px]"
+                className="h-[20px] w-[20px] transition-colors"
                 style={{
-                  color: isActive ? "#F5F5F6" : "#5A5A68",
-                  strokeWidth: isActive ? 2.1 : 1.65,
-                  transition: "color 0.15s, stroke-width 0.15s",
+                  color: isActive ? "var(--foreground)" : "var(--text-tertiary)",
+                  strokeWidth: isActive ? 2.1 : 1.7,
                 }}
               />
-              {showBadge && (
+              {badge > 0 ? (
                 <span
-                  className="absolute -right-[3px] -top-[3px] h-[5px] w-[5px] rounded-full"
+                  className="absolute -right-1.5 -top-1 rounded-full px-1 text-[9px] font-bold leading-[14px]"
                   style={{
-                    background: "#FBBF24",
-                    boxShadow: "0 0 0 1.5px #0B0B0C",
+                    background: "var(--gold)",
+                    color: "#000",
+                    minWidth: 14,
+                    height: 14,
+                    textAlign: "center",
+                    boxShadow: "0 0 0 2px var(--bg-base)",
                   }}
-                />
-              )}
+                >
+                  {badge > 9 ? "9+" : badge}
+                </span>
+              ) : null}
             </span>
 
-            {/* Label */}
             <span
-              className="text-[9px] font-medium tracking-[0.04em]"
-              style={{
-                color: isActive ? "#E5E5E6" : "#5A5A68",
-                transition: "color 0.15s",
-              }}
+              className="text-[10px] font-medium tracking-[0.02em] transition-colors"
+              style={{ color: isActive ? "var(--foreground)" : "var(--text-tertiary)" }}
             >
               {t.label}
             </span>
