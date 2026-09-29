@@ -207,14 +207,20 @@ function FeedPage() {
       comments: 0,
       likedByMe: false,
       repostedByMe: false,
+      bookmarkedByMe: false,
     });
     const map = new Map<string, PostStats>(ids.map((id) => [id, blank()]));
     if (ids.length === 0) return map;
 
-    const [likes, reposts, comments] = await Promise.all([
+    const [likes, reposts, comments, bookmarks] = await Promise.all([
       supabase.from("likes").select("post_id, user_id").in("post_id", ids),
       supabase.from("reposts").select("post_id, user_id").in("post_id", ids),
       supabase.from("comments").select("post_id").in("post_id", ids),
+      // Own rows only, by policy, so this needs no user filter of its own — but one
+      // is passed anyway so the query is covered by the (user_id, created_at) index.
+      uid
+        ? supabase.from("bookmarks").select("post_id").eq("user_id", uid).in("post_id", ids)
+        : Promise.resolve({ data: [] as { post_id: string }[] }),
     ]);
 
     for (const row of likes.data ?? []) {
@@ -232,6 +238,10 @@ function FeedPage() {
     for (const row of comments.data ?? []) {
       const entry = map.get(row.post_id);
       if (entry) entry.comments += 1;
+    }
+    for (const row of (bookmarks as { data: { post_id: string }[] | null }).data ?? []) {
+      const entry = map.get(row.post_id);
+      if (entry) entry.bookmarkedByMe = true;
     }
 
     return map;
