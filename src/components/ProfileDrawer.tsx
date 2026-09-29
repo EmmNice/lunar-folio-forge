@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Loader2,
   Inbox,
+  CreditCard,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
@@ -41,6 +42,12 @@ const SETTINGS_NAV = [
     desc: "Alerts & system updates",
     icon: Bell,
     to: "/account-notifications",
+  },
+  {
+    label: "Billing",
+    desc: "Plan & payment method",
+    icon: CreditCard,
+    to: "/billing",
   },
 ] as const;
 
