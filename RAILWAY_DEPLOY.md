@@ -13,8 +13,8 @@ See [`.env.example`](.env.example) for the full annotated list.
 | Variable                        | Value / where to get it                                                                                    |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `SUPABASE_URL`                  | Supabase → Project Settings → API → Project URL                                                            |
-| `SUPABASE_PUBLISHABLE_KEY`      | Supabase → Project Settings → API → `anon public` key                                                      |
-| `SUPABASE_SERVICE_ROLE_KEY`     | Supabase → Project Settings → API → `service_role` key (keep secret)                                       |
+| `SUPABASE_PUBLISHABLE_KEY`      | Supabase → Settings → API Keys → publishable key (`sb_publishable_…`)                                      |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Supabase → Settings → API Keys → secret key (`sb_secret_…`) — keep secret                                  |
 | `VITE_SUPABASE_URL`             | Same value as `SUPABASE_URL`                                                                               |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Same value as `SUPABASE_PUBLISHABLE_KEY`                                                                   |
 | `APP_URL`                       | Public base URL of this deployment, e.g. `https://app.yourapp.com`. Used for links in transactional email. |
