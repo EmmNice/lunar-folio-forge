@@ -34,8 +34,21 @@ export function describeWriteError(message: string, action: string): string {
   if (lower.includes("vr_silver_needs_github")) {
     return "Silver verification needs a link to your GitHub profile.";
   }
-  if (lower.includes("vr_gold_needs_a_link")) {
-    return "Gold verification needs a link we can check — a company site, portfolio, or your LinkedIn/X.";
+  // Tier and track requirements (20260930000700).
+  if (lower.includes("vr_silver_needs_something_shipped")) {
+    return "Silver needs something you have shipped — a live project URL or a deployed contract address.";
+  }
+  if (lower.includes("vr_gold_track_required") || lower.includes("vr_gold_track_valid")) {
+    return "Choose whether you are applying to Gold as a founder or as a backer.";
+  }
+  if (lower.includes("vr_gold_founder_needs_evidence")) {
+    return "The founder track needs the product's URL plus evidence of real usage — analytics, a store listing, a block explorer link, or a deployed contract address.";
+  }
+  if (lower.includes("vr_gold_backer_needs_evidence")) {
+    return "The backer track needs your fund or company name plus a link we can check.";
+  }
+  if (lower.includes("vr_traction_summary_len")) {
+    return "The traction summary is too long — keep it under 280 characters.";
   }
   if (lower.includes("link_primary_len") || lower.includes("link_secondary_len")) {
     return "One of those links is too long.";

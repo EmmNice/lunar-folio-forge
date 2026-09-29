@@ -23,6 +23,32 @@ import { safeFetchText } from "./safe-fetch.server";
 
 export type ProofMethod = "github_bio" | "github_website" | "domain_page" | "manual";
 
+/**
+ * Facts measured by the server, as opposed to claims made by the applicant.
+ *
+ * Every field on a verification application used to be something the applicant
+ * typed, including the ones a reviewer would most want corroborated. These are
+ * gathered by actually going and looking, and are stored and displayed apart from
+ * the applicant's own answers so the two are never confused.
+ *
+ * Nothing here auto-approves or auto-rejects. A one-repo GitHub account can belong
+ * to someone excellent and a thousand-repo account can belong to a bot farm; the
+ * numbers are context for a person, not a threshold for a machine.
+ */
+export type ApplicantSignals = {
+  github?: {
+    login: string;
+    publicRepos: number;
+    accountAgeDays: number;
+    /** Most recent push across their public repositories, if any. */
+    lastPushedAt: string | null;
+    followers: number;
+  };
+  /** Whether each supplied URL actually resolves and serves a page. */
+  urls?: { label: string; url: string; reachable: boolean; detail: string }[];
+  measuredAt: string;
+};
+
 export type ProofOutcome =
   | { verified: true; method: ProofMethod; detail: string }
   | { verified: false; detail: string };
@@ -93,6 +119,7 @@ type GithubUser = {
   blog?: string | null;
   name?: string | null;
   public_repos?: number;
+  followers?: number;
   created_at?: string;
 };
 
@@ -103,6 +130,100 @@ type GithubUser = {
  * website hop goes through safeFetchText because that URL comes from the
  * applicant's GitHub profile, which is to say from the applicant.
  */
+/**
+ * Headers for the GitHub API.
+ *
+ * A token lifts the rate limit from 60 requests an hour per IP to 5,000. Optional:
+ * without it the checks still work, they just report honestly when GitHub starts
+ * refusing rather than making it look like the applicant's fault.
+ */
+function githubHeaders(): Record<string, string> {
+  return {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "TheLedger-VerificationBot/1.0",
+    ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+  };
+}
+
+/** Fetches one GitHub account, or null when the lookup did not succeed. */
+async function githubUser(login: string): Promise<GithubUser | null> {
+  const response = await fetch(`${GITHUB_API}/users/${encodeURIComponent(login)}`, {
+    headers: githubHeaders(),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) return null;
+  return (await response.json()) as GithubUser;
+}
+
+/** Newest push across an account's public repositories, or null. */
+async function lastPush(login: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${GITHUB_API}/users/${encodeURIComponent(login)}/repos?sort=pushed&per_page=1`,
+      { headers: githubHeaders(), signal: AbortSignal.timeout(8_000) },
+    );
+    if (!response.ok) return null;
+    const repos = (await response.json()) as { pushed_at?: string }[];
+    return repos[0]?.pushed_at ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Days between an ISO timestamp and now, floored. */
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
+/**
+ * Collects the objective half of an application.
+ *
+ * Deliberately tolerant: every lookup may fail, and a failure is recorded rather
+ * than thrown. A GitHub rate limit, or a site that is down for ten minutes, must
+ * not cost somebody their application.
+ */
+export async function collectSignals(input: {
+  githubUrl: string | null;
+  urls: { label: string; url: string | null }[];
+}): Promise<ApplicantSignals> {
+  const signals: ApplicantSignals = { measuredAt: new Date().toISOString() };
+
+  const login = input.githubUrl ? githubLoginFromUrl(input.githubUrl) : null;
+  if (login) {
+    try {
+      const user = await githubUser(login);
+      if (user?.created_at) {
+        signals.github = {
+          login: user.login ?? login,
+          publicRepos: user.public_repos ?? 0,
+          accountAgeDays: daysSince(user.created_at),
+          lastPushedAt: await lastPush(login),
+          followers: user.followers ?? 0,
+        };
+      }
+    } catch {
+      // Left absent rather than recorded as zero: "we could not look" and "they
+      // have no repositories" must not render as the same thing.
+    }
+  }
+
+  const checked: NonNullable<ApplicantSignals["urls"]> = [];
+  for (const entry of input.urls) {
+    if (!entry.url) continue;
+    const result = await safeFetchText(entry.url);
+    checked.push({
+      label: entry.label,
+      url: entry.url,
+      reachable: result.ok,
+      detail: result.ok ? `resolved to ${result.finalUrl}` : result.reason,
+    });
+  }
+  if (checked.length > 0) signals.urls = checked;
+
+  return signals;
+}
+
 async function checkGithub(githubUrl: string, code: string): Promise<ProofOutcome> {
   const login = githubLoginFromUrl(githubUrl);
   if (!login) {
@@ -116,17 +237,7 @@ async function checkGithub(githubUrl: string, code: string): Promise<ProofOutcom
   let response: Response;
   try {
     response = await fetch(`${GITHUB_API}/users/${encodeURIComponent(login)}`, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "TheLedger-VerificationBot/1.0",
-        // A token lifts the rate limit from 60/hour per IP to 5,000. Optional:
-        // without it the check still works, it just reports honestly when GitHub
-        // starts refusing rather than looking like the applicant's fault.
-        ...(process.env.GITHUB_TOKEN
-          ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-          : {}),
-      },
+      headers: githubHeaders(),
       signal: AbortSignal.timeout(8_000),
     });
   } catch {

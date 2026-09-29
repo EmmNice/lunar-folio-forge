@@ -128,6 +128,22 @@ type ApplicationRow = {
   /* Proof of ownership (20260930000300 / 20260930000400). proof_verified_at is the
      single most important field on this row: it is the difference between evidence
      and a claim, so the card leads with it rather than listing it among the links. */
+  /* Which kind of Gold, and the founder-track evidence (20260930000700). */
+  gold_track: "founder" | "backer" | null;
+  traction_summary: string | null;
+  traction_evidence_url: string | null;
+  /* Measured by the server, not supplied by the applicant. */
+  applicant_signals: {
+    github?: {
+      login: string;
+      publicRepos: number;
+      accountAgeDays: number;
+      lastPushedAt: string | null;
+      followers: number;
+    };
+    urls?: { label: string; url: string; reachable: boolean; detail: string }[];
+    measuredAt?: string;
+  } | null;
   proof_verified_at: string | null;
   proof_method: string | null;
   proof_detail: string | null;
@@ -863,9 +879,9 @@ function TierChecklist({ tier, app }: { tier: "silver" | "gold"; app: Applicatio
             met: Boolean(app.github_url ?? app.link_primary),
           },
           {
-            label: "Evidence of something shipped",
+            label: "Something shipped",
             met: Boolean(app.live_project_url ?? app.deployed_contract_address),
-            hint: "a live URL or a deployed contract address",
+            hint: "a live URL or a deployed contract — required, not a nice-to-have",
           },
           {
             label: "Describes recent work",
@@ -877,32 +893,62 @@ function TierChecklist({ tier, app }: { tier: "silver" | "gold"; app: Applicatio
             hint: "the only item a reviewer cannot establish by eye",
           },
         ]
-      : [
-          {
-            label: "Fund or company named",
-            met: Boolean(app.fund_or_company_name),
-          },
-          {
-            label: "Checkable web presence",
-            met: Boolean(app.portfolio_url ?? app.linkedin_or_x_url),
-            hint: "a name alone is not evidence",
-          },
-          {
-            label: "Controls that web presence",
-            met: Boolean(app.proof_verified_at),
-            hint: "Gold can pitch and read Whisper — this is the one that matters",
-          },
-          {
-            label: "Vouched for by an existing Gold member",
-            met: Boolean(app.invite_code),
-            hint: "optional, but it shortens the review",
-          },
-        ];
+      : app.gold_track === "founder"
+        ? [
+            {
+              label: "Live product supplied",
+              met: Boolean(app.live_project_url ?? app.link_primary),
+              hint: "a launched product, not a landing page or a waitlist",
+            },
+            {
+              label: "Evidence of real usage",
+              met: Boolean(app.traction_evidence_url ?? app.deployed_contract_address),
+              hint: "analytics, a store listing, a block explorer, or an on-chain address",
+            },
+            {
+              label: "Stated their numbers",
+              met: Boolean(app.traction_summary),
+              hint: "unverifiable by us — weigh the evidence link, not this",
+            },
+            {
+              label: "Controls the product's domain",
+              met: Boolean(app.proof_verified_at),
+              hint: "Gold can pitch and read Whisper — this is the one that matters",
+            },
+          ]
+        : [
+            {
+              label: "Fund or company named",
+              met: Boolean(app.fund_or_company_name),
+            },
+            {
+              label: "Checkable web presence",
+              met: Boolean(app.portfolio_url ?? app.linkedin_or_x_url),
+              hint: "a name alone is not evidence",
+            },
+            {
+              label: "Controls that web presence",
+              met: Boolean(app.proof_verified_at),
+              hint: "Gold can pitch and read Whisper — this is the one that matters",
+            },
+            {
+              label: "Vouched for by an existing Gold member",
+              met: Boolean(app.invite_code),
+              hint: "optional, but it shortens the review",
+            },
+          ];
+
+  const heading =
+    tier === "silver"
+      ? "Silver — builder criteria"
+      : app.gold_track === "founder"
+        ? "Gold — founder criteria"
+        : "Gold — backer criteria";
 
   return (
     <div className="space-y-1">
       <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {tier === "silver" ? "Silver — builder criteria" : "Gold — investor criteria"}
+        {heading}
       </p>
       {items.map((item) => (
         <div key={item.label} className="flex items-start gap-1.5 text-[11px]">
@@ -916,6 +962,55 @@ function TierChecklist({ tier, app }: { tier: "silver" | "gold"; app: Applicatio
             {item.hint && <span className="opacity-60"> — {item.hint}</span>}
           </span>
         </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * What the server measured, as opposed to what the applicant wrote.
+ *
+ * Every other line on this card is the applicant's own answer. These came from
+ * calling GitHub and fetching the URLs, and they are rendered in their own block
+ * so a reviewer can tell the difference at a glance — which was impossible before,
+ * because there was nothing on the card that had been checked.
+ */
+function MeasuredSignals({ signals }: { signals: ApplicationRow["applicant_signals"] }) {
+  const github = signals?.github;
+  const urls = signals?.urls ?? [];
+  if (!github && urls.length === 0) return null;
+
+  const pushed = github?.lastPushedAt ? timeAgo(github.lastPushedAt) : null;
+
+  return (
+    <div
+      className="space-y-1 rounded-xl px-3 py-2.5"
+      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}
+    >
+      <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        We checked
+      </p>
+      {github && (
+        <p className="text-[11px] text-foreground/80">
+          github.com/{github.login} · {github.publicRepos} public{" "}
+          {github.publicRepos === 1 ? "repo" : "repos"} · {github.followers} followers · account{" "}
+          {github.accountAgeDays < 90 ? (
+            <span className="text-amber-400">{github.accountAgeDays} days old</span>
+          ) : (
+            `${Math.floor(github.accountAgeDays / 365) || "<1"} year${github.accountAgeDays >= 730 ? "s" : ""} old`
+          )}
+          {pushed ? ` · last push ${pushed}` : " · no public pushes found"}
+        </p>
+      )}
+      {urls.map((u) => (
+        <p key={u.label + u.url} className="text-[11px]">
+          <span className="text-muted-foreground">{u.label}: </span>
+          {u.reachable ? (
+            <span className="text-emerald-400">reachable</span>
+          ) : (
+            <span className="text-red-400">unreachable — {u.detail}</span>
+          )}
+        </p>
       ))}
     </div>
   );
@@ -1110,24 +1205,45 @@ function ApplicationCard({
         { label: "Contract", value: app.deployed_contract_address, icon: null },
         { label: "Shipped", value: app.recent_ship_desc, icon: null },
       ]
-    : [
-        {
-          label: "Fund / Company",
-          value: app.fund_or_company_name,
-          icon: <Building2 className="h-3 w-3" />,
-        },
-        {
-          label: "Portfolio",
-          value: app.portfolio_url ?? app.link_primary,
-          icon: <ExternalLink className="h-3 w-3" />,
-        },
-        {
-          label: "LinkedIn / X",
-          value: app.linkedin_or_x_url ?? app.link_secondary,
-          icon: <ExternalLink className="h-3 w-3" />,
-        },
-        { label: "Invite Code", value: app.invite_code, icon: null },
-      ];
+    : app.gold_track === "founder"
+      ? [
+          {
+            label: "Product",
+            value: app.live_project_url ?? app.link_primary,
+            icon: <ExternalLink className="h-3 w-3" />,
+          },
+          {
+            label: "Usage proof",
+            value: app.traction_evidence_url,
+            icon: <ExternalLink className="h-3 w-3" />,
+          },
+          { label: "Contract", value: app.deployed_contract_address, icon: null },
+          // Prefixed, because it is the applicant's own number and the card must
+          // not present it in the same voice as the links above.
+          {
+            label: "Claims",
+            value: app.traction_summary ? `"${app.traction_summary}"` : null,
+            icon: null,
+          },
+        ]
+      : [
+          {
+            label: "Fund / Company",
+            value: app.fund_or_company_name,
+            icon: <Building2 className="h-3 w-3" />,
+          },
+          {
+            label: "Portfolio",
+            value: app.portfolio_url ?? app.link_primary,
+            icon: <ExternalLink className="h-3 w-3" />,
+          },
+          {
+            label: "LinkedIn / X",
+            value: app.linkedin_or_x_url ?? app.link_secondary,
+            icon: <ExternalLink className="h-3 w-3" />,
+          },
+          { label: "Invite Code", value: app.invite_code, icon: null },
+        ];
 
   const borderColor = isSilver ? "rgba(148,163,184,0.18)" : "rgba(251,191,36,0.22)";
   const bgColor = isSilver ? "rgba(148,163,184,0.04)" : "rgba(251,191,36,0.04)";
@@ -1163,8 +1279,21 @@ function ApplicationCard({
         </div>
       </div>
 
+      {/* Which kind of Gold this is, before any of the evidence makes sense. */}
+      {app.tier === "gold" && app.gold_track && (
+        <p
+          className="text-[11px] font-semibold tracking-[0.14em] uppercase"
+          style={{ color: "#fbbf24" }}
+        >
+          {app.gold_track === "founder" ? "Founder / operator track" : "Backer track"}
+        </p>
+      )}
+
       {/* Proof of ownership — the first thing the reviewer should read. */}
       <ProofVerdict app={app} />
+
+      {/* Facts we measured, kept visibly apart from what the applicant told us. */}
+      <MeasuredSignals signals={app.applicant_signals} />
 
       {/* Who is asking. A brand-new empty account applying for Gold is the pattern
           worth noticing, and it was invisible on this card before. */}

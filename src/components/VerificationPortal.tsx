@@ -23,6 +23,9 @@ import {
  * share one implementation rather than two drifting copies.
  */
 
+/** Which kind of Gold somebody is applying for. Mirrors verification_requests.gold_track. */
+export type GoldTrack = "founder" | "backer";
+
 /** The shape this component needs from the viewer's own profile. */
 export type VerificationProfile = {
   id: string;
@@ -78,10 +81,19 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
   const [sLiveUrlErr, setSLiveUrlErr] = useState("");
 
   // Gold fields
+  // Gold branches into two tracks; nothing is preselected, because guessing wrong
+  // would quietly put somebody on the wrong set of requirements.
+  const [gTrack, setGTrack] = useState<GoldTrack | null>(null);
   const [gFundName, setGFundName] = useState("");
   const [gPortfolio, setGPortfolio] = useState("");
   const [gLinkedin, setGLinkedin] = useState("");
   const [gInviteCode, setGInviteCode] = useState("");
+  const [gProductUrl, setGProductUrl] = useState("");
+  const [gTractionUrl, setGTractionUrl] = useState("");
+  const [gTraction, setGTraction] = useState("");
+  const [gContract, setGContract] = useState("");
+  const [gProductUrlErr, setGProductUrlErr] = useState("");
+  const [gTractionUrlErr, setGTractionUrlErr] = useState("");
 
   // Gold field errors
   const [gPortfolioErr, setGPortfolioErr] = useState("");
@@ -183,12 +195,65 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
     } else {
       setSLiveUrlErr("");
     }
+    /*
+      Silver used to require only a GitHub URL, which enforced "has a GitHub
+      account" while claiming to mean "builds things". The database now requires
+      evidence of something shipped (vr_silver_needs_something_shipped), so the
+      form asks for it in a sentence rather than letting the constraint do the
+      talking.
+    */
+    if (!l && !sContract.trim()) {
+      toast.error(
+        "Add something you have shipped — a live project URL, or a deployed contract address.",
+      );
+      ok = false;
+    }
     return ok;
   }
 
-  // Gold validation
+  // Gold validation, per track
   function validateGold(): boolean {
+    if (!gTrack) {
+      toast.error("Choose whether you are applying as a founder or as a backer.");
+      return false;
+    }
     let ok = true;
+
+    if (gTrack === "founder") {
+      const product = gProductUrl.trim();
+      if (!product) {
+        setGProductUrlErr("The product URL is required.");
+        ok = false;
+      } else if (!isValidUrl(product)) {
+        setGProductUrlErr("Enter a valid URL starting with https://");
+        ok = false;
+      } else {
+        setGProductUrlErr("");
+      }
+
+      const evidence = gTractionUrl.trim();
+      if (evidence && !isValidUrl(evidence)) {
+        setGTractionUrlErr("Enter a valid URL starting with https://");
+        ok = false;
+      } else {
+        setGTractionUrlErr("");
+      }
+      // One or the other, which is the rule the database enforces as
+      // vr_gold_founder_needs_evidence. Told here so the applicant learns it from
+      // a sentence rather than from a constraint name.
+      if (!evidence && !gContract.trim()) {
+        toast.error(
+          "Add evidence of real usage: a public analytics page, a store listing, a block explorer link, or your deployed contract address.",
+        );
+        ok = false;
+      }
+      return ok;
+    }
+
+    if (!gFundName.trim()) {
+      toast.error("The backer track needs the name of your fund or company.");
+      ok = false;
+    }
     const p = gPortfolio.trim();
     if (p && !isValidUrl(p)) {
       setGPortfolioErr("Enter a valid URL starting with https://");
@@ -202,6 +267,10 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
       ok = false;
     } else {
       setGLinkedinErr("");
+    }
+    if (!p && !l) {
+      toast.error("Add a link we can check — your fund's site, a portfolio page, or LinkedIn/X.");
+      ok = false;
     }
     return ok;
   }
@@ -227,10 +296,18 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
               }
             : {
                 tier: "gold" as const,
-                fund_or_company_name: gFundName.trim(),
-                portfolio_url: gPortfolio.trim(),
-                linkedin_or_x_url: gLinkedin.trim(),
-                invite_code: gInviteCode.trim(),
+                gold_track: gTrack ?? undefined,
+                // Founder fields reuse live_project_url and the contract address —
+                // the same columns Silver uses for "something shipped", because it
+                // is the same kind of evidence judged against a higher bar.
+                live_project_url: gTrack === "founder" ? gProductUrl.trim() : "",
+                deployed_contract_address: gTrack === "founder" ? gContract.trim() : "",
+                traction_evidence_url: gTrack === "founder" ? gTractionUrl.trim() : "",
+                traction_summary: gTrack === "founder" ? gTraction.trim() : "",
+                fund_or_company_name: gTrack === "backer" ? gFundName.trim() : "",
+                portfolio_url: gTrack === "backer" ? gPortfolio.trim() : "",
+                linkedin_or_x_url: gTrack === "backer" ? gLinkedin.trim() : "",
+                invite_code: gTrack === "backer" ? gInviteCode.trim() : "",
               },
       });
       toast.success("Application submitted — your credentials are now under review.");
@@ -311,7 +388,7 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
               : "text-muted-foreground hover:text-foreground/80")
           }
         >
-          Gold · Investor
+          Gold
           {isGoldVerified && <CheckCircle2 className="h-3 w-3 text-amber-400" />}
         </button>
       </div>
@@ -322,12 +399,12 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold" style={{ color: ts.title }}>
-              {activeTab === "silver" ? "Silver — Recognized Builder" : "Gold — Verified Investor"}
+              {activeTab === "silver" ? "Silver — Builders" : "Gold — Launched & Backing"}
             </p>
             <p className="text-[11px]" style={{ color: ts.subtitle }}>
               {activeTab === "silver"
-                ? "For active builders who ship"
-                : "For fund managers & angels"}
+                ? "Developers, startups, designers — anyone shipping"
+                : "Founders with real traction, and the people who fund them"}
             </p>
           </div>
           {activeVerified && (
@@ -390,6 +467,13 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
         {/* Application form — only shown when user can still apply */}
         {canApply && (
           <>
+            {activeTab === "silver" && (
+              <ul className="space-y-1 text-[11px] leading-relaxed" style={{ color: ts.desc }}>
+                <li>· Your GitHub profile, with the proof code in its bio</li>
+                <li>· One thing you have shipped: a live URL or a deployed contract</li>
+                <li>· A line on what you worked on recently</li>
+              </ul>
+            )}
             <p className="text-xs" style={{ color: ts.desc }}>
               {activeTab === "silver"
                 ? "Provide your GitHub profile and at least one live project so we can confirm you're an active builder."
@@ -511,84 +595,216 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
 
             {/* Gold form */}
             {activeTab === "gold" && (
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label
+              <div className="space-y-4">
+                {/*
+                  Gold covers two different people. A founder who has launched
+                  something with real users and real transactions, and a fund or
+                  angel who backs them. They need the same reach and prove it in
+                  completely different ways, so the track is chosen first and the
+                  form follows from it rather than asking everyone for everything.
+                */}
+                <div className="space-y-2">
+                  <p
                     className="text-[11px] font-medium uppercase tracking-wider"
                     style={{ color: ts.subtitle }}
                   >
-                    Fund or Company Name <span style={{ color: ts.accent }}>*</span>
-                  </label>
-                  <input
-                    className="lux-field"
-                    placeholder="Acme Ventures"
-                    value={gFundName}
-                    onChange={(e) => setGFundName(e.target.value)}
-                  />
+                    Which describes you? <span style={{ color: ts.accent }}>*</span>
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          key: "founder" as const,
+                          label: "Founder / operator",
+                          desc: "I have launched a product that has real users and real transactions",
+                        },
+                        {
+                          key: "backer" as const,
+                          label: "Backer",
+                          desc: "I invest — a fund, an angel, or a company that writes cheques",
+                        },
+                      ] satisfies { key: GoldTrack; label: string; desc: string }[]
+                    ).map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setGTrack(opt.key)}
+                        className="rounded-xl p-3 text-left transition-colors"
+                        style={{
+                          border: `1px solid ${gTrack === opt.key ? ts.btnBorder : "rgba(255,255,255,0.07)"}`,
+                          background: gTrack === opt.key ? ts.btnBg : "transparent",
+                        }}
+                      >
+                        <span
+                          className="block text-[13px] font-semibold"
+                          style={{ color: gTrack === opt.key ? ts.accent : undefined }}
+                        >
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px]" style={{ color: ts.desc }}>
+                          {opt.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label
-                    className="text-[11px] font-medium uppercase tracking-wider"
-                    style={{ color: ts.subtitle }}
-                  >
-                    Portfolio / Fund Website
-                  </label>
-                  <input
-                    className={`lux-field${gPortfolioErr ? " border-red-500/60 focus:border-red-500" : ""}`}
-                    placeholder="https://acmeventures.com"
-                    value={gPortfolio}
-                    onChange={(e) => {
-                      setGPortfolio(e.target.value);
-                      if (gPortfolioErr) setGPortfolioErr("");
-                    }}
-                    onBlur={() => {
-                      const v = gPortfolio.trim();
-                      if (v && !isValidUrl(v))
-                        setGPortfolioErr("Enter a valid URL starting with https://");
-                      else setGPortfolioErr("");
-                    }}
-                  />
-                  {gPortfolioErr && <p className="text-[11px] text-red-400">{gPortfolioErr}</p>}
-                </div>
-                <div className="space-y-1">
-                  <label
-                    className="text-[11px] font-medium uppercase tracking-wider"
-                    style={{ color: ts.subtitle }}
-                  >
-                    LinkedIn or X Profile
-                  </label>
-                  <input
-                    className={`lux-field${gLinkedinErr ? " border-red-500/60 focus:border-red-500" : ""}`}
-                    placeholder="https://linkedin.com/in/yourname"
-                    value={gLinkedin}
-                    onChange={(e) => {
-                      setGLinkedin(e.target.value);
-                      if (gLinkedinErr) setGLinkedinErr("");
-                    }}
-                    onBlur={() => {
-                      const v = gLinkedin.trim();
-                      if (v && !isValidUrl(v))
-                        setGLinkedinErr("Enter a valid URL starting with https://");
-                      else setGLinkedinErr("");
-                    }}
-                  />
-                  {gLinkedinErr && <p className="text-[11px] text-red-400">{gLinkedinErr}</p>}
-                </div>
-                <div className="space-y-1">
-                  <label
-                    className="text-[11px] font-medium uppercase tracking-wider"
-                    style={{ color: ts.subtitle }}
-                  >
-                    Invite Code{" "}
-                    <span className="normal-case opacity-60">(optional — speeds up review)</span>
-                  </label>
-                  <input
-                    className="lux-field font-mono tracking-widest text-xs"
-                    placeholder="LEDGER-XXXX"
-                    value={gInviteCode}
-                    onChange={(e) => setGInviteCode(e.target.value.toUpperCase())}
-                  />
-                </div>
+
+                {gTrack === "founder" && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] leading-relaxed" style={{ color: ts.desc }}>
+                      Gold is for products that are live and being used — not a landing page, not a
+                      waitlist. We need the product itself, and one place a reviewer can go to see
+                      that people are actually using it.
+                    </p>
+                    <Field
+                      label="Live product URL"
+                      required
+                      accent={ts.accent}
+                      subtitle={ts.subtitle}
+                      placeholder="https://yourproduct.com"
+                      value={gProductUrl}
+                      error={gProductUrlErr}
+                      onChange={(v) => {
+                        setGProductUrl(v);
+                        if (gProductUrlErr) setGProductUrlErr("");
+                      }}
+                      onBlur={() => {
+                        const v = gProductUrl.trim();
+                        if (!v) setGProductUrlErr("The product URL is required.");
+                        else if (!isValidUrl(v))
+                          setGProductUrlErr("Enter a valid URL starting with https://");
+                        else setGProductUrlErr("");
+                      }}
+                    />
+                    <Field
+                      label="Evidence of real usage"
+                      required
+                      accent={ts.accent}
+                      subtitle={ts.subtitle}
+                      placeholder="https://… analytics, store listing, or block explorer"
+                      hint="Somewhere public: a shared analytics dashboard, an App Store or Play Store listing with reviews, a block explorer page for your contract, or a status page. A deployed contract address below also counts."
+                      value={gTractionUrl}
+                      error={gTractionUrlErr}
+                      onChange={(v) => {
+                        setGTractionUrl(v);
+                        if (gTractionUrlErr) setGTractionUrlErr("");
+                      }}
+                      onBlur={() => {
+                        const v = gTractionUrl.trim();
+                        if (v && !isValidUrl(v))
+                          setGTractionUrlErr("Enter a valid URL starting with https://");
+                        else setGTractionUrlErr("");
+                      }}
+                    />
+                    <div className="space-y-1">
+                      <label
+                        className="text-[11px] font-medium uppercase tracking-wider"
+                        style={{ color: ts.subtitle }}
+                      >
+                        Your numbers{" "}
+                        <span className="normal-case opacity-60">(as you report them)</span>
+                      </label>
+                      <textarea
+                        className="lux-field min-h-[70px] resize-y"
+                        placeholder="1,400 weekly active users. $38k settled last month. 60 paying customers."
+                        maxLength={280}
+                        value={gTraction}
+                        onChange={(e) => setGTraction(e.target.value)}
+                      />
+                      <p className="text-[10px]" style={{ color: ts.desc }}>
+                        {gTraction.length}/280 · We cannot verify these, and they are shown to
+                        reviewers as your claim. The link above is what carries weight.
+                      </p>
+                    </div>
+                    <Field
+                      label="Deployed contract address"
+                      accent={ts.accent}
+                      subtitle={ts.subtitle}
+                      placeholder="0x…"
+                      hint="Optional, and counts as evidence of usage on its own."
+                      value={gContract}
+                      error=""
+                      onChange={setGContract}
+                    />
+                  </div>
+                )}
+
+                {gTrack === "backer" && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] leading-relaxed" style={{ color: ts.desc }}>
+                      For funds, angels and companies that invest. We need the entity's name and one
+                      link a reviewer can check — then the proof code published on that site.
+                    </p>
+                    <div className="space-y-1">
+                      <label
+                        className="text-[11px] font-medium uppercase tracking-wider"
+                        style={{ color: ts.subtitle }}
+                      >
+                        Fund or company name <span style={{ color: ts.accent }}>*</span>
+                      </label>
+                      <input
+                        className="lux-field"
+                        placeholder="Acme Ventures"
+                        value={gFundName}
+                        onChange={(e) => setGFundName(e.target.value)}
+                      />
+                    </div>
+                    <Field
+                      label="Fund or portfolio website"
+                      accent={ts.accent}
+                      subtitle={ts.subtitle}
+                      placeholder="https://acmeventures.com"
+                      hint="This or a LinkedIn/X profile is required — the site is stronger, because the proof code can be published on it."
+                      value={gPortfolio}
+                      error={gPortfolioErr}
+                      onChange={(v) => {
+                        setGPortfolio(v);
+                        if (gPortfolioErr) setGPortfolioErr("");
+                      }}
+                      onBlur={() => {
+                        const v = gPortfolio.trim();
+                        if (v && !isValidUrl(v))
+                          setGPortfolioErr("Enter a valid URL starting with https://");
+                        else setGPortfolioErr("");
+                      }}
+                    />
+                    <Field
+                      label="LinkedIn or X profile"
+                      accent={ts.accent}
+                      subtitle={ts.subtitle}
+                      placeholder="https://linkedin.com/in/yourname"
+                      value={gLinkedin}
+                      error={gLinkedinErr}
+                      onChange={(v) => {
+                        setGLinkedin(v);
+                        if (gLinkedinErr) setGLinkedinErr("");
+                      }}
+                      onBlur={() => {
+                        const v = gLinkedin.trim();
+                        if (v && !isValidUrl(v))
+                          setGLinkedinErr("Enter a valid URL starting with https://");
+                        else setGLinkedinErr("");
+                      }}
+                    />
+                    <div className="space-y-1">
+                      <label
+                        className="text-[11px] font-medium uppercase tracking-wider"
+                        style={{ color: ts.subtitle }}
+                      >
+                        Invite code{" "}
+                        <span className="normal-case opacity-60">
+                          (optional — speeds up review)
+                        </span>
+                      </label>
+                      <input
+                        className="lux-field font-mono text-xs tracking-widest"
+                        placeholder="LEDGER-XXXX"
+                        value={gInviteCode}
+                        onChange={(e) => setGInviteCode(e.target.value.toUpperCase())}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -749,6 +965,61 @@ function ProofPanel({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * One labelled text input with an optional hint and error.
+ *
+ * The Gold form went from four fields to nine across two tracks, and repeating the
+ * label/input/error markup nine times is how the tracks end up subtly
+ * inconsistent with each other.
+ */
+function Field({
+  label,
+  required,
+  accent,
+  subtitle,
+  placeholder,
+  hint,
+  value,
+  error,
+  onChange,
+  onBlur,
+}: {
+  label: string;
+  required?: boolean;
+  accent: string;
+  subtitle: string;
+  placeholder: string;
+  hint?: string;
+  value: string;
+  error: string;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <label
+        className="text-[11px] font-medium tracking-wider uppercase"
+        style={{ color: subtitle }}
+      >
+        {label} {required && <span style={{ color: accent }}>*</span>}
+      </label>
+      <input
+        className={`lux-field${error ? " border-red-500/60 focus:border-red-500" : ""}`}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+      />
+      {hint && !error && (
+        <p className="text-[10px] leading-relaxed" style={{ color: subtitle }}>
+          {hint}
+        </p>
+      )}
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
     </div>
   );
 }
