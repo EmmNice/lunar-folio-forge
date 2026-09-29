@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { supabase } from "@/integrations/supabase/client";
+import { initBrowserMonitoring } from "@/lib/monitoring.browser";
+import { reportError, setMonitoringUser } from "@/lib/monitoring";
 import { Toaster } from "sonner";
 
 function NotFoundComponent() {
@@ -40,10 +42,17 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
-    // Log to error tracking in production; suppress in dev to keep console clean
+    // This boundary is the only place a React render error surfaces. The comment
+    // here used to say "log to error tracking in production" while doing nothing
+    // but console.error, so every crash a member hit was visible only in their own
+    // devtools. It now actually leaves the browser (when a DSN is configured).
     if (import.meta.env.PROD) {
       console.error("[The Ledger]", error);
     }
+    reportError(error, {
+      source: "browser:routeErrorBoundary",
+      url: typeof window === "undefined" ? undefined : window.location.href,
+    });
   }, [error]);
 
   return (
@@ -141,11 +150,20 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
+  // Must run in an effect, not at module scope: this file is server-rendered and
+  // the reporter registers window listeners.
+  useEffect(() => {
+    initBrowserMonitoring();
+  }, []);
+
   useEffect(() => {
     // Only invalidate on SIGNED_OUT — SIGNED_IN is handled by useAuth hook directly.
     // Calling router.invalidate() on SIGNED_IN causes every beforeLoad to re-run,
     // doubling all DB profile fetches and causing visible flicker on sign-in.
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Tags subsequent reports with the account that hit them, and clears the
+      // tag on sign-out so the next person's errors aren't filed under the last.
+      setMonitoringUser(session?.user?.id);
       if (event === "SIGNED_OUT") {
         queryClient.clear();
         router.invalidate();
