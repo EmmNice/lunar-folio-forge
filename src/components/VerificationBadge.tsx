@@ -16,7 +16,7 @@ export function VerificationBadge({
   if (tier === "gold") {
     return (
       <span
-        title="Elite Founder — Gold Verified"
+        title="Gold Verified"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -40,7 +40,7 @@ export function VerificationBadge({
 
   return (
     <span
-      title="Recognized Builder — Silver Verified"
+      title="Silver Verified — Builder"
       style={{
         display: "inline-flex",
         alignItems: "center",
