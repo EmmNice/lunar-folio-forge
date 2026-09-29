@@ -602,11 +602,14 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
                     <li>· A line on what you worked on recently</li>
                   </ul>
                 )}
-                <p className="text-xs" style={{ color: ts.desc }}>
-                  {activeTab === "silver"
-                    ? "Provide your GitHub profile and at least one live project so we can confirm you're an active builder."
-                    : "Provide your fund or company name and a link we can check. An invite code from an existing Gold member accelerates review."}
-                </p>
+                {/*
+                  There was a track-blind paragraph here that branched only on
+                  silver-vs-gold, so a founder was told to "provide your fund or
+                  company name" — the backer instructions, on the wrong track.
+                  Removed rather than given a third branch: Silver has its bullet
+                  list above, and each Gold track opens with its own description, so
+                  this was duplicating one of them and contradicting the other.
+                */}
 
                 {/*
               The fee, stated plainly before the form rather than sprung at the end.
