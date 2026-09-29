@@ -888,12 +888,11 @@ function FeedPage() {
                     Write the first post
                   </button>
                 ) : user && profile && tab === "signal" ? (
-                  <Link
-                    to="/u/$handle"
-                    params={{ handle: profile.handle }}
-                    search={{ tab: undefined }}
-                    className="btn btn-secondary btn-sm"
-                  >
+                  // Straight to the form. This used to point at the member's own
+                  // profile, which left them to discover that the portal was inside
+                  // the Edit-profile sheet — so the link did not actually lead
+                  // anywhere useful.
+                  <Link to="/verification" className="btn btn-secondary btn-sm">
                     Apply for verification
                   </Link>
                 ) : undefined
