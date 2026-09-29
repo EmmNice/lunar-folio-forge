@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Search as SearchIcon, Users, FileText, Loader2 } from "lucide-react";
-import { AppHeader, MobileNav } from "@/components/AppHeader";
+import { AppHeader } from "@/components/AppHeader";
 import { EmptyState, ErrorState, PostSkeleton } from "@/components/states";
 import { PostCard, type FeedPost } from "@/components/PostCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
@@ -185,8 +185,12 @@ function SearchPage() {
 
   return (
     <div className="min-h-screen">
+      {/* AppHeader renders MobileNav itself unless `controlled`. Rendering one
+          here as well stacked two identical fixed tab bars on top of each other,
+          and mounted a second ProfileDrawer and unread-count subscriber with it.
+          Only the feed needs the standalone MobileNav, because its header is
+          `controlled` and sits inside a CSS-transformed ancestor. */}
       <AppHeader />
-      <MobileNav />
 
       <main className="page-enter mx-auto max-w-2xl px-4 pb-mobile-nav pt-5 sm:px-6">
         <form
