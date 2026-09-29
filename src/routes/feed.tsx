@@ -458,7 +458,9 @@ function FeedPage() {
           type="button"
           onClick={() => setShowModal(true)}
           aria-label="Write a new card"
-          className="fixed right-5 z-40 flex items-center justify-center rounded-full transition-all duration-300 active:scale-95 sm:right-8"
+          /* Mobile only: desktop now has the inline composer at the top of the
+             timeline, and keeping both put two "new post" controls on one screen. */
+          className="fixed right-5 z-40 flex items-center justify-center rounded-full transition-all duration-300 active:scale-95 sm:hidden"
           style={{
             bottom: "calc(env(safe-area-inset-bottom) + var(--mobile-nav-height) + 1rem)",
             width: "58px",

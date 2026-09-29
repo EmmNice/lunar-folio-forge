@@ -737,16 +737,36 @@ function ProfilePage() {
 
   // PUBLIC PROFILE VIEW
   return (
-    <div className="min-h-screen pb-16 sm:pb-0">
+    <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-5xl px-4 pt-10 pb-mobile-nav sm:px-6">
-        <header className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-          {/* Avatar */}
+
+      {/*
+        Cover band, tinted by tier. The self view has always opened with one, so
+        without it the same profile changed shape depending on who was looking:
+        a banner and an overlapping avatar for the owner, a flat row for everyone
+        else.
+      */}
+      <div
+        className="h-24 w-full sm:h-28"
+        style={{
+          background:
+            profile.verification_tier === "gold"
+              ? "linear-gradient(135deg, rgba(251,191,36,0.16) 0%, rgba(251,191,36,0.03) 60%, rgba(255,255,255,0.015) 100%)"
+              : profile.verification_tier === "silver"
+                ? "linear-gradient(135deg, rgba(203,213,225,0.12) 0%, rgba(203,213,225,0.02) 60%, rgba(255,255,255,0.015) 100%)"
+                : "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%)",
+        }}
+      />
+
+      <main className="mx-auto max-w-5xl px-4 pb-mobile-nav sm:px-6">
+        <header className="-mt-10 flex flex-col items-start gap-5 sm:-mt-12 sm:flex-row sm:items-end">
+          {/* Avatar — tier ring, matching the header and the self view */}
           <div
-            className="grid h-20 w-20 shrink-0 overflow-hidden rounded-full text-2xl font-semibold"
+            className="grid h-20 w-20 shrink-0 overflow-hidden rounded-full text-2xl font-semibold sm:h-24 sm:w-24"
             style={{
-              border: "1px solid rgba(255,255,255,0.10)",
+              border: "4px solid var(--bg-base)",
               background: "rgba(255,255,255,0.05)",
+              boxShadow: `0 0 0 2px ${tierRingColor(profile.verification_tier)}`,
             }}
           >
             {profile.avatar_url ? (
