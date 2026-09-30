@@ -9,6 +9,7 @@ import { describeWriteError } from "@/lib/db-errors";
 import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { MAX_MESSAGE_LENGTH } from "@/lib/limits";
+import { secondaryHandle } from "@/lib/identity";
 
 export const Route = createFileRoute("/_authenticated/messages/$id")({
   head: () => ({ meta: [{ title: "Conversation · The Ledger" }] }),
@@ -32,6 +33,40 @@ function ThreadPage() {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+    Opening a thread clears its unread badge.
+
+    Direct messages have no read state of their own — no column on `messages`, none
+    on `conversations` — so the notification rows are what track them, and the Inbox
+    badge counts the unread ones. Marking them read here is therefore the same act
+    as marking the conversation read, and it is the only thing that clears the badge.
+  */
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("user_id", user.id)
+        .eq("type", "message")
+        .eq("conversation_id", id)
+        .eq("read", false);
+      /*
+        No optimistic badge update on purpose.
+
+        Zeroing the count here would hide unread messages in *other* conversations,
+        and decrementing it correctly means tracking how many rows were just marked
+        against the current total — two numbers that can disagree. The shared
+        subscription already refetches both counts on any UPDATE to this table, so
+        it recomputes the truth within a moment and cannot be wrong.
+      */
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, id]);
 
   useEffect(() => {
     if (!user) return;
@@ -152,7 +187,11 @@ function ThreadPage() {
               </div>
               <span className="truncate">{other.display_name}</span>
               <VerificationBadge tier={other.verification_tier} size={13} />
-              <span className="text-muted-foreground">@{other.handle}</span>
+              {secondaryHandle(other.display_name, other.handle) && (
+                <span className="text-muted-foreground">
+                  {secondaryHandle(other.display_name, other.handle)}
+                </span>
+              )}
             </Link>
           ) : null}
         </div>
@@ -213,7 +252,16 @@ function ThreadPage() {
                 send();
               }
             }}
-            placeholder="Write a message… (Enter to send, Shift+Enter for newline)"
+            /*
+              Just "Write a message".
+
+              It used to read "Write a message… (Enter to send, Shift+Enter for
+              newline)" — keyboard instructions inside the input, which is developer
+              documentation in a place meant for a person's own words. It is also
+              wrong on a phone, where there is no Shift and Enter inserts a newline.
+              The behaviour still works for anyone on a keyboard who tries it.
+            */
+            placeholder="Write a message"
             className="min-h-[44px] flex-1 resize-none rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm outline-none focus:border-foreground/40"
           />
           <button

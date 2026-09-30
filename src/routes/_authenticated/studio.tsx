@@ -14,7 +14,7 @@ import { MAX_POST_LENGTH } from "@/lib/limits";
 
 export const Route = createFileRoute("/_authenticated/studio")({
   head: () => ({ meta: [{ title: "Workspace · The Ledger" }] }),
-  // Accept an optional ?draft= param from PulseAssist "Convert to Card"
+  // Accept an optional ?draft= param from PulseAssist AI "Convert to Card"
   validateSearch: (s: Record<string, unknown>) => ({
     draft: typeof s.draft === "string" ? s.draft : undefined,
   }),
@@ -47,7 +47,7 @@ function StudioPage() {
 
   const exportRef = useRef<HTMLDivElement | null>(null);
 
-  // Accept draft text from PulseAssist "Convert to Card"
+  // Accept draft text from PulseAssist AI "Convert to Card"
   useEffect(() => {
     if (search.draft) setContent(search.draft);
   }, [search.draft]);
@@ -73,16 +73,16 @@ function StudioPage() {
         setCreditsLeft(result.creditsRemaining);
         if (result.creditsRemaining === 0) setShowCreditWarning(true);
       }
-      toast.success("PulseAssist updated your draft.");
+      toast.success("PulseAssist AI updated your draft.");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg.includes("CREDITS_EXHAUSTED")) {
         setShowCreditWarning(true);
-        toast.error("No PulseAssist credits left today. Verify to unlock unlimited.");
+        toast.error("No PulseAssist AI credits left today. Verify to unlock unlimited.");
       } else if (msg.includes("AI_NOT_CONFIGURED")) {
-        toast.error("PulseAssist isn't available right now. Please try again later.");
+        toast.error("PulseAssist AI isn't available right now. Please try again later.");
       } else {
-        toast.error("PulseAssist couldn't process your request. Try again.");
+        toast.error("PulseAssist AI couldn't process your request. Try again.");
       }
     } finally {
       setAiLoading(false);
@@ -190,7 +190,7 @@ function StudioPage() {
               />
             </div>
 
-            {/* PulseAssist panel */}
+            {/* PulseAssist AI panel */}
             <div
               className="rounded-2xl p-4"
               style={{
@@ -268,7 +268,7 @@ function StudioPage() {
                   }}
                 >
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                  Daily credits used. Verify your account to unlock unlimited PulseAssist.
+                  Daily credits used. Verify your account to unlock unlimited PulseAssist AI.
                 </div>
               )}
             </div>

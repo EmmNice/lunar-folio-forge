@@ -56,7 +56,7 @@ function approvalEmailHtml(tierLabel: string, ctaUrl: string) {
 
   const perks = isSilver
     ? [
-        ["&#9889;", "Unlimited AI credits", "PulseAssist has no daily cap for Silver builders."],
+        ["&#9889;", "Unlimited AI credits", "PulseAssist AI has no daily cap for Silver builders."],
         [
           "&#128225;",
           "Signal feed visibility",
@@ -65,7 +65,11 @@ function approvalEmailHtml(tierLabel: string, ctaUrl: string) {
         ["&#128304;", "Silver badge", "displayed on your profile and every post you publish."],
       ]
     : [
-        ["&#9854;", "Unlimited AI & pitch credits", "every PulseAssist and pitch tool, no limits."],
+        [
+          "&#9854;",
+          "Unlimited AI & pitch credits",
+          "every PulseAssist AI and pitch tool, no limits.",
+        ],
         [
           "&#128233;",
           "A pitch inbox",

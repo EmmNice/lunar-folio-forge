@@ -767,7 +767,7 @@ function FeedPage() {
         <AppHeader controlled />
 
         {/* Signal / Beat tab switcher */}
-        <div className="mx-auto max-w-2xl px-4 pb-3 pt-1 sm:px-6">
+        <div className="mx-auto max-w-xl px-4 pb-3 pt-1 sm:px-6">
           <div>
             <div className="segmented sm:max-w-[24rem]">
               {visibleTabs.map((t) => {
@@ -793,7 +793,9 @@ function FeedPage() {
       {/* Mobile bottom nav — outside the transformed header so position:fixed works correctly */}
       <MobileNav />
 
-      <main className="page-enter mx-auto max-w-2xl px-4 pb-mobile-nav pt-5 sm:px-6">
+      {/* max-w-xl, not 2xl: at 672px a post ran nearly the full width of a desktop
+          window, which reads as a slab rather than a feed. */}
+      <main className="page-enter mx-auto max-w-xl px-4 pb-mobile-nav pt-5 sm:px-6">
         {/*
           Moderation state, said out loud. RLS blocks posting, commenting, liking,
           re-shipping and messaging for a restricted or banned account, so without

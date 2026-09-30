@@ -28,12 +28,12 @@ const STATUS_COPY: Record<string, { label: string; tone: string; detail: string 
   free: {
     label: "Free",
     tone: "var(--text-secondary)",
-    detail: `You get ${DAILY_AI_CREDITS} PulseAssist requests a day.`,
+    detail: `You get ${DAILY_AI_CREDITS} PulseAssist AI requests a day.`,
   },
   active: {
     label: "Active",
     tone: "#34d399",
-    detail: "PulseAssist is uncapped on your account.",
+    detail: "PulseAssist AI is uncapped on your account.",
   },
   past_due: {
     label: "Payment retrying",
@@ -44,7 +44,7 @@ const STATUS_COPY: Record<string, { label: string; tone: string; detail: string 
   canceled: {
     label: "Cancelled",
     tone: "var(--text-secondary)",
-    detail: `Your subscription has ended, so PulseAssist is back to ${DAILY_AI_CREDITS} requests a day.`,
+    detail: `Your subscription has ended, so PulseAssist AI is back to ${DAILY_AI_CREDITS} requests a day.`,
   },
 };
 
@@ -216,11 +216,11 @@ function BillingPage() {
           >
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4" style={{ color: "var(--gold)" }} />
-              <h2 className="text-sm font-semibold">Uncapped PulseAssist</h2>
+              <h2 className="text-sm font-semibold">Uncapped PulseAssist AI</h2>
             </div>
             <ul className="mt-3 space-y-2">
               {[
-                `Unlimited PulseAssist drafts and chat, instead of ${DAILY_AI_CREDITS} a day.`,
+                `Unlimited PulseAssist AI drafts and chat, instead of ${DAILY_AI_CREDITS} a day.`,
                 "Cancel whenever you like, from Stripe's billing portal.",
               ].map((line) => (
                 <li key={line} className="flex items-start gap-2 text-[13px] leading-relaxed">
@@ -231,7 +231,8 @@ function BillingPage() {
             </ul>
             <p className="mt-3 text-[11px] leading-relaxed text-tertiary">
               Verification is separate and always free — a Silver or Gold badge already includes
-              uncapped PulseAssist, so subscribe only if you would rather not wait to be verified.
+              uncapped PulseAssist AI, so subscribe only if you would rather not wait to be
+              verified.
             </p>
           </div>
         )}
@@ -249,7 +250,7 @@ function BillingPage() {
               <p className="mt-1">
                 This deployment has no payment provider configured, so there is nothing to buy right
                 now. Everything else on The Ledger works as normal, and verification still grants
-                uncapped PulseAssist for free.
+                uncapped PulseAssist AI for free.
               </p>
             </div>
           ) : isPaid || overview?.hasCustomer ? (

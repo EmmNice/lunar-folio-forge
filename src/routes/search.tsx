@@ -13,6 +13,7 @@ import { useCardExport } from "@/hooks/use-card-export";
 import { ROLE_LABEL } from "@/lib/roles";
 import type { RoleType } from "@/hooks/use-auth";
 import { MIN_SEARCH_LENGTH, SEARCH_PAGE_SIZE } from "@/lib/limits";
+import { secondaryHandle } from "@/lib/identity";
 
 /**
  * Search.
@@ -312,10 +313,17 @@ function SearchPage() {
                           size={14}
                         />
                       </span>
+                      {/* Joined rather than concatenated with leading separators: with
+                          the handle omitted, the old form rendered a line starting
+                          " · Core Developer". */}
                       <span className="mt-0.5 block text-[12px] text-tertiary">
-                        @{p.handle}
-                        {p.role_type ? ` · ${ROLE_LABEL[p.role_type as RoleType]}` : ""}
-                        {p.company_name ? ` · ${p.company_name}` : ""}
+                        {[
+                          secondaryHandle(p.display_name, p.handle),
+                          p.role_type ? ROLE_LABEL[p.role_type as RoleType] : null,
+                          p.company_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                       {p.bio ? (
                         <span className="mt-1.5 line-clamp-2 block text-[13px] leading-relaxed text-secondary">

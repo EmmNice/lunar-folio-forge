@@ -26,6 +26,7 @@ import { MAX_POST_LENGTH, MAX_REPORT_REASON_LENGTH } from "@/lib/limits";
 import { describeWriteError } from "@/lib/db-errors";
 import { RichText } from "@/components/RichText";
 import type { VerificationTier } from "@/hooks/use-auth";
+import { secondaryHandle } from "@/lib/identity";
 
 export type FeedAuthor = {
   id: string;
@@ -1068,8 +1069,12 @@ export function PostCard({
                   <VerificationBadge tier={post.author.verification_tier} size={15} />
                 </Link>
                 <p className="mt-0.5 text-[12px] text-tertiary">
-                  @{post.author.handle}
-                  <span className="mx-1.5 opacity-50">·</span>
+                  {secondaryHandle(post.author.display_name, post.author.handle) && (
+                    <>
+                      {secondaryHandle(post.author.display_name, post.author.handle)}
+                      <span className="mx-1.5 opacity-50">·</span>
+                    </>
+                  )}
                   {timeAgo(post.created_at)}
                   {editedMark}
                 </p>
@@ -1082,7 +1087,7 @@ export function PostCard({
         {/* Themed content block */}
         <div className="px-4 pt-3 pb-1 sm:px-5">
           <div
-            className="rounded-xl px-4 py-4"
+            className="rounded-xl px-3.5 py-3.5"
             style={{
               backgroundColor: theme.bg,
               backgroundImage: dotPattern,
@@ -1095,7 +1100,7 @@ export function PostCard({
             ) : (
               <RichText
                 text={content}
-                className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.6] tracking-[-0.01em]"
+                className="whitespace-pre-wrap break-words text-[14.5px] font-medium leading-[1.55] tracking-[-0.01em]"
                 style={{ color: theme.body }}
               />
             )}
@@ -1193,8 +1198,12 @@ export function PostCard({
                   <VerificationBadge tier={post.author.verification_tier} size={15} />
                 </Link>
                 <p className="mt-0.5 text-[12px] text-tertiary">
-                  @{post.author.handle}
-                  <span className="mx-1.5 opacity-50">·</span>
+                  {secondaryHandle(post.author.display_name, post.author.handle) && (
+                    <>
+                      {secondaryHandle(post.author.display_name, post.author.handle)}
+                      <span className="mx-1.5 opacity-50">·</span>
+                    </>
+                  )}
                   {timeAgo(post.created_at)}
                   {editedMark}
                 </p>

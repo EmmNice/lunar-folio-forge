@@ -112,6 +112,12 @@ function NotificationsPage() {
         "id, type, read, created_at, conversation_id, metadata, actor:profiles!notifications_actor_id_fkey(id, handle, display_name, avatar_url), post:posts!notifications_post_id_fkey(id, content)",
       )
       .eq("user_id", user.id)
+      /*
+        Direct messages are excluded. They have their own destination — the Inbox
+        tab, which badges them — and listing them here as well put chat in the same
+        stream as likes and verification decisions.
+      */
+      .neq("type", "message")
       .order("created_at", { ascending: false })
       .limit(NOTIFICATION_PAGE_SIZE);
 
@@ -159,13 +165,13 @@ function NotificationsPage() {
       return;
     }
     setNotifications((prev) => prev?.map((n) => ({ ...n, read: true })) ?? null);
-    setUnreadCount(0);
+    setUnreadCount({ alerts: 0 });
   }
 
   /** Reading one notification marks just that one. */
   async function markOneRead(id: string) {
     setNotifications((prev) => prev?.map((n) => (n.id === id ? { ...n, read: true } : n)) ?? null);
-    setUnreadCount(Math.max(0, unreadCount - 1));
+    setUnreadCount({ alerts: Math.max(0, unreadCount - 1) });
     await supabase.from("notifications").update({ read: true }).eq("id", id);
   }
 
@@ -179,7 +185,7 @@ function NotificationsPage() {
           eyebrow="Activity"
           icon={Bell}
           title="Notifications"
-          description="Likes, replies, re-ships, messages, pitches and verification decisions."
+          description="Likes, replies, re-ships, mentions, pitches and verification decisions. Messages live in your inbox."
           action={
             unreadCount > 0 ? (
               <button
