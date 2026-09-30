@@ -31,6 +31,8 @@ import {
 } from "@/lib/username";
 import { PasswordRequirements } from "@/components/PasswordRequirements";
 import { PasswordField } from "@/components/PasswordField";
+import { signInWithIdentifier } from "@/lib/auth.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 // Terms live outside the app. Set VITE_TERMS_URL to link them from the consent
 // line; when it's unset the sentence renders as plain text rather than pointing
@@ -157,8 +159,12 @@ type AuthView =
 
 function Landing() {
   const navigate = useNavigate();
+  const doSignIn = useServerFn(signInWithIdentifier);
   const [view, setView] = useState<AuthView>("social");
   const [email, setEmail] = useState("");
+  // Sign-in accepts either, so it gets its own field rather than overloading `email`,
+  // which signup and the forgot-password form still use as an email specifically.
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
@@ -244,31 +250,54 @@ function Landing() {
   /* Email sign-in */
   async function handleEmailSignIn(e: FormEvent) {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("Enter your email and password.");
+    if (!identifier || !password) {
+      toast.error("Enter your username or email, and your password.");
       return;
     }
     setSubmitting("email-signin");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setSubmitting(null);
-    if (!error) {
+    /*
+      Goes through a server function rather than supabase.auth directly, because a
+      username has to be resolved to an email and doing that in the browser would
+      turn this form into a username-to-email lookup anyone could use. The email
+      never comes back; a session or a refusal does.
+    */
+    const result = await doSignIn({ data: { identifier, password } });
+    if (result.ok) {
+      // The server authenticated; the browser installs the session it was handed.
+      const { error: setErr } = await supabase.auth.setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      });
+      setSubmitting(null);
+      if (setErr) {
+        toast.error("Signed in, but the session could not be stored. Try again.");
+        return;
+      }
       navigate({ to: "/feed", replace: true });
       return;
     }
-    if (
-      error.message.toLowerCase().includes("not confirmed") ||
-      error.message.toLowerCase().includes("email not confirmed")
-    ) {
-      setConfirmEmail(email);
+    setSubmitting(null);
+    if (result.reason === "unconfirmed") {
+      setConfirmEmail(result.email ?? "");
       setView("check-email");
-    } else if (
-      error.message.toLowerCase().includes("invalid login") ||
-      error.message.toLowerCase().includes("invalid credentials")
-    ) {
-      toast.error("Incorrect email or password. Try again or create an account.");
-    } else {
-      toast.error(error.message);
+      return;
     }
+    if (result.reason === "unavailable") {
+      // Only reachable when the deployment is missing its Supabase keys — not
+      // anything about the account, so it can say so.
+      toast.error("Sign-in is unavailable right now. Try again shortly.");
+      return;
+    }
+    /*
+      One message for every credential failure: wrong password, unknown username,
+      unknown email, or an account that only signs in with Google. Naming which
+      would tell an attacker whether a username exists. The nudge about social
+      sign-in is shown to everyone, so it helps somebody who forgot how they signed
+      up without confirming anything about any particular account.
+    */
+    toast.error(
+      "Incorrect username, email or password. If you signed up with Google or GitHub, use that button instead.",
+    );
   }
 
   /**
@@ -416,11 +445,16 @@ function Landing() {
           </p>
           <form onSubmit={handleForgotPassword} className="space-y-3">
             <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
+              type="text"
+              // "username" rather than "email": password managers offer the saved
+              // value for either, and type=email would reject a bare handle in the
+              // browser before it ever reached the form.
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="Username or email"
               className={inputCls}
               required
             />
@@ -518,7 +552,7 @@ function Landing() {
     if (view === "email-signin") {
       return (
         <div>
-          <h2 className="mb-4 text-center text-base font-semibold">Sign in with email</h2>
+          <h2 className="mb-4 text-center text-base font-semibold">Sign in</h2>
           <form onSubmit={handleEmailSignIn} className="space-y-3">
             <input
               type="email"
