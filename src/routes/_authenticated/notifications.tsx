@@ -75,7 +75,10 @@ const TYPE_ICON_COLOR: Record<string, string> = {
   like: "text-rose-400",
   comment: "text-sky-400",
   repost: "text-emerald-400",
-  verification_approved: "text-amber-400",
+  /*
+    verification_approved is deliberately absent: its colour depends on which badge
+    was granted, which this table cannot see. Resolved per notification below.
+  */
   verification_rejected: "text-red-400",
   message: "text-violet-400",
   pitch: "text-amber-400",
@@ -221,7 +224,18 @@ function NotificationsPage() {
                 const isVerification =
                   n.type === "verification_approved" || n.type === "verification_rejected";
                 const Icon = TYPE_ICON[n.type] ?? Bell;
-                const iconColor = TYPE_ICON_COLOR[n.type] ?? "text-muted-foreground";
+                /*
+                  An approval is coloured by the badge it grants. Silver approvals were
+                  rendering in gold — the icon, and the "Open The Ledger" link — so the
+                  one notification whose whole job is to tell you which tier you got
+                  was showing the wrong one. The tier is already on the row, in
+                  metadata.tier, so nothing had to be fetched to fix this.
+                */
+                const tierInk = n.metadata?.tier === "gold" ? "text-amber-400" : "text-slate-300";
+                const iconColor =
+                  n.type === "verification_approved"
+                    ? tierInk
+                    : (TYPE_ICON_COLOR[n.type] ?? "text-muted-foreground");
 
                 return (
                   <li
@@ -307,7 +321,7 @@ function NotificationsPage() {
                       {isVerification && n.type === "verification_approved" && (
                         <a
                           href="/feed"
-                          className="mt-1 inline-block text-xs font-medium text-amber-400 hover:underline"
+                          className={`mt-1 inline-block text-xs font-medium hover:underline ${tierInk}`}
                         >
                           Open The Ledger →
                         </a>
