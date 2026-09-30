@@ -5,6 +5,7 @@ import { ArrowLeft, Lock, Github, Loader2, CheckCircle2, Circle } from "lucide-r
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
+import { PasswordField } from "@/components/PasswordField";
 
 export const Route = createFileRoute("/_authenticated/account-security")({
   head: () => ({ meta: [{ title: "Security & Auth · The Ledger" }] }),
@@ -167,30 +168,27 @@ function SecuritySettingsPage() {
             {showPwForm && (
               <div className="mt-4 space-y-2">
                 {hasEmail && (
-                  <input
-                    type="password"
+                  <PasswordField
                     autoComplete="current-password"
                     className="lux-field"
                     placeholder="Current password"
                     value={currentPw}
-                    onChange={(e) => setCurrentPw(e.target.value)}
+                    onChange={setCurrentPw}
                   />
                 )}
-                <input
-                  type="password"
+                <PasswordField
                   autoComplete="new-password"
                   className="lux-field"
                   placeholder={`New password (min ${MIN_PASSWORD_LENGTH} chars)`}
                   value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
+                  onChange={setNewPw}
                 />
-                <input
-                  type="password"
+                <PasswordField
                   autoComplete="new-password"
                   className="lux-field"
                   placeholder="Confirm new password"
                   value={confirmPw}
-                  onChange={(e) => setConfirmPw(e.target.value)}
+                  onChange={setConfirmPw}
                 />
                 {!hasEmail && (
                   <p className="px-0.5 text-xs text-muted-foreground">

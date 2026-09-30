@@ -6,6 +6,7 @@ import { Loader2, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LedgerMark } from "@/components/AppHeader";
 import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
+import { PasswordField } from "@/components/PasswordField";
 
 /**
  * Where a password reset link lands.
@@ -182,21 +183,19 @@ function ResetPasswordPage() {
               Choose something you haven't used here before.
             </p>
             <form onSubmit={submit} className="space-y-3">
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="new-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 placeholder={`New password (${MIN_PASSWORD_LENGTH}+ characters)`}
                 className={inputCls}
                 minLength={MIN_PASSWORD_LENGTH}
                 required
               />
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="new-password"
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                onChange={setConfirm}
                 placeholder="Confirm new password"
                 className={inputCls}
                 minLength={MIN_PASSWORD_LENGTH}

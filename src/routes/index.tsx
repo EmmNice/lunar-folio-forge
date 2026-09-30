@@ -30,6 +30,7 @@ import {
   type UsernameState,
 } from "@/lib/username";
 import { PasswordRequirements } from "@/components/PasswordRequirements";
+import { PasswordField } from "@/components/PasswordField";
 
 // Terms live outside the app. Set VITE_TERMS_URL to link them from the consent
 // line; when it's unset the sentence renders as plain text rather than pointing
@@ -528,11 +529,10 @@ function Landing() {
               className={inputCls}
               required
             />
-            <input
-              type="password"
+            <PasswordField
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
               placeholder="Password"
               className={inputCls}
               required
@@ -636,12 +636,11 @@ function Landing() {
               >
                 Password
               </label>
-              <input
+              <PasswordField
                 id="signup-password"
-                type="password"
                 autoComplete="new-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                 className={inputCls}
                 minLength={MIN_PASSWORD_LENGTH}

@@ -24,6 +24,7 @@ import { VerificationBadge } from "@/components/VerificationBadge";
 import { LuxToggle } from "@/components/LuxToggle";
 import { NotificationPreferences } from "@/components/NotificationPreferences";
 import { PITCH_INBOX_PAGE_SIZE, PITCH_LIMIT_OPTIONS } from "@/lib/limits";
+import { PasswordField } from "@/components/PasswordField";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Account Settings · The Ledger" }] }),
@@ -163,19 +164,19 @@ function SecuritySection() {
 
         {showPwForm && (
           <div className="mt-4 space-y-2">
-            <input
-              type="password"
+            <PasswordField
+              autoComplete="new-password"
               className="lux-field"
               placeholder="New password (min 8 chars)"
               value={newPw}
-              onChange={(e) => setNewPw(e.target.value)}
+              onChange={setNewPw}
             />
-            <input
-              type="password"
+            <PasswordField
+              autoComplete="new-password"
               className="lux-field"
               placeholder="Confirm new password"
               value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
+              onChange={setConfirmPw}
             />
             <button
               type="button"
