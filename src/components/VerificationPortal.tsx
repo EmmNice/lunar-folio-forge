@@ -400,6 +400,12 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
     btnBorder: "rgba(148,163,184,0.35)",
     btnBg: "rgba(148,163,184,0.04)",
     btnHoverBg: "rgba(148,163,184,0.12)",
+    /* "Under review" and similar panels. These were hardcoded amber, so a Silver
+       application announced itself in gold — the same mistake as the approval
+       notification, in the screen where the tier is being chosen. */
+    noticeBg: "rgba(148,163,184,0.07)",
+    noticeBorder: "rgba(148,163,184,0.22)",
+    noticeInk: "#cbd5e1",
   };
   const goldStyle = {
     card: "glass-gold",
@@ -412,6 +418,9 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
     btnBorder: "rgba(251,191,36,0.40)",
     btnBg: "rgba(251,191,36,0.04)",
     btnHoverBg: "rgba(251,191,36,0.12)",
+    noticeBg: "rgba(251,191,36,0.06)",
+    noticeBorder: "rgba(251,191,36,0.20)",
+    noticeInk: "#fbbf24",
   };
   const ts = activeTab === "silver" ? silverStyle : goldStyle;
 
@@ -555,9 +564,9 @@ export function VerificationSection({ profile }: { profile: VerificationProfile 
                   <div
                     className="rounded-xl px-4 py-3 text-sm"
                     style={{
-                      background: "rgba(251,191,36,0.06)",
-                      border: "1px solid rgba(251,191,36,0.20)",
-                      color: "#fbbf24",
+                      background: ts.noticeBg,
+                      border: `1px solid ${ts.noticeBorder}`,
+                      color: ts.noticeInk,
                     }}
                   >
                     <p className="font-medium">Application under review</p>
