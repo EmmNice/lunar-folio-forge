@@ -214,6 +214,56 @@ function FeedPage() {
     };
   }, []);
 
+  /*
+    Header hide/reveal, the way X does it: scrolling down tucks the bar away to
+    give the feed the full screen, and *any* upward scroll brings it straight
+    back — you should never have to travel to the top of the timeline to change
+    tabs.
+
+    `headerHidden` already existed and was already wired into the transform
+    below, but nothing ever set it, so the behaviour the comment there describes
+    had never actually run.
+  */
+  useEffect(() => {
+    /* Below this point the bar is always shown: at the top of the feed there is
+       nothing to gain by hiding it, and hiding it there feels like a glitch. */
+    const ALWAYS_SHOW_ABOVE = 72;
+    /* Ignore sub-pixel jitter and the rubber-band settle, which otherwise
+       flicker the bar during a single deliberate swipe. */
+    const DEADZONE = 6;
+
+    let lastY = window.scrollY;
+    let frame = 0;
+
+    function onScroll() {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        // Clamp: overscroll bounce reports negative scrollY on iOS.
+        const y = Math.max(0, window.scrollY);
+        const delta = y - lastY;
+
+        if (y <= ALWAYS_SHOW_ABOVE) {
+          setHeaderHidden(false);
+          lastY = y;
+          return;
+        }
+        // Leave lastY alone below the deadzone so slow scrolls still accumulate
+        // instead of being discarded frame by frame.
+        if (Math.abs(delta) < DEADZONE) return;
+
+        setHeaderHidden(delta > 0);
+        lastY = y;
+      });
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
   // Shared row normaliser
   function normalisePosts(data: RawFeedRow[]): FeedPost[] {
     return data.map((p) => ({

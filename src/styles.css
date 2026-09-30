@@ -113,7 +113,19 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     max-width: 100%;
-    overflow-x: hidden;
+    /*
+       clip, not hidden. `overflow-x: hidden` forces the other axis to compute as
+       `auto`, which turns this element into a scroll container — and a scroll
+       container breaks `position: sticky` for everything inside it. That is why
+       the feed's Signal/Beat/Following bar scrolled off the top and only came
+       back at the very top of the page: it was not hiding by design, it had
+       simply stopped sticking. Measured on the live site at scrollY 238 the
+       header sat at top: -238px instead of 0.
+
+       `clip` suppresses horizontal overflow the same way but creates no scroll
+       container, so overflow-y stays `visible` and sticky works again.
+    */
+    overflow-x: clip;
   }
 
   body {
