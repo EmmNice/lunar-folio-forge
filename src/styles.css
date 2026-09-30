@@ -433,9 +433,15 @@
   .segmented-item:hover {
     color: var(--foreground);
   }
+  /*
+     The selected segment's colours come from two custom properties so a tier can
+     recolour them by setting the vars on the .segmented container, rather than
+     every caller re-implementing the control. Unset, they fall back to exactly
+     the neutral values this rule always had.
+  */
   .segmented-item[data-active="true"] {
-    background: var(--surface-3);
-    color: var(--foreground);
+    background: var(--segmented-active-surface, var(--surface-3));
+    color: var(--segmented-active-ink, var(--foreground));
     box-shadow: var(--shadow-sm);
   }
 

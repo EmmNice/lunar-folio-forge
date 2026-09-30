@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { subscribeToUnreadCount, type UnreadCounts } from "@/lib/unread-count";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
-import { tierVisual, type Tier } from "@/lib/tier-style";
+import { tierAction, tierVisual, type Tier } from "@/lib/tier-style";
 
 /** The Ledger geometric mark — three ascending signal bars */
 export function LedgerMark({ className }: { className?: string }) {
@@ -264,10 +264,16 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
  * transformed parent otherwise, and the bar ends up scrolling with the page.
  */
 export function MobileNav() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { location } = useRouterState();
   const pathname = location.pathname;
   const unread = useUnreadCounts();
+  /*
+    Gold members get a gold active tab instead of a white one. Only the *active*
+    tab: recolouring the inactive ones would remove the contrast that shows which
+    tab you are on, which is the only job this colour has.
+  */
+  const action = tierAction(profile?.verification_tier);
 
   if (!user) return null;
 
@@ -305,7 +311,7 @@ export function MobileNav() {
             {isActive && (
               <span
                 className="absolute inset-x-[26%] top-0 h-[2px] rounded-b-full"
-                style={{ background: "var(--foreground)" }}
+                style={{ background: action.accent }}
               />
             )}
 
@@ -313,7 +319,7 @@ export function MobileNav() {
               <t.icon
                 className="h-[20px] w-[20px] transition-colors"
                 style={{
-                  color: isActive ? "var(--foreground)" : "var(--text-tertiary)",
+                  color: isActive ? action.accent : "var(--text-tertiary)",
                   strokeWidth: isActive ? 2.1 : 1.7,
                 }}
               />
@@ -336,7 +342,7 @@ export function MobileNav() {
 
             <span
               className="text-[10px] font-medium tracking-[0.02em] transition-colors"
-              style={{ color: isActive ? "var(--foreground)" : "var(--text-tertiary)" }}
+              style={{ color: isActive ? action.accent : "var(--text-tertiary)" }}
             >
               {t.label}
             </span>
