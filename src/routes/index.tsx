@@ -445,16 +445,11 @@ function Landing() {
           </p>
           <form onSubmit={handleForgotPassword} className="space-y-3">
             <input
-              type="text"
-              // "username" rather than "email": password managers offer the saved
-              // value for either, and type=email would reject a bare handle in the
-              // browser before it ever reached the form.
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="Username or email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
               className={inputCls}
               required
             />
@@ -555,11 +550,16 @@ function Landing() {
           <h2 className="mb-4 text-center text-base font-semibold">Sign in</h2>
           <form onSubmit={handleEmailSignIn} className="space-y-3">
             <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
+              type="text"
+              // "username" rather than "email": password managers offer the saved
+              // value for either, and type=email would reject a bare handle in the
+              // browser before it ever reached the form.
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="Username or email"
               className={inputCls}
               required
             />
