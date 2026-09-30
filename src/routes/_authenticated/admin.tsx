@@ -173,7 +173,7 @@ function AdminPage() {
   // Admin status comes from the user_roles table only. There used to be a
   // VITE_ADMIN_IDS fallback, but VITE_* values are inlined into the public
   // bundle at build time, so it published the admin UUID to every visitor.
-  const { user, isAdmin, loading } = useAuth();
+  const { user, profile, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const doReview = useServerFn(reviewApplication);
   const doListApplications = useServerFn(listPendingApplications);
@@ -200,10 +200,17 @@ function AdminPage() {
   const [reportBusy, setReportBusy] = useState<Record<string, boolean>>({});
   const [audit, setAudit] = useState<AuditRow[] | null>(null);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!isAdmin) navigate({ to: "/feed", replace: true });
-  }, [loading, isAdmin, navigate]);
+  /*
+    This used to redirect to /feed the moment isAdmin came back false, while the
+    body rendered "Loading…". A member who opened an admin link was dropped on
+    the feed with no explanation, which is indistinguishable from a broken link —
+    and that is exactly how it got reported. It also hid the useful fact: you are
+    signed in, just on the wrong account.
+
+    Nothing is lost by staying put. Every privileged operation behind this screen
+    goes through requireAdmin() on the server, so the redirect was never what kept
+    a non-admin out; it only decided what they were told. Now they are told.
+  */
 
   // Served by a server function rather than a browser query: the directory needs
   // account_status, which is no longer readable by `authenticated`, and this puts
@@ -349,11 +356,46 @@ function AdminPage() {
     }
   }
 
-  if (loading || !isAdmin) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading…
       </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <>
+        <AppHeader />
+        <main className="mx-auto flex max-w-md flex-col items-center px-4 py-20 text-center">
+          <div
+            className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl"
+            style={{ background: "rgba(255,255,255,0.06)" }}
+          >
+            <ShieldOff className="h-5 w-5 text-muted-foreground" strokeWidth={1.8} />
+          </div>
+          <h1 className="text-[19px] font-semibold tracking-tight">Admin access required</h1>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-secondary">
+            This account doesn&apos;t have moderator permissions.
+            {profile ? (
+              <>
+                {" "}
+                You&apos;re signed in as{" "}
+                <span className="font-medium text-foreground">@{profile.handle}</span>.
+              </>
+            ) : null}{" "}
+            If you manage The Ledger, sign out and sign back in with your admin account.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/feed" })}
+            className="btn btn-primary btn-sm mt-6"
+          >
+            Back to feed
+          </button>
+        </main>
+      </>
     );
   }
 
