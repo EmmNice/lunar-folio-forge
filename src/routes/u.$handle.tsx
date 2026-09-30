@@ -64,7 +64,7 @@ import {
 import { describeWriteError } from "@/lib/db-errors";
 import { timeAgo } from "@/lib/time";
 import { AvatarPicker } from "@/components/AvatarPicker";
-import { tierVisual } from "@/lib/tier-style";
+import { tierAction, tierVisual } from "@/lib/tier-style";
 import { SkillsInput } from "@/components/SkillsInput";
 import { FollowList } from "@/components/FollowList";
 import { SavedPosts } from "@/components/SavedPosts";
@@ -203,6 +203,8 @@ function ProfilePage() {
   const { requestExport, exportSurface } = useCardExport();
   const { handle } = Route.useParams();
   const { user, profile: me, refreshProfile, loading: authLoading } = useAuth();
+  // `me`, not the profile on screen: this button composes the viewer's own card.
+  const myAction = tierAction(me?.verification_tier);
   const navigate = useNavigate();
   const start = useServerFn(startConversation);
 
@@ -940,8 +942,11 @@ function ProfilePage() {
               bottom: "calc(env(safe-area-inset-bottom) + 72px)",
               width: "52px",
               height: "52px",
-              background: "#F5F5F6",
-              color: "#0B0B0C",
+              /* Was a hardcoded #F5F5F6/#0B0B0C pair, so it silently skipped the
+                 shared action colour. Keyed to the viewer's own tier, not the
+                 profile being viewed — it composes *your* card. */
+              background: myAction.surface,
+              color: myAction.ink,
               boxShadow: "0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30)",
             }}
           >

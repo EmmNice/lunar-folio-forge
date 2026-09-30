@@ -80,3 +80,68 @@ export function tierVisual(tier: Tier): TierVisual {
  */
 export const ACTION_SURFACE = "#F5F5F6";
 export const ACTION_INK = "#0B0B0C";
+
+/**
+ * How the primary action chrome — compose button, active tab — is coloured.
+ *
+ * The note above still holds for the case it was written about: the compose button
+ * used to be amber for *everybody*, which both devalued the badge and told an
+ * unverified member something untrue about themselves. Neutral was the right fix.
+ *
+ * This is the narrower thing the owner asked for: a Gold member, and only a Gold
+ * member, gets gold chrome. That does not reintroduce the original bug. The colour
+ * is now earned rather than default, so it makes a true claim about whoever is
+ * looking at it, and it is the tier doing the talking — the same principle the
+ * identity surfaces above already follow.
+ *
+ * Silver stays neutral on purpose, and not for lack of a swatch. Silver is
+ * #cbd5e1; against a #F5F5F6 button on near-black it is a barely perceptible
+ * change, so tinting it would buy nothing visible while making the one real
+ * distinction — gold or not — harder to read. Unverified stays neutral because it
+ * has earned nothing.
+ */
+export type TierAction = {
+  /** Filled-button background. */
+  surface: string;
+  /** Text/icon on top of `surface`. */
+  ink: string;
+  /** Accent for chrome drawn *on* the page background: active tab bar, underline. */
+  accent: string;
+  /**
+   * Selected-segment background in the Signal/Beat/Following control.
+   *
+   * A tint rather than a solid fill, deliberately. Solid gold works on the compose
+   * button because that button is one small circle and the loudest thing on the
+   * screen by design. Three tabs in a sticky header are not that: a solid gold
+   * segment there would out-shout the compose button and flatten the hierarchy
+   * between "the thing you press to write" and "which list you are reading". The
+   * tint keeps the raised-dark-pill shape the control already has and lets the
+   * gold ink carry the signal.
+   */
+  chipSurface: string;
+  /** Selected-segment label and icon. */
+  chipInk: string;
+};
+
+const NEUTRAL_ACTION: TierAction = {
+  surface: ACTION_SURFACE,
+  ink: ACTION_INK,
+  accent: "var(--foreground)",
+  chipSurface: "var(--surface-3)",
+  chipInk: "var(--foreground)",
+};
+
+const GOLD_ACTION: TierAction = {
+  surface: "var(--gold)",
+  // #fbbf24 is a light amber; it needs the dark ink, not white.
+  ink: ACTION_INK,
+  accent: "var(--gold)",
+  // Stronger than tierVisual().wash (0.07), which is tuned for large panels and
+  // would leave a selected tab barely distinguishable from an unselected one.
+  chipSurface: "rgba(251,191,36,0.18)",
+  chipInk: "var(--gold)",
+};
+
+export function tierAction(tier: Tier): TierAction {
+  return tier === "gold" ? GOLD_ACTION : NEUTRAL_ACTION;
+}

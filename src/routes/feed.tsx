@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Plus, Loader2, ShieldAlert, Rss, Sparkles, Users } from "lucide-react";
 import { EmptyState, ErrorState, PostSkeleton } from "@/components/states";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +17,7 @@ import type { VerificationTier } from "@/hooks/use-auth";
 import { useCardExport } from "@/hooks/use-card-export";
 import { FEED_PAGE_SIZE } from "@/lib/limits";
 import { fetchFollowingIds, fetchMutedIds } from "@/lib/social";
-import { ACTION_INK, ACTION_SURFACE, tierVisual } from "@/lib/tier-style";
+import { tierAction, tierVisual } from "@/lib/tier-style";
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
@@ -138,6 +138,7 @@ type TimelineItem = {
 // Main feed page
 function FeedPage() {
   const { user, profile, loading } = useAuth();
+  const action = tierAction(profile?.verification_tier);
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<FeedTab>("signal");
@@ -769,7 +770,17 @@ function FeedPage() {
         {/* Signal / Beat tab switcher */}
         <div className="mx-auto max-w-xl px-4 pb-3 pt-1 sm:px-6">
           <div>
-            <div className="segmented sm:max-w-[24rem]">
+            <div
+              className="segmented sm:max-w-[24rem]"
+              /* Gold members get a gold selected segment; the vars are unset for
+                 everyone else, so the CSS falls back to the neutral default. */
+              style={
+                {
+                  "--segmented-active-surface": action.chipSurface,
+                  "--segmented-active-ink": action.chipInk,
+                } as CSSProperties
+              }
+            >
               {visibleTabs.map((t) => {
                 const Icon = TAB_META[t].icon;
                 return (
@@ -992,10 +1003,10 @@ function FeedPage() {
             bottom: "calc(env(safe-area-inset-bottom) + var(--mobile-nav-height) + 1rem)",
             width: "58px",
             height: "58px",
-            /* Neutral, not amber. A core action should not borrow the badge's
-               colour to look important, nor change colour per viewer. */
-            background: ACTION_SURFACE,
-            color: ACTION_INK,
+            /* Gold members get gold here; everyone else stays neutral. See
+               tierAction() for why this is not the old "amber for all" bug. */
+            background: action.surface,
+            color: action.ink,
             boxShadow: "0 8px 28px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.40)",
             opacity: fabVisible ? 1 : 0,
             transform: fabVisible ? "scale(1)" : "scale(0.75)",

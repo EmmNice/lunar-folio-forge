@@ -15,7 +15,7 @@ import {
   Trash2,
   Gavel,
 } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { resetPerUserState } from "@/lib/session-reset";
@@ -144,6 +144,15 @@ export function ProfileDrawer({
         className="flex w-[280px] flex-col border-r p-0 sm:max-w-[280px]"
         style={{ background: "#0B0B0C", borderColor: "rgba(255,255,255,0.07)" }}
       >
+        {/*
+          A dialog needs an accessible name, and this one had none — Radix was
+          logging the violation on every open. Visually hidden rather than shown:
+          the drawer already leads with your avatar and handle, so a heading would
+          be redundant on screen but is the only thing a screen reader announces.
+        */}
+        <SheetTitle className="sr-only">Your account</SheetTitle>
+        <SheetDescription className="sr-only">Profile, settings and sign out.</SheetDescription>
+
         {/* Profile header */}
         <div
           className="relative flex flex-col gap-3 px-5 pb-5 pt-8"
