@@ -14,6 +14,7 @@ import {
   Pencil,
   CornerDownRight,
   Bookmark,
+  Share2,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,7 @@ import { describeWriteError } from "@/lib/db-errors";
 import { RichText } from "@/components/RichText";
 import type { VerificationTier } from "@/hooks/use-auth";
 import { secondaryHandle } from "@/lib/identity";
+import { sharePost } from "@/lib/share";
 
 export type FeedAuthor = {
   id: string;
@@ -131,6 +133,30 @@ export function PostCard({
 
   const [bookmarked, setBookmarked] = useState(false);
   const [busyBookmark, setBusyBookmark] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  /*
+    Share the permalink off-platform. On a phone this opens the OS share sheet;
+    on desktop, where navigator.share mostly does not exist, it copies the link.
+    A cancelled share sheet is silent — the person chose not to send it, so
+    neither a success nor an error toast would be true.
+  */
+  async function onShare() {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const outcome = await sharePost({
+        postId: post.id,
+        authorName: post.author.display_name,
+        authorHandle: post.author.handle,
+        content: post.content,
+      });
+      if (outcome === "copied") toast.success("Link copied — paste it anywhere.");
+      else if (outcome === "failed") toast.error("Couldn't share this post. Try again.");
+    } finally {
+      setSharing(false);
+    }
+  }
 
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(post.content);
@@ -744,6 +770,21 @@ export function PostCard({
         title={bookmarked ? "Remove from saved" : "Save for later"}
       >
         <Bookmark className="h-4 w-4" fill={bookmarked ? "currentColor" : "none"} />
+      </button>
+
+      {/*
+        Share sits next to Download because they answer the same question — "get
+        this out of the app" — one as a link, one as an image.
+      */}
+      <button
+        type="button"
+        onClick={onShare}
+        disabled={sharing}
+        className={actionBtn + " hover:text-foreground"}
+        aria-label="Share this post"
+        title="Share this post"
+      >
+        <Share2 className="h-4 w-4" />
       </button>
 
       <button
