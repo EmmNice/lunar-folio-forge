@@ -13,6 +13,7 @@ import {
   AtSign,
   BadgeCheck,
   Trash2,
+  Gavel,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
@@ -86,6 +87,21 @@ const GOLD_NAV = [
   },
 ] as const;
 
+/*
+  /admin had no entry point anywhere in the product — not in this drawer, not in
+  the header, not in the tab bar. The route worked, but the only way to reach it
+  was to know the URL and type it, so an admin who signed in correctly still saw
+  no sign the panel existed. Same class of bug as the pitch inbox above.
+*/
+const ADMIN_NAV = [
+  {
+    label: "Admin Panel",
+    desc: "Applications, reports & audit",
+    icon: Gavel,
+    to: "/admin",
+  },
+] as const;
+
 export function ProfileDrawer({
   open,
   onOpenChange,
@@ -93,7 +109,7 @@ export function ProfileDrawer({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   // One derivation for every tier-coloured surface in the drawer.
   const visual = tierVisual(profile?.verification_tier as Tier);
   const isGold = profile?.verification_tier === "gold";
@@ -208,6 +224,44 @@ export function ProfileDrawer({
 
         {/* Settings nav */}
         <nav className="flex-1 overflow-y-auto py-2">
+          {/*
+            Admins first, and in a section of its own: moderation is not one of
+            your account settings, and burying it under seven personal
+            preferences is how it stayed invisible.
+          */}
+          {isAdmin ? (
+            <>
+              <p className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                Administration
+              </p>
+              {ADMIN_NAV.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    close();
+                    navigate({ to: item.to });
+                  }}
+                  className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
+                >
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(56,189,248,0.12)" }}
+                  >
+                    <item.icon className="h-[15px] w-[15px] text-sky-400" strokeWidth={1.8} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
+                      {item.label}
+                    </p>
+                    <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+                </button>
+              ))}
+            </>
+          ) : null}
+
           <p className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
             Settings
           </p>
