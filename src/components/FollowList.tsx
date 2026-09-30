@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { EmptyState } from "@/components/states";
 import type { VerificationTier } from "@/hooks/use-auth";
+import { secondaryHandle } from "@/lib/identity";
 
 /**
  * Who follows a profile, or who it follows.
@@ -136,7 +137,11 @@ export function FollowList({
                 {p.display_name}
                 <VerificationBadge tier={p.verification_tier} size={13} />
               </span>
-              <span className="mt-0.5 block text-[12px] text-tertiary">@{p.handle}</span>
+              {secondaryHandle(p.display_name, p.handle) && (
+                <span className="mt-0.5 block text-[12px] text-tertiary">
+                  {secondaryHandle(p.display_name, p.handle)}
+                </span>
+              )}
               {p.bio ? (
                 <span className="mt-1 line-clamp-1 block text-[12px] text-secondary">{p.bio}</span>
               ) : null}

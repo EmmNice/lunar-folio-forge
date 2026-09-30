@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { MessageSquare, Bell, Rss, PenSquare, Zap, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { subscribeToUnreadCount } from "@/lib/unread-count";
+import { subscribeToUnreadCount, type UnreadCounts } from "@/lib/unread-count";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
 import { tierVisual, type Tier } from "@/lib/tier-style";
@@ -20,7 +20,7 @@ export function LedgerMark({ className }: { className?: string }) {
 
 const PRIMARY_NAV = [
   { to: "/feed" as const, label: "Explore", icon: Rss },
-  { to: "/pulse" as const, label: "PulseAssist", icon: Zap },
+  { to: "/pulse" as const, label: "PulseAssist AI", icon: Zap },
   { to: "/studio" as const, label: "Studio", icon: PenSquare },
 ] as const;
 
@@ -41,19 +41,19 @@ const BOTTOM_TABS = [
  * lib/unread-count.ts because the header and the tab bar are both mounted at
  * once, and two channels with the same name is an error rather than a duplicate.
  */
-function useUnreadCount(): number {
+function useUnreadCounts(): UnreadCounts {
   const { user } = useAuth();
-  const [count, setCount] = useState(0);
+  const [counts, setCounts] = useState<UnreadCounts>({ alerts: 0, messages: 0 });
 
   useEffect(() => {
     if (!user) {
-      setCount(0);
+      setCounts({ alerts: 0, messages: 0 });
       return;
     }
-    return subscribeToUnreadCount(user.id, setCount);
+    return subscribeToUnreadCount(user.id, setCounts);
   }, [user]);
 
-  return count;
+  return counts;
 }
 
 function Avatar({
@@ -108,7 +108,7 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
   const { user, profile, loading } = useAuth();
   const [hidden, setHidden] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const unread = useUnreadCount();
+  const unread = useUnreadCounts();
 
   useEffect(() => {
     if (controlled) return;
@@ -205,16 +205,18 @@ export function AppHeader({ controlled = false }: { controlled?: boolean } = {})
                 </Link>
                 <Link
                   to="/notifications"
-                  aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+                  aria-label={
+                    unread.alerts > 0 ? `Notifications, ${unread.alerts} unread` : "Notifications"
+                  }
                   className="btn-icon relative hidden sm:inline-flex"
                   activeProps={{
                     style: { background: "var(--surface-2)", color: "var(--foreground)" },
                   }}
                 >
                   <Bell className="h-[18px] w-[18px]" />
-                  {unread > 0 ? (
+                  {unread.alerts > 0 ? (
                     <span className="badge-count absolute -right-0.5 -top-0.5">
-                      {unread > 99 ? "99+" : unread}
+                      {unread.alerts > 99 ? "99+" : unread.alerts}
                     </span>
                   ) : null}
                 </Link>
@@ -265,7 +267,7 @@ export function MobileNav() {
   const { user } = useAuth();
   const { location } = useRouterState();
   const pathname = location.pathname;
-  const unread = useUnreadCount();
+  const unread = useUnreadCounts();
 
   if (!user) return null;
 
@@ -283,7 +285,13 @@ export function MobileNav() {
           pathname === t.to ||
           (t.to !== "/feed" && pathname.startsWith(t.to + "/")) ||
           (t.to === "/feed" && pathname.startsWith("/feed"));
-        const badge = t.to === "/notifications" ? unread : 0;
+        /*
+          Messages badge the Inbox tab, everything else badges Alerts. A DM used to
+          increment the bell and leave Inbox blank, which is the opposite of where a
+          person looks for a message.
+        */
+        const badge =
+          t.to === "/notifications" ? unread.alerts : t.to === "/messages" ? unread.messages : 0;
 
         return (
           <Link

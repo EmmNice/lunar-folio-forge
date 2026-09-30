@@ -22,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { LedgerMark } from "@/components/AppHeader";
 import { ACTION_INK, ACTION_SURFACE, tierVisual, type Tier } from "@/lib/tier-style";
+import { secondaryHandle } from "@/lib/identity";
 
 const SETTINGS_NAV = [
   {
@@ -168,7 +169,11 @@ export function ProfileDrawer({
               {profile?.display_name ?? "—"}
               {profile && <VerificationBadge tier={profile.verification_tier} size={13} />}
             </p>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">@{profile?.handle ?? "…"}</p>
+            {(!profile || secondaryHandle(profile.display_name, profile.handle)) && (
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                {profile ? secondaryHandle(profile.display_name, profile.handle) : "…"}
+              </p>
+            )}
           </div>
 
           {/* View profile CTA */}

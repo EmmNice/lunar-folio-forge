@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
 import { EmptyState, ListSkeleton, PageHeader } from "@/components/states";
 import { MessageSquare } from "lucide-react";
+import { secondaryHandle } from "@/lib/identity";
 
 /*
  * Named messages.index.tsx, not messages.tsx, and that matters.
@@ -139,8 +140,12 @@ function MessagesIndex() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
                           {other.display_name}
-                          <VerificationBadge tier={other.verification_tier} size={13} />{" "}
-                          <span className="text-muted-foreground">@{other.handle}</span>
+                          <VerificationBadge tier={other.verification_tier} size={13} />
+                          {secondaryHandle(other.display_name, other.handle) && (
+                            <span className="ml-1.5 text-muted-foreground">
+                              {secondaryHandle(other.display_name, other.handle)}
+                            </span>
+                          )}
                         </p>
                         {unread && (
                           <p className="text-xs font-medium text-violet-400">New message</p>

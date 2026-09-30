@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { pulseAssistChat } from "@/lib/pulse-chat.functions";
 
 export const Route = createFileRoute("/_authenticated/pulse")({
-  head: () => ({ meta: [{ title: "PulseAssist · The Ledger" }] }),
+  head: () => ({ meta: [{ title: "PulseAssist AI · The Ledger" }] }),
   component: PulsePage,
 });
 
@@ -57,7 +57,7 @@ function PulsePage() {
     const body = (text ?? input).trim();
     if (!body || loading) return;
     if (exhausted) {
-      toast.error("No credits left today. Verify your account to unlock unlimited PulseAssist.");
+      toast.error("No credits left today. Verify your account to unlock unlimited PulseAssist AI.");
       return;
     }
 
@@ -89,11 +89,11 @@ function PulsePage() {
       const msg = e instanceof Error ? e.message : "";
       if (msg.includes("CREDITS_EXHAUSTED")) {
         setExhausted(true);
-        toast.error("Daily credits used up. Verify to unlock unlimited PulseAssist.");
+        toast.error("Daily credits used up. Verify to unlock unlimited PulseAssist AI.");
       } else if (msg.includes("AI_NOT_CONFIGURED")) {
-        toast.error("PulseAssist isn't available right now. Please try again later.");
+        toast.error("PulseAssist AI isn't available right now. Please try again later.");
       } else {
-        toast.error("PulseAssist couldn't respond. Try again.");
+        toast.error("PulseAssist AI couldn't respond. Try again.");
       }
       // Remove the user message on failure so they can retry
       setMessages(nextMessages.slice(0, -1));
@@ -185,7 +185,7 @@ function PulsePage() {
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500/15">
             <Zap className="h-3.5 w-3.5 text-violet-400" />
           </div>
-          <span className="text-sm font-semibold tracking-tight">PulseAssist</span>
+          <span className="text-sm font-semibold tracking-tight">PulseAssist AI</span>
           <span className="hidden text-xs text-muted-foreground sm:block">
             — your AI writing partner
           </span>
@@ -216,7 +216,7 @@ function PulsePage() {
               >
                 <Zap className="h-6 w-6 text-violet-400" />
               </div>
-              <h2 className="text-lg font-semibold tracking-tight">PulseAssist</h2>
+              <h2 className="text-lg font-semibold tracking-tight">PulseAssist AI</h2>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                 Your AI writing partner for The Ledger. Craft high-signal posts, sharpen pitches,
                 and build your builder narrative.
@@ -344,7 +344,7 @@ function PulsePage() {
               }}
             >
               <Info className="h-3.5 w-3.5 shrink-0" />
-              Daily limit reached. Verify your account to unlock unlimited PulseAssist.
+              Daily limit reached. Verify your account to unlock unlimited PulseAssist AI.
             </div>
           )}
           <div className="flex items-end gap-2 px-2 py-1.5">
@@ -355,7 +355,7 @@ function PulsePage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading || exhausted}
-              placeholder="Ask PulseAssist anything…"
+              placeholder="Ask PulseAssist AI anything…"
               className="flex-1 resize-none bg-transparent py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 disabled:opacity-40"
               style={{
                 minHeight: 36,
