@@ -479,23 +479,37 @@
       0 0 20px rgba(167, 139, 250, 0.07);
   }
 
+  /*
+     Prefixed first, standard last. That order is not cosmetic here.
+
+     Written the other way round, the minifier collapsed the pair and kept only
+     the last declaration, so the shipped rule was
+       .glass{-webkit-backdrop-filter:blur(20px)saturate(150%);background:#0c0c0fd1}
+     with no unprefixed property at all. Chromium does not honour
+     -webkit-backdrop-filter, so getComputedStyle reported backdrop-filter:none and
+     the blur silently did nothing on every glass surface — most visibly the mobile
+     bottom bar, where post text showed straight through the 0.82-alpha background.
+
+     With the standard property last it is the one that survives, and Safari still
+     gets its prefix.
+  */
   .glass {
-    backdrop-filter: blur(20px) saturate(150%);
     -webkit-backdrop-filter: blur(20px) saturate(150%);
+    backdrop-filter: blur(20px) saturate(150%);
     background: rgba(12, 12, 15, 0.82);
   }
 
   .glass-silver {
-    backdrop-filter: blur(12px) saturate(120%);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
     background: linear-gradient(135deg, rgba(203, 213, 225, 0.06) 0%, var(--surface-1) 100%);
     border: 1px solid rgba(203, 213, 225, 0.18) !important;
     box-shadow: var(--shadow-md);
   }
 
   .glass-gold {
-    backdrop-filter: blur(12px) saturate(120%);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
     background: linear-gradient(135deg, rgba(251, 191, 36, 0.07) 0%, var(--surface-1) 100%);
     border: 1px solid rgba(251, 191, 36, 0.22) !important;
     box-shadow: var(--shadow-md);
