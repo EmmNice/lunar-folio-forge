@@ -15,6 +15,7 @@ import { Route as FeedRouteImport } from './routes/feed'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UHandleRouteImport } from './routes/u.$handle'
+import { Route as PIdRouteImport } from './routes/p.$id'
 import { Route as AuthenticatedVerificationRouteImport } from './routes/_authenticated/verification'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -58,6 +59,11 @@ const IndexRoute = IndexRouteImport.update({
 const UHandleRoute = UHandleRouteImport.update({
   id: '/u/$handle',
   path: '/u/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PIdRoute = PIdRouteImport.update({
+  id: '/p/$id',
+  path: '/p/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedVerificationRoute =
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/studio': typeof AuthenticatedStudioRoute
   '/verification': typeof AuthenticatedVerificationRoute
+  '/p/$id': typeof PIdRoute
   '/u/$handle': typeof UHandleRoute
   '/messages/$id': typeof AuthenticatedMessagesIdRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
@@ -184,6 +191,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/studio': typeof AuthenticatedStudioRoute
   '/verification': typeof AuthenticatedVerificationRoute
+  '/p/$id': typeof PIdRoute
   '/u/$handle': typeof UHandleRoute
   '/messages/$id': typeof AuthenticatedMessagesIdRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
   '/_authenticated/verification': typeof AuthenticatedVerificationRoute
+  '/p/$id': typeof PIdRoute
   '/u/$handle': typeof UHandleRoute
   '/_authenticated/messages/$id': typeof AuthenticatedMessagesIdRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
@@ -232,6 +241,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/verification'
+    | '/p/$id'
     | '/u/$handle'
     | '/messages/$id'
     | '/messages/'
@@ -254,6 +264,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/verification'
+    | '/p/$id'
     | '/u/$handle'
     | '/messages/$id'
     | '/messages'
@@ -277,6 +288,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/studio'
     | '/_authenticated/verification'
+    | '/p/$id'
     | '/u/$handle'
     | '/_authenticated/messages/$id'
     | '/_authenticated/messages/'
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   FeedRoute: typeof FeedRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
+  PIdRoute: typeof PIdRoute
   UHandleRoute: typeof UHandleRoute
 }
 
@@ -333,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/u/$handle'
       fullPath: '/u/$handle'
       preLoaderRoute: typeof UHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p/$id': {
+      id: '/p/$id'
+      path: '/p/$id'
+      fullPath: '/p/$id'
+      preLoaderRoute: typeof PIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/verification': {
@@ -489,6 +509,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedRoute: FeedRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
+  PIdRoute: PIdRoute,
   UHandleRoute: UHandleRoute,
 }
 export const routeTree = rootRouteImport
