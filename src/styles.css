@@ -94,7 +94,10 @@
 
   /* ── Mobile chrome heights, so padding and scroll offsets agree ── */
   --nav-height: 3.5rem;
-  --mobile-nav-height: 4rem;
+  /* Must equal the real tab bar: 3.5rem tabs + its 1px top border. It was 4rem,
+     which left a 7px strip above the bar where scrolled content showed through
+     under anything pinned to it (Studio's Save/Post bar, the DM composer). */
+  --mobile-nav-height: calc(3.5rem + 1px);
 }
 
 @layer base {
