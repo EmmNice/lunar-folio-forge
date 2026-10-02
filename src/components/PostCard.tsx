@@ -15,6 +15,8 @@ import {
   CornerDownRight,
   Bookmark,
   Share2,
+  MoreHorizontal,
+  Pin,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +31,13 @@ import { RichText } from "@/components/RichText";
 import type { VerificationTier } from "@/hooks/use-auth";
 import { secondaryHandle } from "@/lib/identity";
 import { sharePost } from "@/lib/share";
+import { describeEditTimeLeft, editTimeLeft } from "@/lib/post-edit";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export type FeedAuthor = {
   id: string;
@@ -97,6 +106,8 @@ export function PostCard({
   onEdited,
   repostedBy,
   stats,
+  showPinnedLabel,
+  onPinChanged,
 }: {
   post: FeedPost;
   onDownload: (post: FeedPost) => void;
@@ -106,8 +117,12 @@ export function PostCard({
   onEdited?: (id: string, content: string, editedAt: string | null) => void;
   repostedBy?: RepostAttribution;
   stats?: PostStats;
+  /** Render the "Pinned" line above the post — used at the top of a profile. */
+  showPinnedLabel?: boolean;
+  /** Told when you pin or unpin this post, so a profile can reorder itself. */
+  onPinChanged?: (pinnedPostId: string | null) => void;
 }) {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, refreshProfile } = useAuth();
 
   const [liked, setLiked] = useState(stats?.likedByMe ?? false);
   const [likeCount, setLikeCount] = useState(stats?.likes ?? 0);
@@ -171,13 +186,54 @@ export function PostCard({
   const isVerifiedOnly = post.visibility === "verified_only";
   const isWhisper = post.visibility === "whisper";
 
-  // Tier-based border + glow styles
-  const tierBorder =
-    post.author.verification_tier === "gold"
-      ? "border-amber-500/25 glow-gold"
-      : post.author.verification_tier === "silver"
-        ? "border-slate-400/25 glow-silver"
-        : "border-border/50";
+  /*
+    Time left to edit, re-evaluated when it runs out so the Edit option disappears
+    at the moment the database starts refusing it, not on the next re-render.
+  */
+  const [editMsLeft, setEditMsLeft] = useState(() =>
+    (user?.id ?? currentUserId) === post.author.id ? editTimeLeft(post.created_at) : 0,
+  );
+  useEffect(() => {
+    if (!isSelf) {
+      setEditMsLeft(0);
+      return;
+    }
+    const left = editTimeLeft(post.created_at);
+    setEditMsLeft(left);
+    if (left <= 0) return;
+    // Tick each minute for the "N min left" label, and once more at expiry.
+    const id = setInterval(
+      () => {
+        const next = editTimeLeft(post.created_at);
+        setEditMsLeft(next);
+        if (next <= 0) clearInterval(id);
+      },
+      Math.min(60_000, left),
+    );
+    return () => clearInterval(id);
+  }, [isSelf, post.created_at]);
+
+  const [busyPin, setBusyPin] = useState(false);
+  async function togglePin() {
+    if (!user || !profile || busyPin) return;
+    const pinning = profile.pinned_post_id !== post.id;
+    setBusyPin(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ pinned_post_id: pinning ? post.id : null })
+      .eq("id", user.id);
+    if (error) {
+      setBusyPin(false);
+      toast.error(describeWriteError(error.message, "pin this post"));
+      return;
+    }
+    // The pin lives on your profile row, which every surface reads through
+    // useAuth — refreshing it is what moves the "Pinned" label everywhere.
+    await refreshProfile();
+    setBusyPin(false);
+    onPinChanged?.(pinning ? post.id : null);
+    toast.success(pinning ? "Pinned to your profile." : "Unpinned.");
+  }
 
   // Keep the local copy in step when the parent hands down a changed row —
   // a realtime update, or the same post re-rendered in a different list.
@@ -592,72 +648,89 @@ export function PostCard({
     </>
   ) : null;
 
-  /* Shared delete toggle — the author's own post, or an admin removing any post */
-  const canDelete = (isSelf || isAdmin) && !!onDeleted;
-  const deleteControl = canDelete ? (
-    <div className="shrink-0">
-      {confirmDelete ? (
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">
-            {isSelf ? "Delete?" : "Remove as moderator?"}
-          </span>
-          <button
-            type="button"
-            onClick={deletePost}
-            disabled={busyDelete}
-            className="text-xs text-red-400 transition-colors hover:text-red-300"
-          >
-            {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(false)}
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            No
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-          aria-label={isSelf ? "Delete post" : "Remove post as moderator"}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
-  ) : null;
-
   /*
-     Edit, for your own posts only.
+     Owner / moderator actions, behind one "⋯" menu as on X.
 
-     posts had an UPDATE policy from the first migration and no UI ever used it, so
-     a typo was permanent and the only remedy was to delete and repost — losing the
-     likes and the replies with it.
+     There used to be a pencil and a bin sitting next to the timestamp on every
+     post you wrote. With pinning added that would have been three icons, so they
+     moved into a menu — and the menu is a Radix portal, so it is never clipped by
+     the post list it sits in.
    */
-  const editControl =
-    isSelf && !editing ? (
-      <button
-        type="button"
-        onClick={() => {
-          setEditDraft(content);
-          setEditing(true);
-        }}
-        className="rounded p-1 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-        aria-label="Edit post"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
-    ) : null;
+  const canDelete = (isSelf || isAdmin) && !!onDeleted;
+  // Edit is offered only while the database would accept it (lib/post-edit.ts).
+  const editOpenFor = isSelf ? editMsLeft : 0;
+  const canEdit = isSelf && !editing && editOpenFor > 0;
+  // Only public posts can be pinned (guard_pinned_post), so don't offer the rest.
+  const canPin = isSelf && !!profile && post.visibility === "public";
+  const isPinned = isSelf && profile?.pinned_post_id === post.id;
 
   const ownerControls =
-    editControl || deleteControl ? (
-      <div className="flex shrink-0 items-center gap-0.5">
-        {editControl}
-        {deleteControl}
+    confirmDelete && canDelete ? (
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">
+          {isSelf ? "Delete?" : "Remove as moderator?"}
+        </span>
+        <button
+          type="button"
+          onClick={deletePost}
+          disabled={busyDelete}
+          className="text-xs text-red-400 transition-colors hover:text-red-300"
+        >
+          {busyDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(false)}
+          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          No
+        </button>
       </div>
+    ) : canDelete || canEdit || canPin ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="More options"
+            className="-mr-1.5 -mt-1 shrink-0 rounded-full p-1.5 text-tertiary transition-colors hover:bg-white/[0.06] hover:text-foreground"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="min-w-[12rem] rounded-xl border-[var(--border)] bg-[var(--surface-1)] p-1"
+        >
+          {canPin ? (
+            <DropdownMenuItem onSelect={togglePin} disabled={busyPin} className="gap-2.5 py-2">
+              <Pin className="h-4 w-4" />
+              {isPinned ? "Unpin from profile" : "Pin to your profile"}
+            </DropdownMenuItem>
+          ) : null}
+          {canEdit ? (
+            <DropdownMenuItem
+              onSelect={() => {
+                setEditDraft(content);
+                setEditing(true);
+              }}
+              className="gap-2.5 py-2"
+            >
+              <Pencil className="h-4 w-4" />
+              <span className="flex-1">Edit</span>
+              <span className="text-[11px] text-tertiary">{describeEditTimeLeft(editOpenFor)}</span>
+            </DropdownMenuItem>
+          ) : null}
+          {canDelete ? (
+            <DropdownMenuItem
+              onSelect={() => setConfirmDelete(true)}
+              className="gap-2.5 py-2 text-red-400 focus:text-red-300"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isSelf ? "Delete" : "Remove as moderator"}
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     ) : null;
 
   /*
@@ -716,11 +789,12 @@ export function PostCard({
   }
 
   /* Shared actions row */
+  /*
+     X-style action bar: no rule above it, icons spread across the text column
+     rather than bunched at the left, Report pushed to the far end.
+   */
   const actionsRow = (
-    <div
-      className="mt-3 flex items-center gap-1 border-t pt-2 text-secondary"
-      style={{ borderColor: "var(--border)" }}
-    >
+    <div className="mt-1 -ml-2 flex max-w-[30rem] items-center justify-between text-tertiary">
       <button
         type="button"
         onClick={toggleLike}
@@ -1040,152 +1114,98 @@ export function PostCard({
     </>
   );
 
-  /* Beat post (Studio-crafted, non-noir theme) */
-  if (isCardPost) {
-    const theme = THEMES[post.background ?? "cream"] ?? THEMES.cream;
-    const dotPattern = `radial-gradient(${theme.dot} 1px, transparent 1px)`;
+  /*
+     One layout for every post, modelled on X: a flat row in a list rather than a
+     boxed card. Avatar in a left column; name, badge, @handle and time on one line;
+     the text directly underneath; the action bar under the text.
 
-    return (
-      <article className={`rounded-2xl border bg-card/50 overflow-hidden ${tierBorder}`}>
-        {repostedBy && <div className="px-4 pt-3 sm:px-5">{repostBanner}</div>}
+     Studio posts keep their theme, but as an inset block inside the row — the way
+     X shows an attached image — instead of the whole post becoming a card. The
+     downloadable image is unaffected: Download renders a separate off-screen
+     StatusCard (hooks/use-card-export.tsx), never this element.
 
-        {/* Author header — same layout as regular posts */}
-        <div className="flex items-start gap-3 px-4 pt-4 pb-0 sm:px-5">
-          {/* Avatar */}
-          <Link
-            to="/u/$handle"
-            params={{ handle: post.author.handle }}
-            search={{ tab: undefined }}
-            className="shrink-0 self-start"
-          >
-            <div
-              className={`grid h-11 w-11 overflow-hidden rounded-full bg-secondary/60 text-sm font-semibold transition-opacity hover:opacity-85 ${
-                post.author.verification_tier === "gold"
-                  ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-background"
-                  : post.author.verification_tier === "silver"
-                    ? "ring-2 ring-slate-400/60 ring-offset-1 ring-offset-background"
-                    : "ring-1 ring-border/60"
-              }`}
-            >
-              {post.author.avatar_url ? (
-                <img
-                  src={post.author.avatar_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  crossOrigin="anonymous"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="grid h-full w-full place-items-center text-[15px] font-bold text-foreground/70">
-                  {post.author.display_name.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
-          </Link>
-
-          {/* Name / handle / time */}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                {(isVerifiedOnly || isWhisper) && (
-                  <span
-                    className="mb-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    style={{
-                      background: isWhisper ? "rgba(167,139,250,0.10)" : "rgba(255,255,255,0.06)",
-                      color: isWhisper ? "#c4b5fd" : "#94a3b8",
-                      border: `1px solid ${isWhisper ? "rgba(167,139,250,0.20)" : "rgba(255,255,255,0.08)"}`,
-                    }}
-                  >
-                    <Lock className="h-2.5 w-2.5" />
-                    {isWhisper ? "Whisper Feed" : "Verified only"}
-                  </span>
-                )}
-                <Link
-                  to="/u/$handle"
-                  params={{ handle: post.author.handle }}
-                  search={{ tab: undefined }}
-                  className="inline-flex items-center gap-1.5 font-semibold leading-tight text-foreground hover:underline underline-offset-2"
-                >
-                  {post.author.display_name}
-                  <VerificationBadge tier={post.author.verification_tier} size={15} />
-                </Link>
-                <p className="mt-0.5 text-[12px] text-tertiary">
-                  {secondaryHandle(post.author.display_name, post.author.handle) && (
-                    <>
-                      {secondaryHandle(post.author.display_name, post.author.handle)}
-                      <span className="mx-1.5 opacity-50">·</span>
-                    </>
-                  )}
-                  {timeAgo(post.created_at)}
-                  {editedMark}
-                </p>
-              </div>
-              {ownerControls}
-            </div>
-          </div>
-        </div>
-
-        {/* Themed content block */}
-        <div className="px-4 pt-3 pb-1 sm:px-5">
-          <div
-            className="rounded-xl px-3.5 py-3.5"
-            style={{
-              backgroundColor: theme.bg,
-              backgroundImage: dotPattern,
-              backgroundSize: "18px 18px",
-              border: `1px solid ${theme.border}`,
-            }}
-          >
-            {editing ? (
-              renderBody({ color: theme.body, surface: "rgba(0,0,0,0.06)", border: theme.border })
-            ) : (
-              <RichText
-                text={content}
-                className="whitespace-pre-wrap break-words text-[14.5px] font-medium leading-[1.55] tracking-[-0.01em]"
-                style={{ color: theme.body }}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Actions + comments */}
-        <div className="px-4 pb-3 sm:px-5">
-          {actionsRow}
-          {reportForm}
-          {commentsThread}
-        </div>
-      </article>
-    );
-  }
-
-  /* Regular text post — polished layout */
+     The tier is still visible where it carries meaning — the avatar ring and the
+     badge — rather than as a glowing border around the whole post.
+   */
+  const theme = isCardPost ? (THEMES[post.background ?? "cream"] ?? THEMES.cream) : null;
   const avatarRing =
     post.author.verification_tier === "gold"
       ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-background"
       : post.author.verification_tier === "silver"
         ? "ring-2 ring-slate-400/60 ring-offset-1 ring-offset-background"
-        : "ring-1 ring-border/60";
+        : "";
+  const handleLine = secondaryHandle(post.author.display_name, post.author.handle);
 
   return (
-    <article className={`group relative card card-interactive ${tierBorder}`}>
-      {/* Gold accent top bar */}
-      {post.author.verification_tier === "gold" && (
-        <div
-          className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl"
-          style={{
-            background: "linear-gradient(90deg, transparent, rgba(251,191,36,0.5), transparent)",
-          }}
-        />
-      )}
+    <article className="post-row group relative px-4 pt-3 pb-1.5 transition-colors hover:bg-white/[0.018] sm:px-5">
+      {showPinnedLabel ? (
+        <div className="mb-1 flex items-center gap-1.5 pl-[52px] text-[12px] font-semibold text-tertiary">
+          <Pin className="h-3 w-3" />
+          Pinned
+        </div>
+      ) : null}
+      {repostedBy ? <div className="pl-[52px]">{repostBanner}</div> : null}
 
-      <div className="px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
-        {repostBanner}
+      <div className="flex gap-3">
+        {/* Avatar column */}
+        <Link
+          to="/u/$handle"
+          params={{ handle: post.author.handle }}
+          search={{ tab: undefined }}
+          className="shrink-0 self-start"
+        >
+          <div
+            className={`grid h-10 w-10 overflow-hidden rounded-full bg-secondary/60 transition-opacity hover:opacity-85 ${avatarRing}`}
+          >
+            {post.author.avatar_url ? (
+              <img
+                src={post.author.avatar_url}
+                alt=""
+                className="h-full w-full object-cover"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="grid h-full w-full place-items-center text-[15px] font-bold text-foreground/70">
+                {post.author.display_name.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+        </Link>
 
-        {/* Visibility pill */}
-        {(isVerifiedOnly || isWhisper) && (
-          <div className="mb-3 flex items-center gap-1.5">
+        <div className="min-w-0 flex-1">
+          {/* Name · @handle · time — one line, truncating like X */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1 text-[14.5px] leading-5">
+              <Link
+                to="/u/$handle"
+                params={{ handle: post.author.handle }}
+                search={{ tab: undefined }}
+                className="inline-flex min-w-0 items-center gap-1 font-bold text-foreground hover:underline underline-offset-2"
+              >
+                <span className="truncate">{post.author.display_name}</span>
+                <VerificationBadge tier={post.author.verification_tier} size={15} />
+              </Link>
+              <span className="flex min-w-0 items-center text-tertiary">
+                {handleLine ? <span className="ml-0.5 truncate">{handleLine}</span> : null}
+                <span className="mx-1 shrink-0 opacity-60">·</span>
+                <Link
+                  to="/p/$id"
+                  params={{ id: post.id }}
+                  className="shrink-0 hover:underline underline-offset-2"
+                  title={new Date(post.created_at).toLocaleString()}
+                >
+                  {timeAgo(post.created_at)}
+                </Link>
+                {editedMark}
+              </span>
+            </div>
+            {ownerControls}
+          </div>
+
+          {(isVerifiedOnly || isWhisper) && (
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
               style={{
                 background: isWhisper ? "rgba(167,139,250,0.10)" : "rgba(255,255,255,0.06)",
                 color: isWhisper ? "#c4b5fd" : "#94a3b8",
@@ -1195,77 +1215,41 @@ export function PostCard({
               <Lock className="h-2.5 w-2.5" />
               {isWhisper ? "Whisper Feed" : "Verified only"}
             </span>
-          </div>
-        )}
+          )}
 
-        <div className="flex gap-3.5">
-          {/* Avatar with tier ring */}
-          <Link
-            to="/u/$handle"
-            params={{ handle: post.author.handle }}
-            search={{ tab: undefined }}
-            className="shrink-0 self-start"
-          >
+          {/* Body */}
+          {theme ? (
             <div
-              className={`grid h-11 w-11 overflow-hidden rounded-full bg-secondary/60 text-sm font-semibold transition-opacity hover:opacity-85 ${avatarRing}`}
+              className="mt-2 rounded-2xl px-4 py-4"
+              style={{
+                backgroundColor: theme.bg,
+                backgroundImage: `radial-gradient(${theme.dot} 1px, transparent 1px)`,
+                backgroundSize: "18px 18px",
+                border: `1px solid ${theme.border}`,
+              }}
             >
-              {post.author.avatar_url ? (
-                <img
-                  src={post.author.avatar_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  crossOrigin="anonymous"
-                  referrerPolicy="no-referrer"
-                />
+              {editing ? (
+                renderBody({ color: theme.body, surface: "rgba(0,0,0,0.06)", border: theme.border })
               ) : (
-                <span className="grid h-full w-full place-items-center text-[15px] font-bold text-foreground/70">
-                  {post.author.display_name.charAt(0).toUpperCase()}
-                </span>
+                <RichText
+                  text={content}
+                  className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.5]"
+                  style={{ color: theme.body }}
+                />
               )}
             </div>
-          </Link>
+          ) : editing ? (
+            renderBody(null)
+          ) : (
+            <RichText
+              text={content}
+              className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[1.5] text-foreground/95"
+            />
+          )}
 
-          <div className="min-w-0 flex-1">
-            {/* Meta: name on top, handle + time below */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <Link
-                  to="/u/$handle"
-                  params={{ handle: post.author.handle }}
-                  search={{ tab: undefined }}
-                  className="inline-flex items-center gap-1.5 font-semibold leading-tight text-foreground hover:underline underline-offset-2"
-                >
-                  {post.author.display_name}
-                  <VerificationBadge tier={post.author.verification_tier} size={15} />
-                </Link>
-                <p className="mt-0.5 text-[12px] text-tertiary">
-                  {secondaryHandle(post.author.display_name, post.author.handle) && (
-                    <>
-                      {secondaryHandle(post.author.display_name, post.author.handle)}
-                      <span className="mx-1.5 opacity-50">·</span>
-                    </>
-                  )}
-                  {timeAgo(post.created_at)}
-                  {editedMark}
-                </p>
-              </div>
-              {ownerControls}
-            </div>
-
-            {/* Content */}
-            {editing ? (
-              renderBody(null)
-            ) : (
-              <RichText
-                text={content}
-                className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-foreground/95 tracking-[-0.01em]"
-              />
-            )}
-
-            {actionsRow}
-            {reportForm}
-            {commentsThread}
-          </div>
+          {actionsRow}
+          {reportForm}
+          {commentsThread}
         </div>
       </div>
     </article>

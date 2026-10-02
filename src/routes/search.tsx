@@ -336,7 +336,7 @@ function SearchPage() {
               ))}
             </ul>
           ) : (
-            <div className="space-y-3">
+            <div className="post-list">
               {(results as FeedPost[]).map((post) => (
                 <PostCard
                   key={post.id}

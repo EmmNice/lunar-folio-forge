@@ -64,6 +64,7 @@ import {
 import { describeWriteError } from "@/lib/db-errors";
 import { timeAgo } from "@/lib/time";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { CoverPicker, ProfileCover } from "@/components/CoverPicker";
 import { tierAction, tierVisual } from "@/lib/tier-style";
 import { SkillsInput } from "@/components/SkillsInput";
 import { FollowList } from "@/components/FollowList";
@@ -114,6 +115,8 @@ type ProfileRow = {
   skills: string[] | null;
   location: string | null;
   availability_status: string | null;
+  pinned_post_id: string | null;
+  cover_url: string | null;
 };
 
 /** A pinned project, in the order the owner arranged them. */
@@ -228,6 +231,43 @@ function ProfilePage() {
   const block = useServerFn(blockMember);
   const unblock = useServerFn(unblockMember);
 
+  /*
+    The pinned post. On your own profile it is read from useAuth, so pinning from
+    the ⋯ menu (which refreshes your profile) reorders this page immediately; for
+    everyone else it comes from the profile row loaded below.
+  */
+  const viewingSelf = !!user && !!profile && user.id === profile.id;
+  const pinnedId = viewingSelf ? (me?.pinned_post_id ?? null) : (profile?.pinned_post_id ?? null);
+  const [pinnedPost, setPinnedPost] = useState<PostRow | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!pinnedId) {
+      setPinnedPost(null);
+      return;
+    }
+    // Usually already in the newest 30; fetched separately only when it is older.
+    const inList = posts.find((p) => p.id === pinnedId);
+    if (inList) {
+      setPinnedPost(inList);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("id, content, background, comments_enabled, visibility, created_at, edited_at")
+        .eq("id", pinnedId)
+        .maybeSingle();
+      if (!cancelled) setPinnedPost((data as PostRow | null) ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pinnedId, posts]);
+  // Pinned first, then everything else newest-first — without listing it twice.
+  const orderedPosts = pinnedPost
+    ? [pinnedPost, ...posts.filter((p) => p.id !== pinnedPost.id)]
+    : posts;
+
   // Inject <meta name="robots" content="noindex"> when the viewed profile
   // has opted out of search-engine indexing.
   useEffect(() => {
@@ -247,7 +287,7 @@ function ProfilePage() {
       const { data: pf, error } = await supabase
         .from("profiles")
         .select(
-          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search, pitch_limit, dm_cloaking_enabled, skills, location, availability_status",
+          "id, handle, display_name, avatar_url, bio, company_name, role_type, verification_tier, github_url, portfolio_url, startup_url, traction_url, hide_from_search, pitch_limit, dm_cloaking_enabled, skills, location, availability_status, pinned_post_id, cover_url",
         )
         .eq("handle", handle)
         .maybeSingle();
@@ -619,12 +659,10 @@ function ProfilePage() {
         <AppHeader />
         <main className="mx-auto max-w-2xl pb-mobile-nav">
           {/* Cover banner */}
-          <div
-            className="h-28 sm:h-36 w-full"
-            /* Was amber for everybody. Your own profile telling you that you are
-               gold-tier when you are not is the most misleading place to do it. */
-            style={{ background: tierVisual(me.verification_tier).cover }}
-          />
+          {/* Cover photo, or the tier gradient when none is set. The gradient
+              used to be amber for everybody — your own profile telling you that you
+              are gold-tier when you are not is the most misleading place to do it. */}
+          <ProfileCover url={me.cover_url} tier={me.verification_tier} />
 
           {/* Profile header */}
           <div className="px-4 sm:px-6">
@@ -762,8 +800,8 @@ function ProfilePage() {
                   </Link>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {posts.map((p) => {
+                <div className="post-list">
+                  {orderedPosts.map((p) => {
                     const feedPost: FeedPost = {
                       id: p.id,
                       content: p.content,
@@ -786,7 +824,15 @@ function ProfilePage() {
                         post={feedPost}
                         currentUserId={user?.id}
                         onDownload={requestExport}
-                        onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                        showPinnedLabel={p.id === pinnedId}
+                        onDeleted={(id) => {
+                          setPosts((prev) => prev.filter((x) => x.id !== id));
+                          // ON DELETE SET NULL cleared the pin in the database.
+                          if (id === pinnedId) {
+                            setPinnedPost(null);
+                            if (viewingSelf) void refreshProfile();
+                          }
+                        }}
                         onEdited={(id, content, editedAt) =>
                           setPosts((prev) =>
                             prev.map((x) =>
@@ -899,7 +945,7 @@ function ProfilePage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="post-list">
                   {likedPosts.map((p) => {
                     const feedPost: FeedPost = {
                       id: p.id,
@@ -1067,12 +1113,9 @@ function ProfilePage() {
         a banner and an overlapping avatar for the owner, a flat row for everyone
         else.
       */}
-      <div
-        className="h-24 w-full sm:h-28"
-        style={{
-          background: tierVisual(profile.verification_tier).cover,
-        }}
-      />
+      <div className="mx-auto max-w-5xl">
+        <ProfileCover url={profile.cover_url} tier={profile.verification_tier} />
+      </div>
 
       <main className="mx-auto max-w-5xl px-4 pb-mobile-nav sm:px-6">
         <header className="-mt-10 flex flex-col items-start gap-5 sm:-mt-12 sm:flex-row sm:items-end">
@@ -1336,8 +1379,8 @@ function ProfilePage() {
               {posts.length === 0 ? (
                 <p className="mt-4 text-sm text-muted-foreground">Nothing published yet.</p>
               ) : (
-                <div className="mt-4 space-y-4">
-                  {posts.map((p) => {
+                <div className="post-list mt-4">
+                  {orderedPosts.map((p) => {
                     const feedPost: FeedPost = {
                       id: p.id,
                       content: p.content,
@@ -1360,7 +1403,15 @@ function ProfilePage() {
                         post={feedPost}
                         currentUserId={user?.id}
                         onDownload={requestExport}
-                        onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+                        showPinnedLabel={p.id === pinnedId}
+                        onDeleted={(id) => {
+                          setPosts((prev) => prev.filter((x) => x.id !== id));
+                          // ON DELETE SET NULL cleared the pin in the database.
+                          if (id === pinnedId) {
+                            setPinnedPost(null);
+                            if (viewingSelf) void refreshProfile();
+                          }
+                        }}
                         onEdited={(id, content, editedAt) =>
                           setPosts((prev) =>
                             prev.map((x) =>
@@ -1516,6 +1567,7 @@ function DeveloperDetails({
 /** Owner-facing profile card, with an inline edit toggle. */
 type SelfProfile = {
   id: string;
+  cover_url: string | null;
   handle: string;
   display_name: string;
   avatar_url: string | null;
@@ -1543,6 +1595,7 @@ function EditProfileForm({
   const [companyName, setCompanyName] = useState(profile.company_name ?? "");
   const [roleType, setRoleType] = useState<string>(profile.role_type ?? "");
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? "");
+  const [coverUrl, setCoverUrl] = useState(profile.cover_url ?? "");
   const [githubUrl, setGithubUrl] = useState(profile.github_url ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(profile.portfolio_url ?? "");
   const [skills, setSkills] = useState<string[]>(profile.skills ?? []);
@@ -1575,6 +1628,7 @@ function EditProfileForm({
         display_name: displayName.trim(),
         bio: bio.trim() || null,
         avatar_url: avatarUrl.trim() || null,
+        cover_url: coverUrl.trim() || null,
         company_name: companyName.trim() || null,
         role_type: roleType || null,
         github_url: githubUrl.trim() || null,
@@ -1606,6 +1660,16 @@ function EditProfileForm({
           Profile Photo
         </p>
         <AvatarPicker value={avatarUrl} onChange={setAvatarUrl} />
+      </div>
+
+      <div
+        className="rounded-2xl p-4"
+        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+          Cover Photo
+        </p>
+        <CoverPicker value={coverUrl} onChange={setCoverUrl} tier={profile.verification_tier} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -79,6 +79,9 @@ export function AvatarPicker({
     try {
       const { data: existing } = await supabase.storage.from("avatars").list(user.id);
       const stale = (existing ?? [])
+        // Folders (the `cover/` subfolder) list with a null id. Skip them, so
+        // replacing your avatar can never touch your cover photo.
+        .filter((obj) => obj.id)
         .map((obj) => `${user.id}/${obj.name}`)
         .filter((objectPath) => objectPath !== path);
       if (stale.length > 0) {

@@ -457,6 +457,35 @@
     box-shadow: var(--shadow-sm);
   }
 
+  /*
+     A timeline of posts, X-style: rows separated by hairlines rather than a stack
+     of floating cards. Edge to edge on a phone (cancelling the page's 1rem gutter),
+     a bordered column on wider screens. No overflow:hidden — the ⋯ menu is a
+     portal, but a clipped list would still cut off the inline report form.
+  */
+  .post-list {
+    margin-inline: -1rem;
+    border-block: 1px solid var(--border);
+  }
+  .post-list > * + * {
+    border-top: 1px solid var(--border);
+  }
+  @media (min-width: 640px) {
+    .post-list {
+      margin-inline: 0;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+    }
+    .post-list > :first-child {
+      border-top-left-radius: 1rem;
+      border-top-right-radius: 1rem;
+    }
+    .post-list > :last-child {
+      border-bottom-left-radius: 1rem;
+      border-bottom-right-radius: 1rem;
+    }
+  }
+
   /* Count badge on tabs and nav icons. */
   .badge-count {
     display: inline-flex;
