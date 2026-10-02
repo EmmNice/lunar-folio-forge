@@ -787,7 +787,7 @@ function FeedPage() {
 
       {/* max-w-xl, not 2xl: at 672px a post ran nearly the full width of a desktop
           window, which reads as a slab rather than a feed. */}
-      <main className="page-enter mx-auto max-w-xl px-4 pb-mobile-nav pt-0 sm:px-6 sm:pt-5">
+      <main className="page-enter mx-auto max-w-xl px-4 pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom)+6rem)] pt-0 sm:px-6 sm:pb-mobile-nav sm:pt-5">
         {/*
           Moderation state, said out loud. RLS blocks posting, commenting, liking,
           re-shipping and messaging for a restricted or banned account, so without
