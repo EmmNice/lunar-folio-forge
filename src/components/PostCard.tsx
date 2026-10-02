@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { THEMES, type Background } from "@/components/StatusCard";
+import type { Background } from "@/components/StatusCard";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { timeAgo } from "@/lib/time";
@@ -614,9 +614,6 @@ export function PostCard({
     "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 -mx-0.5 text-[13px] font-medium tabular-nums " +
     "transition-colors disabled:opacity-40 select-none";
 
-  // Studio card posts (non-noir theme) get an entirely different visual treatment
-  const isCardPost = post.background !== "noir";
-
   /*
      Re-ship attribution.
 
@@ -663,6 +660,8 @@ export function PostCard({
   // Only public posts can be pinned (guard_pinned_post), so don't offer the rest.
   const canPin = isSelf && !!profile && post.visibility === "public";
   const isPinned = isSelf && profile?.pinned_post_id === post.id;
+  // Signed-in members can report anyone else's post; it moved here from the bar.
+  const canReport = !!user && !isSelf;
 
   const ownerControls =
     confirmDelete && canDelete ? (
@@ -686,7 +685,7 @@ export function PostCard({
           No
         </button>
       </div>
-    ) : canDelete || canEdit || canPin ? (
+    ) : canDelete || canEdit || canPin || canReport ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -727,6 +726,16 @@ export function PostCard({
             >
               <Trash2 className="h-4 w-4" />
               {isSelf ? "Delete" : "Remove as moderator"}
+            </DropdownMenuItem>
+          ) : null}
+          {canReport ? (
+            <DropdownMenuItem
+              onSelect={() => setReportOpen(true)}
+              disabled={reported}
+              className="gap-2.5 py-2"
+            >
+              <Flag className="h-4 w-4" />
+              {reported ? "Reported" : "Report post"}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -790,99 +799,99 @@ export function PostCard({
 
   /* Shared actions row */
   /*
-     X-style action bar: no rule above it, icons spread across the text column
-     rather than bunched at the left, Report pushed to the far end.
+     X-style action bar: six fixed slots in X's order — reply, re-ship, like, save,
+     share, download — identical on every post. Report used to be a seventh button
+     that only appeared on other people's posts, so the icons sat in different
+     places from one post to the next. It now lives in the ⋯ menu, as on X.
    */
+  const slot = "flex flex-1 justify-start";
   const actionsRow = (
-    <div className="mt-1 -ml-2 flex max-w-[30rem] items-center justify-between text-tertiary">
-      <button
-        type="button"
-        onClick={toggleLike}
-        disabled={busyLike}
-        className={actionBtn + (liked ? " text-rose-400" : " hover:text-foreground")}
-        aria-label="Like"
-      >
-        <Heart className="h-4 w-4" fill={liked ? "currentColor" : "none"} />
-        <span className="sr-only">{liked ? "Unlike" : "Like"}</span>
-        {likeCount > 0 ? <span aria-label={`${likeCount} likes`}>{likeCount}</span> : null}
-      </button>
-
-      {commentsEnabled && (
+    <div className="-ml-2 mt-1 flex max-w-[30rem] items-center text-tertiary">
+      <div className={slot}>
         <button
           type="button"
-          onClick={toggleThread}
-          className={actionBtn + " hover:text-foreground"}
-          aria-label="Comment"
+          onClick={commentsEnabled ? toggleThread : undefined}
+          aria-disabled={!commentsEnabled}
+          className={
+            actionBtn + (commentsEnabled ? " hover:text-sky-400" : " cursor-default opacity-40")
+          }
+          aria-label={commentsEnabled ? "Reply" : "Replies are off"}
+          title={commentsEnabled ? "Reply" : "Replies are turned off for this post"}
         >
-          <MessageCircle className="h-4 w-4" />
-          <span className="sr-only">Replies</span>
+          <MessageCircle className="h-[18px] w-[18px]" />
           {commentCount > 0 ? (
             <span aria-label={`${commentCount} replies`}>{commentCount}</span>
           ) : null}
         </button>
-      )}
+      </div>
 
-      <button
-        type="button"
-        onClick={toggleRepost}
-        disabled={busyRepost || isSelf}
-        className={actionBtn + (reposted ? " text-emerald-400" : " hover:text-foreground")}
-        aria-label="Re-Ship"
-      >
-        <Repeat2 className="h-4 w-4" />
-        <span className="sr-only">Re-ship</span>
-        {repostCount > 0 ? <span aria-label={`${repostCount} re-ships`}>{repostCount}</span> : null}
-      </button>
-
-      <button
-        type="button"
-        onClick={toggleBookmark}
-        disabled={busyBookmark}
-        aria-pressed={bookmarked}
-        className={actionBtn + (bookmarked ? " text-[var(--gold)]" : " hover:text-foreground")}
-        aria-label={bookmarked ? "Remove from saved" : "Save post"}
-        title={bookmarked ? "Remove from saved" : "Save for later"}
-      >
-        <Bookmark className="h-4 w-4" fill={bookmarked ? "currentColor" : "none"} />
-      </button>
-
-      {/*
-        Share sits next to Download because they answer the same question — "get
-        this out of the app" — one as a link, one as an image.
-      */}
-      <button
-        type="button"
-        onClick={onShare}
-        disabled={sharing}
-        className={actionBtn + " hover:text-foreground"}
-        aria-label="Share this post"
-        title="Share this post"
-      >
-        <Share2 className="h-4 w-4" />
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onDownload(post)}
-        className={actionBtn + " hover:text-foreground"}
-        aria-label="Download card as an image"
-        title="Download card as an image"
-      >
-        <Download className="h-4 w-4" />
-      </button>
-
-      {!isSelf && (
+      <div className={slot}>
         <button
           type="button"
-          onClick={() => setReportOpen((v) => !v)}
-          disabled={reported}
-          className={actionBtn + (reported ? " ml-auto" : " ml-auto hover:text-foreground")}
-          aria-label={reported ? "Already reported" : "Report post"}
-          title={reported ? "You've reported this post" : "Report post"}
+          onClick={isSelf ? () => toast("You can't re-ship your own post.") : toggleRepost}
+          disabled={busyRepost}
+          className={actionBtn + (reposted ? " text-emerald-400" : " hover:text-emerald-400")}
+          aria-label={reposted ? "Undo re-ship" : "Re-ship"}
+          title="Re-ship"
         >
-          <Flag className="h-4 w-4" fill={reported ? "currentColor" : "none"} />
+          <Repeat2 className="h-[18px] w-[18px]" />
+          {repostCount > 0 ? (
+            <span aria-label={`${repostCount} re-ships`}>{repostCount}</span>
+          ) : null}
         </button>
-      )}
+      </div>
+
+      <div className={slot}>
+        <button
+          type="button"
+          onClick={toggleLike}
+          disabled={busyLike}
+          className={actionBtn + (liked ? " text-rose-500" : " hover:text-rose-500")}
+          aria-label={liked ? "Unlike" : "Like"}
+        >
+          <Heart className="h-[18px] w-[18px]" fill={liked ? "currentColor" : "none"} />
+          {likeCount > 0 ? <span aria-label={`${likeCount} likes`}>{likeCount}</span> : null}
+        </button>
+      </div>
+
+      <div className={slot}>
+        <button
+          type="button"
+          onClick={toggleBookmark}
+          disabled={busyBookmark}
+          aria-pressed={bookmarked}
+          className={actionBtn + (bookmarked ? " text-sky-400" : " hover:text-sky-400")}
+          aria-label={bookmarked ? "Remove from saved" : "Save post"}
+          title={bookmarked ? "Remove from saved" : "Save for later"}
+        >
+          <Bookmark className="h-[18px] w-[18px]" fill={bookmarked ? "currentColor" : "none"} />
+        </button>
+      </div>
+
+      <div className={slot}>
+        <button
+          type="button"
+          onClick={onShare}
+          disabled={sharing}
+          className={actionBtn + " hover:text-sky-400"}
+          aria-label="Share this post"
+          title="Share"
+        >
+          <Share2 className="h-[18px] w-[18px]" />
+        </button>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => onDownload(post)}
+          className={actionBtn + " hover:text-foreground"}
+          aria-label="Download card as an image"
+          title="Download as a card"
+        >
+          <Download className="h-[18px] w-[18px]" />
+        </button>
+      </div>
     </div>
   );
 
@@ -1127,7 +1136,6 @@ export function PostCard({
      The tier is still visible where it carries meaning — the avatar ring and the
      badge — rather than as a glowing border around the whole post.
    */
-  const theme = isCardPost ? (THEMES[post.background ?? "cream"] ?? THEMES.cream) : null;
   const avatarRing =
     post.author.verification_tier === "gold"
       ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-background"
@@ -1217,28 +1225,13 @@ export function PostCard({
             </span>
           )}
 
-          {/* Body */}
-          {theme ? (
-            <div
-              className="mt-2 rounded-2xl px-4 py-4"
-              style={{
-                backgroundColor: theme.bg,
-                backgroundImage: `radial-gradient(${theme.dot} 1px, transparent 1px)`,
-                backgroundSize: "18px 18px",
-                border: `1px solid ${theme.border}`,
-              }}
-            >
-              {editing ? (
-                renderBody({ color: theme.body, surface: "rgba(0,0,0,0.06)", border: theme.border })
-              ) : (
-                <RichText
-                  text={content}
-                  className="whitespace-pre-wrap break-words text-[15px] font-medium leading-[1.5]"
-                  style={{ color: theme.body }}
-                />
-              )}
-            </div>
-          ) : editing ? (
+          {/*
+            Body. Every post renders as plain text, the way X does. The post's
+            theme (post.background) is still stored and still drives the
+            downloaded image — Download renders its own StatusCard from it — it
+            just no longer turns the post itself into a coloured card.
+          */}
+          {editing ? (
             renderBody(null)
           ) : (
             <RichText

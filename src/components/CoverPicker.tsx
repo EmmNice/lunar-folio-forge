@@ -146,7 +146,10 @@ export function ProfileCover({ url, tier }: { url: string | null | undefined; ti
   return (
     <div
       className="relative aspect-[3/1] max-h-52 w-full overflow-hidden"
-      style={{ background: tierVisual(tier).cover }}
+      /* Plain grey when no cover is set, as on X. The tier gradient read as a
+         muddy brown smear on gold profiles; the tier still shows on the avatar
+         ring and badge directly below. */
+      style={{ background: url ? undefined : "var(--surface-3)" }}
     >
       {url ? (
         <img
