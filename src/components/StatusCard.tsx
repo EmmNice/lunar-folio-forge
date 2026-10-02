@@ -216,7 +216,7 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
 
   const initial = (name.trim() || "•").charAt(0).toUpperCase();
 
-  return (
+  const card = (
     <div
       ref={ref}
       style={{
@@ -435,6 +435,21 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
           </div>
         ) : null}
       </div>
+    </div>
+  );
+
+  if (exportMode) return card;
+
+  /*
+    The preview is laid out in em, so its type has to scale with the card's width
+    or a small preview overflows: at the default 16px a 128px-wide card drew a
+    56px avatar and a 32px name, and the name ran off the edge. Sizing the root
+    font to the card's own width (5% = 16px at 320px, the size it was designed at)
+    keeps every preview a true scale model of the 1080x1920 export.
+  */
+  return (
+    <div style={{ containerType: "inline-size", width: "100%" }}>
+      <div style={{ fontSize: "5cqw" }}>{card}</div>
     </div>
   );
 });
