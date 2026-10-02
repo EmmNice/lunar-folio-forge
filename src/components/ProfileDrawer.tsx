@@ -14,6 +14,7 @@ import {
   BadgeCheck,
   Trash2,
   Gavel,
+  Smartphone,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +25,7 @@ import { VerificationBadge } from "@/components/VerificationBadge";
 import { LedgerMark } from "@/components/AppHeader";
 import { ACTION_INK, ACTION_SURFACE, tierVisual, type Tier } from "@/lib/tier-style";
 import { secondaryHandle } from "@/lib/identity";
+import { useInstallAction } from "@/components/InstallApp";
 
 const SETTINGS_NAV = [
   {
@@ -116,6 +118,7 @@ export function ProfileDrawer({
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [signingOut, setSigningOut] = useState(false);
+  const install = useInstallAction();
 
   function close() {
     onOpenChange(false);
@@ -138,170 +141,145 @@ export function ProfileDrawer({
   if (!user) return null;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="left"
-        className="flex w-[280px] flex-col border-r p-0 sm:max-w-[280px]"
-        style={{ background: "#0B0B0C", borderColor: "rgba(255,255,255,0.07)" }}
-      >
-        {/*
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="left"
+          className="flex w-[280px] flex-col border-r p-0 sm:max-w-[280px]"
+          style={{ background: "#0B0B0C", borderColor: "rgba(255,255,255,0.07)" }}
+        >
+          {/*
           A dialog needs an accessible name, and this one had none — Radix was
           logging the violation on every open. Visually hidden rather than shown:
           the drawer already leads with your avatar and handle, so a heading would
           be redundant on screen but is the only thing a screen reader announces.
         */}
-        <SheetTitle className="sr-only">Your account</SheetTitle>
-        <SheetDescription className="sr-only">Profile, settings and sign out.</SheetDescription>
+          <SheetTitle className="sr-only">Your account</SheetTitle>
+          <SheetDescription className="sr-only">Profile, settings and sign out.</SheetDescription>
 
-        {/* Profile header */}
-        <div
-          className="relative flex flex-col gap-3 px-5 pb-5 pt-8"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
-        >
-          {/* Ambient glow */}
+          {/* Profile header */}
           <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background: `radial-gradient(ellipse 200px 130px at 30px -20px, ${visual.wash} 0%, transparent 100%)`,
-            }}
-          />
-
-          {/* Avatar */}
-          <div
-            className="relative h-[60px] w-[60px] overflow-hidden rounded-full"
-            style={{
-              background: "rgba(255,255,255,0.07)",
-              boxShadow: `0 0 0 2.5px ${visual.ring}, 0 0 0 4.5px #0B0B0C`,
-            }}
+            className="relative flex flex-col gap-3 px-5 pb-5 pt-8"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
           >
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt=""
-                className="h-full w-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="grid h-full w-full place-items-center text-xl font-semibold text-foreground/80">
-                {profile?.display_name?.charAt(0).toUpperCase() ?? "?"}
-              </span>
-            )}
-          </div>
+            {/* Ambient glow */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: `radial-gradient(ellipse 200px 130px at 30px -20px, ${visual.wash} 0%, transparent 100%)`,
+              }}
+            />
 
-          {/* Name + handle */}
-          <div>
-            <p className="flex items-center gap-1.5 text-[15px] font-semibold leading-tight tracking-[-0.02em]">
-              {profile?.display_name ?? "—"}
-              {profile && <VerificationBadge tier={profile.verification_tier} size={13} />}
-            </p>
-            {(!profile || secondaryHandle(profile.display_name, profile.handle)) && (
-              <p className="mt-0.5 text-[12px] text-muted-foreground">
-                {profile ? secondaryHandle(profile.display_name, profile.handle) : "…"}
+            {/* Avatar */}
+            <div
+              className="relative h-[60px] w-[60px] overflow-hidden rounded-full"
+              style={{
+                background: "rgba(255,255,255,0.07)",
+                boxShadow: `0 0 0 2.5px ${visual.ring}, 0 0 0 4.5px #0B0B0C`,
+              }}
+            >
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="grid h-full w-full place-items-center text-xl font-semibold text-foreground/80">
+                  {profile?.display_name?.charAt(0).toUpperCase() ?? "?"}
+                </span>
+              )}
+            </div>
+
+            {/* Name + handle */}
+            <div>
+              <p className="flex items-center gap-1.5 text-[15px] font-semibold leading-tight tracking-[-0.02em]">
+                {profile?.display_name ?? "—"}
+                {profile && <VerificationBadge tier={profile.verification_tier} size={13} />}
               </p>
+              {(!profile || secondaryHandle(profile.display_name, profile.handle)) && (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  {profile ? secondaryHandle(profile.display_name, profile.handle) : "…"}
+                </p>
+              )}
+            </div>
+
+            {/* View profile CTA */}
+            {profile ? (
+              <Link
+                to="/u/$handle"
+                params={{ handle: profile.handle }}
+                search={{ tab: undefined }}
+                onClick={close}
+                className="inline-flex w-fit items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium text-foreground/70 transition-colors hover:border-white/20 hover:text-foreground"
+                style={{ borderColor: "rgba(255,255,255,0.10)" }}
+              >
+                <User className="h-3 w-3" />
+                View profile
+              </Link>
+            ) : (
+              <Link
+                to="/onboarding"
+                onClick={close}
+                className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-background transition-opacity hover:opacity-90"
+                style={{ background: ACTION_SURFACE, color: ACTION_INK }}
+              >
+                <User className="h-3 w-3" />
+                Complete your profile
+              </Link>
             )}
+
+            <div className="absolute right-4 top-4 opacity-[0.14]">
+              <LedgerMark className="h-4 w-auto" />
+            </div>
           </div>
 
-          {/* View profile CTA */}
-          {profile ? (
-            <Link
-              to="/u/$handle"
-              params={{ handle: profile.handle }}
-              search={{ tab: undefined }}
-              onClick={close}
-              className="inline-flex w-fit items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium text-foreground/70 transition-colors hover:border-white/20 hover:text-foreground"
-              style={{ borderColor: "rgba(255,255,255,0.10)" }}
-            >
-              <User className="h-3 w-3" />
-              View profile
-            </Link>
-          ) : (
-            <Link
-              to="/onboarding"
-              onClick={close}
-              className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-background transition-opacity hover:opacity-90"
-              style={{ background: ACTION_SURFACE, color: ACTION_INK }}
-            >
-              <User className="h-3 w-3" />
-              Complete your profile
-            </Link>
-          )}
-
-          <div className="absolute right-4 top-4 opacity-[0.14]">
-            <LedgerMark className="h-4 w-auto" />
-          </div>
-        </div>
-
-        {/* Settings nav */}
-        <nav className="flex-1 overflow-y-auto py-2">
-          {/*
+          {/* Settings nav */}
+          <nav className="flex-1 overflow-y-auto py-2">
+            {/*
             Admins first, and in a section of its own: moderation is not one of
             your account settings, and burying it under seven personal
             preferences is how it stayed invisible.
           */}
-          {isAdmin ? (
-            <>
-              <p className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-                Administration
-              </p>
-              {ADMIN_NAV.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    close();
-                    navigate({ to: item.to });
-                  }}
-                  className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
-                >
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-                    style={{ background: "rgba(56,189,248,0.12)" }}
-                  >
-                    <item.icon className="h-[15px] w-[15px] text-sky-400" strokeWidth={1.8} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
-                      {item.label}
-                    </p>
-                    <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
-                </button>
-              ))}
-            </>
-          ) : null}
-
-          <p className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-            Settings
-          </p>
-
-          {SETTINGS_NAV.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => {
-                close();
-                navigate({ to: item.to });
-              }}
-              className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
-            >
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              >
-                <item.icon className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.8} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
-                  {item.label}
+            {isAdmin ? (
+              <>
+                <p className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                  Administration
                 </p>
-                <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
-              </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
-            </button>
-          ))}
-          {isGold &&
-            GOLD_NAV.map((item) => (
+                {ADMIN_NAV.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      close();
+                      navigate({ to: item.to });
+                    }}
+                    className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
+                  >
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                      style={{ background: "rgba(56,189,248,0.12)" }}
+                    >
+                      <item.icon className="h-[15px] w-[15px] text-sky-400" strokeWidth={1.8} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
+                        {item.label}
+                      </p>
+                      <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+                  </button>
+                ))}
+              </>
+            ) : null}
+
+            <p className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+              Settings
+            </p>
+
+            {SETTINGS_NAV.map((item) => (
               <button
                 key={item.label}
                 type="button"
@@ -313,9 +291,12 @@ export function ProfileDrawer({
               >
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-                  style={{ background: visual.wash }}
+                  style={{ background: "rgba(255,255,255,0.07)" }}
                 >
-                  <item.icon className="h-[15px] w-[15px] text-amber-400" strokeWidth={1.8} />
+                  <item.icon
+                    className="h-[15px] w-[15px] text-muted-foreground"
+                    strokeWidth={1.8}
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
@@ -326,30 +307,96 @@ export function ProfileDrawer({
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
               </button>
             ))}
-        </nav>
+            {isGold &&
+              GOLD_NAV.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    close();
+                    navigate({ to: item.to });
+                  }}
+                  className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
+                >
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: visual.wash }}
+                  >
+                    <item.icon className="h-[15px] w-[15px] text-amber-400" strokeWidth={1.8} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] font-medium text-foreground/90 leading-tight">
+                      {item.label}
+                    </p>
+                    <p className="text-[11px] text-tertiary leading-snug">{item.desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+                </button>
+              ))}
+          </nav>
 
-        {/* Sign Out */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-          <button
-            type="button"
-            onClick={signOut}
-            disabled={signingOut}
-            className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-red-500/[0.07] active:bg-red-500/[0.12] disabled:opacity-50"
-          >
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-              style={{ background: "rgba(239,68,68,0.12)" }}
-            >
-              {signingOut ? (
-                <Loader2 className="h-[15px] w-[15px] animate-spin text-red-400" />
-              ) : (
-                <LogOut className="h-[15px] w-[15px] text-red-400" strokeWidth={1.8} />
-              )}
+          {/*
+          Install entry. Shown only when this browser can actually install —
+          Chrome-family with a prompt in hand, or iOS (instructions) — and never
+          once you are already in the installed app.
+        */}
+          {install.available ? (
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  void install.run();
+                }}
+                className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.07]"
+              >
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                  style={{ background: "rgba(255,255,255,0.07)" }}
+                >
+                  <Smartphone
+                    className="h-[15px] w-[15px] text-muted-foreground"
+                    strokeWidth={1.8}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-medium leading-tight text-foreground/90">
+                    Install app
+                  </p>
+                  <p className="text-[11px] leading-snug text-tertiary">
+                    Add The Ledger to your home screen
+                  </p>
+                </div>
+              </button>
             </div>
-            <span className="text-[13.5px] font-medium text-red-400">Sign out</span>
-          </button>
-        </div>
-      </SheetContent>
-    </Sheet>
+          ) : null}
+
+          {/* Sign Out */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+            <button
+              type="button"
+              onClick={signOut}
+              disabled={signingOut}
+              className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-red-500/[0.07] active:bg-red-500/[0.12] disabled:opacity-50"
+            >
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: "rgba(239,68,68,0.12)" }}
+              >
+                {signingOut ? (
+                  <Loader2 className="h-[15px] w-[15px] animate-spin text-red-400" />
+                ) : (
+                  <LogOut className="h-[15px] w-[15px] text-red-400" strokeWidth={1.8} />
+                )}
+              </div>
+              <span className="text-[13.5px] font-medium text-red-400">Sign out</span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+      {/* Outside the drawer's Sheet: the drawer closes before this opens, and a
+        sheet nested inside a closed one would unmount with it. */}
+      {install.iosSheet}
+    </>
   );
 }

@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { VerificationTier } from "@/hooks/use-auth";
 import { useCardExport } from "@/hooks/use-card-export";
 import { POST_SELECT, fetchPostStats } from "@/lib/post-query";
+import { InstallBanner } from "@/components/InstallApp";
 import { FEED_PAGE_SIZE } from "@/lib/limits";
 import { fetchFollowingIds, fetchMutedIds } from "@/lib/social";
 import { tierAction, tierVisual } from "@/lib/tier-style";
@@ -818,6 +819,9 @@ function FeedPage() {
             </div>
           </div>
         )}
+
+        {/* Phones only; renders nothing if installed, dismissed, or not installable. */}
+        <InstallBanner />
 
         {/* Feed load failures used to be a toast that vanished, leaving an empty page */}
         {feedError && (

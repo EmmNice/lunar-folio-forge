@@ -15,6 +15,9 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { initBrowserMonitoring } from "@/lib/monitoring.browser";
 import { reportError, setMonitoringUser } from "@/lib/monitoring";
 import { resetPerUserState } from "@/lib/session-reset";
+// Imported at the root so its beforeinstallprompt listener is attached as soon as
+// the client bundle runs — Chrome fires that event once and does not replay it.
+import { registerServiceWorker } from "@/lib/pwa";
 import { Toaster } from "sonner";
 
 function NotFoundComponent() {
@@ -96,7 +99,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      /*
+        viewport-fit=cover is what makes env(safe-area-inset-*) report real values.
+        Without it every one of those insets is 0, so the bottom tab bar, the
+        compose buttons and the message composer all sat under the iPhone home
+        indicator once the app runs full-screen from the home screen.
+      */
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover",
+      },
+      // Colours the Android status bar and task switcher to match the app.
+      { name: "theme-color", content: "#0B0B0C" },
+      // Home-screen launch on iOS. "black", not "black-translucent": translucent
+      // would draw the page under the status bar and need top insets everywhere.
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black" },
+      { name: "apple-mobile-web-app-title", content: "Ledger" },
       { title: "The Ledger — a high-signal network for tech founders" },
       {
         name: "description",
@@ -120,6 +140,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      // iOS ignores manifest icons for the home screen and reads this instead.
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png", sizes: "180x180" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -156,6 +179,9 @@ function RootComponent() {
   // the reporter registers window listeners.
   useEffect(() => {
     initBrowserMonitoring();
+    // Makes the site installable and gives it an offline page. See public/sw.js
+    // for why it deliberately caches nothing else.
+    registerServiceWorker();
   }, []);
 
   useEffect(() => {
