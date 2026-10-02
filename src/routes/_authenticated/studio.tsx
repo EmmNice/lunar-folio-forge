@@ -167,7 +167,7 @@ function StudioPage() {
       name={name}
       handle={handle}
       avatarUrl={avatarUrl}
-      content={content || "Your words show up here as you type."}
+      content={content || "Your card"}
       background={background}
       verificationTier={profile?.verification_tier}
     />
@@ -193,9 +193,9 @@ function StudioPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
-          {/* Preview — first on a phone, right-hand column on desktop */}
-          <div className="lg:order-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
+          {/* Preview — right-hand column on desktop (on a phone it sits under the text box) */}
+          <div className="hidden lg:order-2 lg:block">
             <div className="lg:sticky lg:top-24">
               <div className="mx-auto w-full max-w-[240px] sm:max-w-[280px] lg:max-w-[320px]">
                 {preview}
@@ -207,7 +207,7 @@ function StudioPage() {
           </div>
 
           {/* Controls */}
-          <div className="space-y-5 lg:order-1">
+          <div className="min-w-0 space-y-5 lg:order-1">
             {/* Text */}
             <section>
               <SectionLabel
@@ -236,6 +236,12 @@ function StudioPage() {
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What are you shipping?"
               />
+            </section>
+
+            {/* Phone preview: small, under the text, so you see both at once */}
+            <section className="lg:hidden">
+              <SectionLabel>Preview</SectionLabel>
+              <div className="mx-auto w-full max-w-[190px]">{preview}</div>
             </section>
 
             {/* Theme — one row of swatches, scrolls sideways on narrow phones */}
