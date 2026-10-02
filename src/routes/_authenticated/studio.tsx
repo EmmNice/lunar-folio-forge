@@ -289,7 +289,7 @@ function StudioPage() {
             <section>
               <SectionLabel>Card</SectionLabel>
               <div className="flex items-start gap-4 lg:block">
-                <div className="w-[128px] shrink-0 lg:hidden">{preview}</div>
+                <div className="w-[132px] shrink-0 lg:hidden">{preview}</div>
                 <div className="min-w-0 flex-1">
                   <div className="lg:hidden">{themeSwatches("grid")}</div>
                   <div className="hidden lg:block">{themeSwatches("row")}</div>
