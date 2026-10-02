@@ -443,13 +443,16 @@ export const StatusCard = forwardRef<HTMLDivElement, StatusCardProps>(function S
   /*
     The preview is laid out in em, so its type has to scale with the card's width
     or a small preview overflows: at the default 16px a 128px-wide card drew a
-    56px avatar and a 32px name, and the name ran off the edge. Sizing the root
-    font to the card's own width (5% = 16px at 320px, the size it was designed at)
-    keeps every preview a true scale model of the 1080x1920 export.
+    56px avatar and a 32px name, and the name ran off the edge.
+
+    3.5% is the export's own ratio: the px/em pairs above (96px = 2.5em body,
+    76 = 2em, 124 = 3.5em avatar, ...) work out to 1em = 35-38px on a 1080px
+    canvas, i.e. ~3.5% of the width. At that size the preview wraps the text on
+    the same words as the downloaded image.
   */
   return (
     <div style={{ containerType: "inline-size", width: "100%" }}>
-      <div style={{ fontSize: "5cqw" }}>{card}</div>
+      <div style={{ fontSize: "3.5cqw" }}>{card}</div>
     </div>
   );
 });

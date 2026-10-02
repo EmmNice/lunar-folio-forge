@@ -57,6 +57,13 @@ function StudioPage() {
   const [content, setContent] = useState("");
   const [background, setBackground] = useState<Background>("noir");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
+  // useState reads its initial value once, usually before the profile has loaded,
+  // so the card fell back to your initial and "Show my photo" read Off. Adopt the
+  // photo when it arrives, unless you have already switched it off yourself.
+  const [photoTouched, setPhotoTouched] = useState(false);
+  useEffect(() => {
+    if (!photoTouched) setAvatarUrl(profile?.avatar_url ?? null);
+  }, [profile?.avatar_url, photoTouched]);
   const [commentsEnabled, setCommentsEnabled] = useState(true);
   const [visibility, setVisibility] = useState<"public" | "verified_only">("public");
   const [whisperFeed, setWhisperFeed] = useState(false);
@@ -178,7 +185,11 @@ function StudioPage() {
 
   const themeSwatches = (layout: "grid" | "row") => (
     <div
-      className={layout === "grid" ? "grid grid-cols-4 gap-x-2 gap-y-3" : "flex flex-wrap gap-4"}
+      className={
+        layout === "grid"
+          ? "grid grid-cols-[repeat(auto-fill,minmax(46px,1fr))] gap-x-1 gap-y-3"
+          : "flex flex-wrap gap-4"
+      }
     >
       {THEME_OPTIONS.map(({ id, label, swatch, accent }) => {
         const isActive = background === id;
@@ -388,9 +399,10 @@ function StudioPage() {
                     </div>
                     <Switch
                       checked={!!avatarUrl}
-                      onChange={() =>
-                        setAvatarUrl(avatarUrl ? null : (profile?.avatar_url ?? null))
-                      }
+                      onChange={() => {
+                        setPhotoTouched(true);
+                        setAvatarUrl(avatarUrl ? null : (profile?.avatar_url ?? null));
+                      }}
                     />
                   </div>
                 ) : null}
@@ -543,7 +555,7 @@ function Switch({
       }}
     >
       <span
-        className="absolute top-[3px] h-[18px] w-[18px] rounded-full shadow transition-transform"
+        className="absolute left-0 top-[3px] h-[18px] w-[18px] rounded-full shadow transition-transform"
         style={{
           background: checked ? (accent ? "#FFFFFF" : "#0B0B0C") : "#E4E4E7",
           transform: checked ? "translateX(19px)" : "translateX(3px)",
