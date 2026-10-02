@@ -700,21 +700,18 @@ function FeedPage() {
   // Following is meaningless without an account to follow from.
   const visibleTabs: FeedTab[] = user ? ["signal", "beat", "following"] : ["signal", "beat"];
 
-  const TAB_META: Record<FeedTab, { label: string; icon: typeof Rss; blurb: string }> = {
+  const TAB_META: Record<FeedTab, { label: string; icon: typeof Rss }> = {
     signal: {
       label: "Signal",
       icon: Rss,
-      blurb: "Verified builders only — silver and gold, vouched for and on the record.",
     },
     beat: {
       label: "Beat",
       icon: Sparkles,
-      blurb: "Where everyone else is shipping. Open to all, gold kept out so it stays that way.",
     },
     following: {
       label: "Following",
       icon: Users,
-      blurb: "Only the builders you follow, plus what they re-ship.",
     },
   };
 
@@ -840,9 +837,6 @@ function FeedPage() {
             />
           </div>
         )}
-
-        {/* Tab description */}
-        <p className="mb-4 text-[13px] leading-relaxed text-tertiary">{TAB_META[tab].blurb}</p>
 
         {/* Feed */}
         {feedLoading ? (
