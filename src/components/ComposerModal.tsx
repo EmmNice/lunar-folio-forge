@@ -241,6 +241,9 @@ export function ComposerModal({
             placeholder="What's happening?"
             aria-label="Post text"
             className="min-w-0 flex-1 resize-none bg-transparent pt-1.5 text-[19px] leading-[1.4] text-foreground outline-none placeholder:text-tertiary"
+            /* The global textarea rule draws a border and a focus glow; X's compose
+               box has neither. Inline so it wins over that rule. */
+            style={{ border: "none", boxShadow: "none", background: "transparent" }}
           />
         </div>
 
