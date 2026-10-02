@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Loader2, ShieldAlert, Rss, Sparkles, Users } from "lucide-react";
 import { EmptyState, ErrorState, PostSkeleton } from "@/components/states";
 import { supabase } from "@/integrations/supabase/client";
@@ -681,20 +681,12 @@ function FeedPage() {
    * gold posts go to Signal" — which was observed on the deployed site, and is
    * wrong twice over: they have no posts and no badge.
    */
+  /* One short line, the way X words an empty timeline. */
   function emptyTabDescription(which: TierTab): string {
-    if (!profile) {
-      return which === "signal"
-        ? "Signal carries posts from verified builders — silver and gold. Anyone can read it; nobody has posted yet."
-        : "Beat is the open floor, where every builder without a gold badge posts. Nothing here yet.";
-    }
-    if (viewerPostsLandIn(which)) {
-      return which === "signal"
-        ? "Signal carries posts from verified builders. Be the first to ship something worth reading."
-        : "Beat is the open floor — every builder without a gold badge posts here. Be the first.";
-    }
+    if (viewerPostsLandIn(which)) return "Be the first to post here.";
     return which === "signal"
-      ? "Signal carries posts from verified builders only — silver and gold. You can read every word of it; earning a badge is what puts your own posts here."
-      : "Beat is where unverified and silver builders post. Your gold posts go to Signal instead.";
+      ? "Posts from verified builders show up here."
+      : "Posts from builders show up here.";
   }
 
   // Following is meaningless without an account to follow from.
@@ -753,36 +745,39 @@ function FeedPage() {
         {/* Top nav bar — controlled mode: no internal scroll listener, no sticky/transform of its own */}
         <AppHeader controlled />
 
-        {/* Signal / Beat tab switcher */}
-        <div className="mx-auto max-w-xl px-4 pb-3 pt-1 sm:px-6">
-          <div>
-            <div
-              className="segmented sm:max-w-[24rem]"
-              /* Gold members get a gold selected segment; the vars are unset for
-                 everyone else, so the CSS falls back to the neutral default. */
-              style={
-                {
-                  "--segmented-active-surface": action.chipSurface,
-                  "--segmented-active-ink": action.chipInk,
-                } as CSSProperties
-              }
-            >
-              {visibleTabs.map((t) => {
-                const Icon = TAB_META[t].icon;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTab(t)}
-                    data-active={tab === t}
-                    className="segmented-item"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {TAB_META[t].label}
-                  </button>
-                );
-              })}
-            </div>
+        {/*
+          Signal / Beat / Following, laid out the way X lays out "For you /
+          Following": plain text tabs sharing the full width, the active one bold
+          with a short underline, and a hairline under the whole bar. No pill, no
+          icons. Gold members get a gold underline; everyone else gets white.
+        */}
+        <div className="border-b" style={{ borderColor: "var(--border)" }}>
+          <div className="mx-auto flex max-w-xl" role="tablist">
+            {visibleTabs.map((t) => {
+              const active = tab === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(t)}
+                  className="relative flex h-[52px] flex-1 items-center justify-center text-[15px] transition-colors hover:bg-white/[0.03]"
+                  style={{
+                    color: active ? "var(--foreground)" : "var(--text-tertiary)",
+                    fontWeight: active ? 700 : 500,
+                  }}
+                >
+                  {TAB_META[t].label}
+                  {active ? (
+                    <span
+                      className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full"
+                      style={{ background: action.accent }}
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -792,7 +787,7 @@ function FeedPage() {
 
       {/* max-w-xl, not 2xl: at 672px a post ran nearly the full width of a desktop
           window, which reads as a slab rather than a feed. */}
-      <main className="page-enter mx-auto max-w-xl px-4 pb-mobile-nav pt-5 sm:px-6">
+      <main className="page-enter mx-auto max-w-xl px-4 pb-mobile-nav pt-0 sm:px-6 sm:pt-5">
         {/*
           Moderation state, said out loud. RLS blocks posting, commenting, liking,
           re-shipping and messaging for a restricted or banned account, so without
@@ -847,16 +842,17 @@ function FeedPage() {
                just hasn't followed anyone. Point them at the timeline that works
                without a follow graph rather than at the composer. */
             <EmptyState
+              plain
               icon={Users}
               title={
                 followingIds && followingIds.length > 0
-                  ? "Nothing new from the people you follow"
-                  : "You're not following anyone yet"
+                  ? "Nothing new yet"
+                  : "Welcome to your timeline"
               }
               description={
                 followingIds && followingIds.length > 0
-                  ? "When they post or re-ship something, it lands here."
-                  : "Follow a few builders and their posts — and anything they re-ship — will collect here. Explore is where everyone is."
+                  ? "New posts from people you follow show up here."
+                  : "Follow builders to see their posts here."
               }
               action={
                 <Link
@@ -874,6 +870,7 @@ function FeedPage() {
                would post, watch Signal stay empty, and reasonably call it broken —
                their post went to Beat, because that is what these tabs mean. */
             <EmptyState
+              plain
               icon={tab === "signal" ? Rss : Sparkles}
               title={tab === "signal" ? "Nothing on Signal yet" : "Nothing on Beat yet"}
               description={emptyTabDescription(tab as TierTab)}

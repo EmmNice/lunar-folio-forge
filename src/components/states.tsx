@@ -55,14 +55,17 @@ export function EmptyState({
   title,
   description,
   action,
+  plain = false,
 }: {
   icon: ComponentType<{ className?: string }>;
   title: string;
   description?: string;
   action?: ReactNode;
+  /** No card around it — for timelines, where X shows empty states unboxed. */
+  plain?: boolean;
 }) {
   return (
-    <div className="card flex flex-col items-center px-6 py-14 text-center">
+    <div className={(plain ? "" : "card ") + "flex flex-col items-center px-6 py-14 text-center"}>
       <div
         className="mb-4 grid h-12 w-12 place-items-center rounded-2xl border"
         style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
