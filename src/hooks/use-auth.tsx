@@ -54,6 +54,10 @@ export type Profile = {
   notification_prefs: NotificationPrefs;
   /** 'active' | 'restricted' | 'banned' — moderation state, set by admins only. */
   account_status: AccountStatus;
+  /** The one post pinned to the top of your profile (20260930001100). */
+  pinned_post_id: string | null;
+  /** Profile banner image URL (20260930001200). */
+  cover_url: string | null;
 };
 
 export type AccountStatus = "active" | "restricted" | "banned";

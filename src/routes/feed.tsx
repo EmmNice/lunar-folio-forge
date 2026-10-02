@@ -941,7 +941,7 @@ function FeedPage() {
               </button>
             ) : null}
 
-            <div className="space-y-3">
+            <div className="post-list">
               {displayedItems.map((item) => (
                 <PostCard
                   key={item.key}

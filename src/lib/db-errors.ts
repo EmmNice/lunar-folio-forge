@@ -29,6 +29,18 @@ export function describeWriteError(message: string, action: string): string {
   if (lower.includes("_scheme")) {
     return "Links must start with http:// or https://";
   }
+  // Edit window and pinning (20260930001000, 20260930001100). Matched before the
+  // generic RLS case would never see them — these are raised by triggers with
+  // 42501, not by a policy, so the RLS text above does not apply.
+  if (lower.includes("can only be edited within")) {
+    return "Posts can only be edited for 10 minutes after publishing. You can still delete it.";
+  }
+  if (lower.includes("only pin your own post")) {
+    return "You can only pin your own post.";
+  }
+  if (lower.includes("only a public post can be pinned")) {
+    return "Only a public post can be pinned to your profile.";
+  }
   // Verification application rules (20260930000300). A member who trips one of
   // these was previously shown the constraint name.
   if (lower.includes("vr_silver_needs_github")) {

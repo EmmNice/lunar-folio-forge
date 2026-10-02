@@ -95,7 +95,7 @@ export function SavedPosts({ userId }: { userId: string }) {
 
   return (
     <>
-      <div className="space-y-3">
+      <div className="post-list">
         {posts.map((post) => (
           <PostCard
             key={post.id}

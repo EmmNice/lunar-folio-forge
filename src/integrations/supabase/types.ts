@@ -691,6 +691,7 @@ export type Database = {
           bio: string | null
           company_name: string | null
           contract_url: string | null
+          cover_url: string | null
           created_at: string
           date_of_birth: string | null
           display_name: string
@@ -703,6 +704,7 @@ export type Database = {
           location: string | null
           notification_prefs: Json
           onboarding_completed: boolean
+          pinned_post_id: string | null
           pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
@@ -724,6 +726,7 @@ export type Database = {
           bio?: string | null
           company_name?: string | null
           contract_url?: string | null
+          cover_url?: string | null
           created_at?: string
           date_of_birth?: string | null
           display_name: string
@@ -736,6 +739,7 @@ export type Database = {
           location?: string | null
           notification_prefs?: Json
           onboarding_completed?: boolean
+          pinned_post_id?: string | null
           pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
@@ -757,6 +761,7 @@ export type Database = {
           bio?: string | null
           company_name?: string | null
           contract_url?: string | null
+          cover_url?: string | null
           created_at?: string
           date_of_birth?: string | null
           display_name?: string
@@ -769,6 +774,7 @@ export type Database = {
           location?: string | null
           notification_prefs?: Json
           onboarding_completed?: boolean
+          pinned_post_id?: string | null
           pitch_limit?: number | null
           portfolio_url?: string | null
           role_type?: string | null
@@ -781,7 +787,15 @@ export type Database = {
           verification_proof_code?: string
           verification_tier?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_pinned_post_fkey"
+            columns: ["pinned_post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reports: {
         Row: {
@@ -897,102 +911,102 @@ export type Database = {
       }
       verification_requests: {
         Row: {
+          amount_cents: number | null
+          applicant_signals: Json
           created_at: string
           deployed_contract_address: string | null
           fund_or_company_name: string | null
           github_url: string | null
+          gold_track: string | null
           id: string
           invite_code: string | null
           link_primary: string
           link_secondary: string | null
           linkedin_or_x_url: string | null
           live_project_url: string | null
-          portfolio_url: string | null
-          amount_cents: number | null
-          applicant_signals: Json
-          gold_track: string | null
           paid_at: string | null
           payment_reference: string | null
           payment_status: string
           payment_waived_reason: string | null
+          portfolio_url: string | null
           proof_attempts: number
           proof_checked_at: string | null
           proof_detail: string | null
           proof_method: string | null
           proof_verified_at: string | null
           recent_ship_desc: string | null
-          traction_evidence_url: string | null
-          traction_summary: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
           tier: string
+          traction_evidence_url: string | null
+          traction_summary: string | null
           user_id: string
         }
         Insert: {
+          amount_cents?: number | null
+          applicant_signals?: Json
           created_at?: string
           deployed_contract_address?: string | null
           fund_or_company_name?: string | null
           github_url?: string | null
+          gold_track?: string | null
           id?: string
           invite_code?: string | null
           link_primary: string
           link_secondary?: string | null
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
-          portfolio_url?: string | null
-          amount_cents?: number | null
-          applicant_signals?: Json
-          gold_track?: string | null
           paid_at?: string | null
           payment_reference?: string | null
           payment_status?: string
           payment_waived_reason?: string | null
+          portfolio_url?: string | null
           proof_attempts?: number
           proof_checked_at?: string | null
           proof_detail?: string | null
           proof_method?: string | null
           proof_verified_at?: string | null
           recent_ship_desc?: string | null
-          traction_evidence_url?: string | null
-          traction_summary?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
           tier: string
+          traction_evidence_url?: string | null
+          traction_summary?: string | null
           user_id: string
         }
         Update: {
+          amount_cents?: number | null
+          applicant_signals?: Json
           created_at?: string
           deployed_contract_address?: string | null
           fund_or_company_name?: string | null
           github_url?: string | null
+          gold_track?: string | null
           id?: string
           invite_code?: string | null
           link_primary?: string
           link_secondary?: string | null
           linkedin_or_x_url?: string | null
           live_project_url?: string | null
-          portfolio_url?: string | null
-          amount_cents?: number | null
-          applicant_signals?: Json
-          gold_track?: string | null
           paid_at?: string | null
           payment_reference?: string | null
           payment_status?: string
           payment_waived_reason?: string | null
+          portfolio_url?: string | null
           proof_attempts?: number
           proof_checked_at?: string | null
           proof_detail?: string | null
           proof_method?: string | null
           proof_verified_at?: string | null
           recent_ship_desc?: string | null
-          traction_evidence_url?: string | null
-          traction_summary?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
           tier?: string
+          traction_evidence_url?: string | null
+          traction_summary?: string | null
           user_id?: string
         }
         Relationships: [
@@ -1059,6 +1073,7 @@ export type Database = {
           bio: string | null
           company_name: string | null
           contract_url: string | null
+          cover_url: string | null
           created_at: string
           date_of_birth: string | null
           display_name: string
@@ -1071,6 +1086,7 @@ export type Database = {
           location: string | null
           notification_prefs: Json
           onboarding_completed: boolean
+          pinned_post_id: string | null
           pitch_limit: number | null
           portfolio_url: string | null
           role_type: string | null
@@ -1100,6 +1116,7 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_blocked_with: { Args: { _other: string }; Returns: boolean }
       post_accepts_comments: { Args: { _post_id: string }; Returns: boolean }
+      post_edit_window: { Args: never; Returns: string }
       refund_ai_credit: { Args: { _user_id: string }; Returns: undefined }
       search_profiles: {
         Args: { _limit?: number; _query: string }
@@ -1111,7 +1128,6 @@ export type Database = {
           handle: string
           id: string
           role_type: string
-          verification_proof_code: string
           verification_tier: string
         }[]
       }
