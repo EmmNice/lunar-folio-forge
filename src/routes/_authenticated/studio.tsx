@@ -80,6 +80,7 @@ function StudioPage() {
   const isGold = profile?.verification_tier === "gold";
   const hasUnlimitedAI = isVerified;
   const action = tierAction(profile?.verification_tier);
+  const canPost = busy === null && remaining >= 0 && content.trim() !== "";
 
   async function handlePulseAssist() {
     const body = content.trim();
@@ -163,14 +164,54 @@ function StudioPage() {
   }
 
   const preview = (
-    <StatusCard
-      name={name}
-      handle={handle}
-      avatarUrl={avatarUrl}
-      content={content || "Your card"}
-      background={background}
-      verificationTier={profile?.verification_tier}
-    />
+    <div className="transition-opacity" style={{ opacity: content.trim() ? 1 : 0.55 }}>
+      <StatusCard
+        name={name}
+        handle={handle}
+        avatarUrl={avatarUrl}
+        content={content || "Start typing…"}
+        background={background}
+        verificationTier={profile?.verification_tier}
+      />
+    </div>
+  );
+
+  const themeSwatches = (layout: "grid" | "row") => (
+    <div
+      className={layout === "grid" ? "grid grid-cols-4 gap-x-2 gap-y-3" : "flex flex-wrap gap-4"}
+    >
+      {THEME_OPTIONS.map(({ id, label, swatch, accent }) => {
+        const isActive = background === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setBackground(id)}
+            aria-pressed={isActive}
+            aria-label={`${label} theme`}
+            className="flex flex-col items-center gap-1.5"
+          >
+            <span
+              className="block h-10 w-10 rounded-full transition-shadow"
+              style={{
+                background: accent
+                  ? `radial-gradient(circle at 35% 35%, ${accent}66, ${swatch})`
+                  : swatch,
+                boxShadow: isActive
+                  ? `0 0 0 2px var(--bg-base), 0 0 0 4px ${accent ?? "#F5F5F6"}`
+                  : "inset 0 0 0 1px rgba(255,255,255,0.16)",
+              }}
+            />
+            <span
+              className="text-[11px] font-medium"
+              style={{ color: isActive ? "var(--foreground)" : "var(--text-tertiary)" }}
+            >
+              {label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 
   return (
@@ -238,46 +279,21 @@ function StudioPage() {
               />
             </section>
 
-            {/* Phone preview: small, under the text, so you see both at once */}
-            <section className="lg:hidden">
-              <SectionLabel>Preview</SectionLabel>
-              <div className="mx-auto w-full max-w-[190px]">{preview}</div>
-            </section>
-
-            {/* Theme — one row of swatches, scrolls sideways on narrow phones */}
+            {/*
+              Card: on a phone the preview sits beside the theme picker, so tapping
+              a theme changes the card right next to your thumb. It used to be a
+              full-width card that filled the screen and slid under the Save/Post
+              bar, with the themes in a sideways-scrolling row that clipped the
+              selected ring and showed a scrollbar.
+            */}
             <section>
-              <SectionLabel>Theme</SectionLabel>
-              <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-                {THEME_OPTIONS.map(({ id, label, swatch, accent }) => {
-                  const isActive = background === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setBackground(id)}
-                      aria-pressed={isActive}
-                      className="flex shrink-0 flex-col items-center gap-1.5"
-                    >
-                      <span
-                        className="block h-11 w-11 rounded-full transition-shadow"
-                        style={{
-                          background: accent
-                            ? `radial-gradient(circle at 35% 35%, ${accent}66, ${swatch})`
-                            : swatch,
-                          boxShadow: isActive
-                            ? `0 0 0 2px var(--bg-base), 0 0 0 4px ${accent ?? "#F5F5F6"}`
-                            : "inset 0 0 0 1px rgba(255,255,255,0.14)",
-                        }}
-                      />
-                      <span
-                        className="text-[11px] font-medium"
-                        style={{ color: isActive ? "var(--foreground)" : "var(--text-tertiary)" }}
-                      >
-                        {label}
-                      </span>
-                    </button>
-                  );
-                })}
+              <SectionLabel>Card</SectionLabel>
+              <div className="flex items-start gap-4 lg:block">
+                <div className="w-[128px] shrink-0 lg:hidden">{preview}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="lg:hidden">{themeSwatches("grid")}</div>
+                  <div className="hidden lg:block">{themeSwatches("row")}</div>
+                </div>
               </div>
             </section>
 
@@ -359,20 +375,25 @@ function StudioPage() {
                   borderColor: "var(--border)",
                 }}
               >
-                <div
-                  className="flex items-center justify-between gap-4 px-4 py-3"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <div>
-                    <p className="text-[13px] font-medium">Show my photo</p>
-                    <p className="text-[11px] text-tertiary">Off shows your initial instead</p>
+                {/* Only offered when there is a photo to show; otherwise it was a
+                    permanently greyed-out switch that looked broken. */}
+                {profile?.avatar_url ? (
+                  <div
+                    className="flex items-center justify-between gap-4 px-4 py-3"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    <div>
+                      <p className="text-[13px] font-medium">Show my photo</p>
+                      <p className="text-[11px] text-tertiary">Off shows your initial instead</p>
+                    </div>
+                    <Switch
+                      checked={!!avatarUrl}
+                      onChange={() =>
+                        setAvatarUrl(avatarUrl ? null : (profile?.avatar_url ?? null))
+                      }
+                    />
                   </div>
-                  <Switch
-                    checked={!!avatarUrl}
-                    disabled={!profile?.avatar_url}
-                    onChange={() => setAvatarUrl(avatarUrl ? null : (profile?.avatar_url ?? null))}
-                  />
-                </div>
+                ) : null}
 
                 {isVerified && (
                   <div className="px-4 py-3" style={{ borderColor: "var(--border)" }}>
@@ -447,9 +468,14 @@ function StudioPage() {
               <button
                 type="button"
                 onClick={handlePublish}
-                disabled={busy !== null || remaining < 0 || content.trim() === ""}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-[15px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-                style={{ background: action.surface, color: action.ink }}
+                disabled={!canPost}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-[15px] font-bold transition-colors hover:opacity-90"
+                /* Faded gold read as dirty brown, not as "disabled". Grey does. */
+                style={
+                  canPost
+                    ? { background: action.surface, color: action.ink }
+                    : { background: "var(--surface-3)", color: "var(--text-tertiary)" }
+                }
               >
                 {busy === "publish" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -496,10 +522,13 @@ function Switch({
   checked,
   onChange,
   disabled = false,
+  accent,
 }: {
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
+  /** On-colour for the track; defaults to white. */
+  accent?: string;
 }) {
   return (
     <button
@@ -508,15 +537,17 @@ function Switch({
       aria-checked={checked}
       disabled={disabled}
       onClick={onChange}
-      className="relative h-5 w-9 shrink-0 rounded-full transition-all disabled:opacity-40"
+      className="relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-40"
       style={{
-        background: checked ? "rgba(245,245,246,0.90)" : "rgba(255,255,255,0.10)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        background: checked ? (accent ?? "#F5F5F6") : "rgba(255,255,255,0.18)",
       }}
     >
       <span
-        className="absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform"
-        style={{ transform: checked ? "translateX(16px)" : "translateX(2px)" }}
+        className="absolute top-[3px] h-[18px] w-[18px] rounded-full shadow transition-transform"
+        style={{
+          background: checked ? (accent ? "#FFFFFF" : "#0B0B0C") : "#E4E4E7",
+          transform: checked ? "translateX(19px)" : "translateX(3px)",
+        }}
       />
     </button>
   );
@@ -539,31 +570,10 @@ function Toggle({
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <p className="text-xs font-medium text-foreground">{label}</p>
-        <p className="text-[11px] text-muted-foreground">{description}</p>
+        <p className="text-[13px] font-medium text-foreground">{label}</p>
+        <p className="text-[11px] text-tertiary">{description}</p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={onChange}
-        className="relative h-5 w-9 shrink-0 rounded-full transition-all"
-        style={{
-          background: checked
-            ? gold
-              ? "rgba(167,139,250,0.80)"
-              : "rgba(245,245,246,0.90)"
-            : "rgba(255,255,255,0.10)",
-          border: "1px solid rgba(255,255,255,0.10)",
-        }}
-      >
-        <span
-          className="absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform"
-          style={{
-            transform: checked ? "translateX(16px)" : "translateX(2px)",
-          }}
-        />
-      </button>
+      <Switch checked={checked} onChange={onChange} accent={gold ? "#a78bfa" : undefined} />
     </div>
   );
 }
