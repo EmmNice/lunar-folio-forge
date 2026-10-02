@@ -777,7 +777,16 @@ function ProfilePage() {
           </div>
 
           {/* Tab content */}
-          <div className="px-4 sm:px-6 py-6 pb-28">
+          {/* Post lists sit flush under the tab bar, as on X; other tabs keep
+              their breathing room. */}
+          <div
+            className={
+              "px-4 pb-28 sm:px-6 sm:pt-6 " +
+              (activeTab === "posts" || activeTab === "likes" || activeTab === "saved"
+                ? "pt-0"
+                : "pt-6")
+            }
+          >
             {/* POSTS */}
             {activeTab === "posts" &&
               (posts.length === 0 ? (
@@ -800,7 +809,7 @@ function ProfilePage() {
                   </Link>
                 </div>
               ) : (
-                <div className="post-list">
+                <div className="post-list border-t-0 sm:border-t">
                   {orderedPosts.map((p) => {
                     const feedPost: FeedPost = {
                       id: p.id,
@@ -945,7 +954,7 @@ function ProfilePage() {
                   </p>
                 </div>
               ) : (
-                <div className="post-list">
+                <div className="post-list border-t-0 sm:border-t">
                   {likedPosts.map((p) => {
                     const feedPost: FeedPost = {
                       id: p.id,
