@@ -185,11 +185,7 @@ function StudioPage() {
 
   const themeSwatches = (layout: "grid" | "row") => (
     <div
-      className={
-        layout === "grid"
-          ? "grid grid-cols-[repeat(auto-fill,minmax(46px,1fr))] gap-x-1 gap-y-3"
-          : "flex flex-wrap gap-4"
-      }
+      className={layout === "grid" ? "grid grid-cols-4 gap-x-1 gap-y-3" : "flex flex-wrap gap-4"}
     >
       {THEME_OPTIONS.map(({ id, label, swatch, accent }) => {
         const isActive = background === id;
@@ -203,7 +199,7 @@ function StudioPage() {
             className="flex flex-col items-center gap-1.5"
           >
             <span
-              className="block h-10 w-10 rounded-full transition-shadow"
+              className="block h-9 w-9 rounded-full transition-shadow min-[400px]:h-10 min-[400px]:w-10"
               style={{
                 background: accent
                   ? `radial-gradient(circle at 35% 35%, ${accent}66, ${swatch})`
@@ -214,7 +210,7 @@ function StudioPage() {
               }}
             />
             <span
-              className="text-[11px] font-medium"
+              className="text-[10px] font-medium min-[400px]:text-[11px]"
               style={{ color: isActive ? "var(--foreground)" : "var(--text-tertiary)" }}
             >
               {label}
